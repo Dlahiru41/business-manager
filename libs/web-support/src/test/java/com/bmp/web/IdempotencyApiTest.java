@@ -3,7 +3,6 @@ package com.bmp.web;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import com.bmp.web.idempotency.IdempotencyInterceptor;
 import com.bmp.web.idempotency.InMemoryIdempotencyStore;
 import com.bmp.web.idempotency.RequestHasher;
 import com.bmp.web.testapp.DummyController;
@@ -89,7 +88,10 @@ class IdempotencyApiTest {
         String key = UUID.randomUUID().toString();
         String hash = new RequestHasher(jsonMapper).hash("POST", "/test/things", BODY.getBytes(StandardCharsets.UTF_8));
         store.claim(
-                IdempotencyInterceptor.PLATFORM_SCOPE, key, hash, Instant.now().plusSeconds(60));
+                WebSupportTestApplication.DEFAULT_TENANT,
+                key,
+                hash,
+                Instant.now().plusSeconds(60));
 
         MvcTestResult result = create(key, BODY);
 

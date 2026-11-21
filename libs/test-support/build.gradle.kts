@@ -11,6 +11,9 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-jackson")
     api("org.testcontainers:testcontainers-postgresql")
     api("org.awaitility:awaitility")
+    // Consumers that use JwtTestTokens already have Spring Security through web-support.
+    compileOnly("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    api(libs.archunit.junit5)
     implementation("org.postgresql:postgresql")
 }
 

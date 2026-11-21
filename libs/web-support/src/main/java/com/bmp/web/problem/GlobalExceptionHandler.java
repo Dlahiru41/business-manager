@@ -27,6 +27,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.method.ParameterValidationResult;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -102,6 +104,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorCode code = missingTenant ? PlatformErrorCode.TENANT_CONTEXT_MISSING : PlatformErrorCode.INTERNAL_ERROR;
         logFailure(code, request, ex);
         return respondInternal(request, code);
+    }
+
+    /** {@code @PreAuthorize} denials raised inside controllers. */
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        logFailure(PlatformErrorCode.ACCESS_DENIED, request, null);
+        return respond(PlatformErrorCode.ACCESS_DENIED, request);
+    }
+
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<Object> handleAuthentication(AuthenticationException ex, HttpServletRequest request) {
+        logFailure(PlatformErrorCode.UNAUTHENTICATED, request, null);
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
+        return respond(
+                PlatformErrorCode.UNAUTHENTICATED,
+                HttpStatuses.of(PlatformErrorCode.UNAUTHENTICATED),
+                null,
+                Map.of(),
+                List.of(),
+                request,
+                headers);
     }
 
     @ExceptionHandler(CallNotPermittedException.class)

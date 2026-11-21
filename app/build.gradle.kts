@@ -11,4 +11,5 @@ dependencies {
     implementation(libs.datasource.micrometer)
 
     testImplementation(project(":libs:test-support"))
+    testImplementation("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
 }

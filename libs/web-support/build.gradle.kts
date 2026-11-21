@@ -9,6 +9,8 @@ dependencies {
     api(project(":libs:persistence-support"))
     api("org.springframework.boot:spring-boot-starter-webmvc")
     api("org.springframework.boot:spring-boot-starter-validation")
+    api("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
+    implementation("com.github.ben-manes.caffeine:caffeine")
     implementation("io.micrometer:micrometer-core")
     implementation("ch.qos.logback:logback-classic")
     implementation(libs.resilience4j.circuitbreaker)

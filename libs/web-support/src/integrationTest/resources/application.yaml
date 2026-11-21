@@ -1,0 +1,3 @@
+bmp:
+  security:
+    issuer-uri: https://issuer.test.bmp/realms/bmp

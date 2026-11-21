@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-06 Security
-- Next step (exact, so a new session can resume): T00-06 — resource server + `BmpPrincipal`, `TenantContextFilter` (tenant status SPI), `PermissionEvaluator` (SPI backed by iam), CORS/headers, Keycloak realm export, `JwtTestTokens`, ArchUnit `@PreAuthorize` rule.
+- Current task: T00-07 Tenant module
+- Next step (exact, so a new session can resume): T00-07 — `contracts/openapi/common.yaml` + `tenant.yaml`, AsyncAPI events, tenant migrations, domain (Tenant, Location, Setting, ReceiptTemplate), handlers, controllers, `TenantStatusProvider` impl with Caffeine cache, rules TEN-01..04, ADR-015 (event publication style).
 
 ## Task checklist (current phase)
 
@@ -30,7 +30,7 @@ Phase 00:
 - [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
 - [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
 - [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
-- [ ] T00-06 Security
+- [x] T00-06 Security — ADR-014; Keycloak Testcontainers IT and the cross-tenant 404 test need real endpoints and are added with T00-07/T00-08
 - [ ] T00-07 Tenant module
 - [ ] T00-08 IAM module
 - [ ] T00-09 Audit module (skeleton)
@@ -43,6 +43,7 @@ Phase 00:
 
 _One line each: date, question, assumption taken, ADR link._
 
+- 2026-11-21 — Default role permissions follow 08-security.md §3 literally, so only OWNER has `tenant:read`/`tenant:*`; MANAGER etc. may need `tenant:read` for settings — assumption: least privilege, tenants extend roles via the iam API (ADR-014).
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:

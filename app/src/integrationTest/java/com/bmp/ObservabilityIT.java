@@ -3,6 +3,8 @@ package com.bmp;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bmp.test.persistence.WithPostgres;
+import com.bmp.test.security.JwtTestTokens;
+import com.bmp.test.security.TestJwtConfiguration;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -16,12 +18,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 /** T00-05 acceptance: health on the management port, structured logs with correlation ids, masking, metrics. */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
 @WithPostgres
+@Import(TestJwtConfiguration.class)
 @ExtendWith(OutputCaptureExtension.class)
 class ObservabilityIT {
 
@@ -35,11 +39,18 @@ class ObservabilityIT {
 
     private HttpResponse<String> get(int targetPort, String path, String requestId)
             throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(URI.create("http://localhost:" + targetPort + path))
+        return get(targetPort, path, requestId, null);
+    }
+
+    private HttpResponse<String> get(int targetPort, String path, String requestId, String token)
+            throws IOException, InterruptedException {
+        HttpRequest.Builder request = HttpRequest.newBuilder(URI.create("http://localhost:" + targetPort + path))
                 .header("X-Request-Id", requestId)
-                .GET()
-                .build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
+                .GET();
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     @Test
@@ -51,7 +62,12 @@ class ObservabilityIT {
                 .isEqualTo(200);
         assertThat(get(managementPort, "/actuator/health/readiness", id).statusCode())
                 .isEqualTo(200);
-        assertThat(get(managementPort, "/actuator/prometheus", id).body()).contains("bmp_idempotency_replays_total");
+        assertThat(get(managementPort, "/actuator/prometheus", id).statusCode())
+                .as("metrics need a platform administrator")
+                .isEqualTo(401);
+        assertThat(get(managementPort, "/actuator/prometheus", id, JwtTestTokens.platformAdmin())
+                        .body())
+                .contains("bmp_idempotency_replays_total");
         assertThat(get(port, "/actuator/health", id).statusCode())
                 .as("actuator is not exposed on the public port")
                 .isNotEqualTo(200);
@@ -75,7 +91,7 @@ class ObservabilityIT {
                 .contains("\"traceId\":\"")
                 .contains("\"requestId\":\"" + requestId + "\"")
                 .contains("\"http\":{")
-                .contains("\"status\":404");
+                .contains("\"status\":401");
     }
 
     @Test

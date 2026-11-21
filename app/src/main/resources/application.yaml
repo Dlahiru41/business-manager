@@ -21,6 +21,10 @@ spring:
     timeout-per-shutdown-phase: 20s
 
 bmp:
+  security:
+    issuer-uri: ${BMP_ISSUER_URI:http://localhost:8180/realms/bmp}
+  web:
+    cors-allowed-origins: ${BMP_CORS_ALLOWED_ORIGINS:}
   persistence:
     migrator:
       username: bmp_migrator
