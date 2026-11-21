@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-04 Persistence support
-- Next step (exact, so a new session can resume): implement `libs/persistence-support` (T00-04), including `JdbcIdempotencyStore` and its cleanup job.
+- Current task: T00-05 Observability baseline
+- Next step (exact, so a new session can resume): T00-05 — logging config + masking converter, tracing/metrics, actuator on 8081, `EventBacklogHealthIndicator`, `EventContext` listener advisor (tenant/MDC/trace restore), failed-event parking and resubmission job.
 
 ## Task checklist (current phase)
 
@@ -28,7 +28,7 @@ Phase 00:
 - [x] T00-01 Repository and build scaffold
 - [x] T00-02 Shared kernel (`libs/shared-kernel`)
 - [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
-- [ ] T00-04 Persistence support (`libs/persistence-support`)
+- [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
 - [ ] T00-05 Observability baseline
 - [ ] T00-06 Security
 - [ ] T00-07 Tenant module
