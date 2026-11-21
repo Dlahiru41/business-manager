@@ -19,15 +19,15 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-03 Web support
-- Next step (exact, so a new session can resume): implement `libs/web-support` (T00-03).
+- Current task: T00-04 Persistence support
+- Next step (exact, so a new session can resume): implement `libs/persistence-support` (T00-04), including `JdbcIdempotencyStore` and its cleanup job.
 
 ## Task checklist (current phase)
 
 Phase 00:
 - [x] T00-01 Repository and build scaffold
 - [x] T00-02 Shared kernel (`libs/shared-kernel`)
-- [ ] T00-03 Web support (`libs/web-support`)
+- [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
 - [ ] T00-04 Persistence support (`libs/persistence-support`)
 - [ ] T00-05 Observability baseline
 - [ ] T00-06 Security
@@ -42,6 +42,8 @@ Phase 00:
 ## Open questions
 
 _One line each: date, question, assumption taken, ADR link._
+
+- 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:
 - Measured yield: 750 ml bottles per 18 kg can of oil (sets the oil conversion factor).

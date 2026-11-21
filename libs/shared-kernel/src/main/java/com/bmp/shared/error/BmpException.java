@@ -19,16 +19,23 @@ public abstract sealed class BmpException extends RuntimeException
 
     private final transient ErrorCode errorCode;
     private final transient Map<String, Object> details;
+    private final @Nullable String explicitMessage;
 
     protected BmpException(
             ErrorCode errorCode, @Nullable String message, Map<String, ?> details, @Nullable Throwable cause) {
         super(message != null ? message : defaultMessage(errorCode, details), cause);
         this.errorCode = Objects.requireNonNull(errorCode, "errorCode");
         this.details = copy(details);
+        this.explicitMessage = message;
     }
 
     public ErrorCode errorCode() {
         return errorCode;
+    }
+
+    /** The human-readable message given by the thrower, if any (never personal data); else {@code null}. */
+    public @Nullable String explicitMessage() {
+        return explicitMessage;
     }
 
     /** Safe context for clients and logs, in insertion order. */
