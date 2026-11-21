@@ -19,6 +19,10 @@ spring:
       enabled: false
   lifecycle:
     timeout-per-shutdown-phase: 20s
+  # Only packages annotated @ApplicationModule are modules (libraries are not). Also read by ModularityTests, which
+  # loads this file but not the platform's environment defaults.
+  modulith:
+    detection-strategy: explicitly-annotated
 
 bmp:
   security:

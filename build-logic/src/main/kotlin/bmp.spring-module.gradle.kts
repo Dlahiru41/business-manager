@@ -28,6 +28,13 @@ dependencies {
     add("testImplementation", project(":libs:test-support"))
 }
 
+// MapStruct mappers are Spring beans with constructor injection, like every other bean (CLAUDE.md §1.4).
+tasks.named<JavaCompile>("compileJava") {
+    options.compilerArgs.addAll(
+        listOf("-Amapstruct.defaultComponentModel=spring", "-Amapstruct.defaultInjectionStrategy=constructor"),
+    )
+}
+
 // Contract first (03-api-standards.md §1): generate controller interfaces and DTOs from contracts/openapi/<module>.yaml.
 val openApiSpec = rootProject.layout.projectDirectory.file("contracts/openapi/$moduleName.yaml").asFile
 if (openApiSpec.exists()) {
