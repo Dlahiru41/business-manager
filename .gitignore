@@ -1,0 +1,24 @@
+# Build output
+build/
+out/
+.gradle/
+.kotlin/
+bin/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+*.swp
+
+# Local secrets (never commit)
+.env
+*.local.env
+http/http-client.private.env.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude local settings
+.claude/settings.local.json
