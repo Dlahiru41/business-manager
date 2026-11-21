@@ -44,6 +44,7 @@ Option 1. Versions chosen:
 | SBOM | CycloneDX Gradle plugin | 3.6.1 | |
 | Vulnerabilities | OWASP Dependency-Check Gradle plugin | 13.0.0 | Trivy is the blocking CI scan |
 | Bootstrapping | foojay toolchain resolver | 1.0.0 | |
+| Security override | Jackson 2 BOM | 2.22.3 | Above Boot's 2.22.1 for five HIGH CVEs (Trivy, 2026-11-22); remove when the Boot BOM catches up |
 
 ## Consequences
 - Upgrades are a one-line change in the catalog plus a build run; Spring Boot patch updates are applied monthly
@@ -52,3 +53,6 @@ Option 1. Versions chosen:
   line (4.1.3) with Modulith 2.1.3. That change needs a superseding ADR.
 - The PIT Gradle plugin uses a Gradle API that is deprecated for Gradle 11. Gradle therefore runs in its default
   warning mode (summary), not `fail`. Revisit when the plugin is updated.
+- Versions above the Boot BOM are allowed only as security overrides, each with its CVE in the catalog comment
+  (first case: Jackson 2, 2026-11-22). The SBOM covers the runtime classpath only, so build tools (Error Prone and its
+  Guava) are not scanned as shipped code.

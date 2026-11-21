@@ -32,6 +32,8 @@ dependency-check = "13.0.0"
 datasource-micrometer = "2.3.1"
 resilience4j = "2.4.0"
 json-schema-validator = "2.0.8"
+# Jackson 2 (used by the JSON schema and contract validators) above the Boot BOM: CVE-2026-89407, -89425, -68497, -91776, -91777.
+jackson2 = "2.22.3"
 
 [libraries]
 # BOMs
@@ -39,6 +41,7 @@ spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies"
 spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "spring-modulith" }
 spring-cloud-bom = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
 resilience4j-bom = { module = "io.github.resilience4j:resilience4j-bom", version.ref = "resilience4j" }
+jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson2" }
 
 # Libraries not managed by the Spring Boot BOM
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }

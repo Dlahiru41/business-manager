@@ -30,7 +30,7 @@ java {
     }
 }
 
-val boms = listOf("spring-boot-bom", "spring-modulith-bom", "resilience4j-bom")
+val boms = listOf("spring-boot-bom", "spring-modulith-bom", "resilience4j-bom", "jackson2-bom")
 
 dependencies {
     for (bom in boms) {

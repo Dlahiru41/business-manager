@@ -61,7 +61,8 @@ paths:
               username: nimal.cashier
               email: nimal@example.lk
               displayName: Nimal
-              roles: [CASHIER]
+              roles:
+                - code: CASHIER
       responses:
         "201":
           description: Created.

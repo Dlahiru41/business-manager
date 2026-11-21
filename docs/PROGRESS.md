@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-10 Local environment and developer experience
-- Next step (exact, so a new session can resume): T00-10 — `deploy/local/compose.yaml` (postgres 18 + init script, Keycloak 26.8.2 realm import, mailpit, otel-lgtm + dashboard), `.env.example`, local seed of the pilot and second tenants and their users (iam provisioning API), `http/*.http`, root README.
+- Current task: Definition of Done and phase review
+- Next step (exact, so a new session can resume): run the `code-reviewer` agent over `git diff main...HEAD`, fix BLOCKER/MAJOR findings, write the phase summary, mark the phase done and merge `phase/00-foundation` into `main` once CI has run on GitHub.
 
 ## Task checklist (current phase)
 
@@ -34,9 +34,9 @@ Phase 00:
 - [x] T00-07 Tenant module — ADR-012, ADR-015; extra platform endpoints `POST /tenants/{id}/suspend|reactivate` (TEN-04 needs a way to suspend)
 - [x] T00-08 IAM module — ADR-016 (tenant roles as the `bmp_roles` user attribute; Keycloak 26.8 needs `kc-admin-api` and a mapper allow-list); `@Idempotent(redact)` keeps device secrets out of replay storage; generator option `containerDefaultToNull` (PATCH can tell "absent" from "empty", fixes receipt-template PATCH clearing omitted JSON fields)
 - [x] T00-09 Audit module (skeleton) — per-tenant SHA-256 hash chain with gapless sequence (advisory lock), API-write interceptor, generic `DomainEvent` listener, `GET /api/v1/audit-records`; tamper detection proven in `AuditIT`
-- [ ] T00-10 Local environment and developer experience
-- [ ] T00-11 Architecture tests and documentation
-- [ ] T00-12 CI pipeline
+- [x] T00-10 Local environment and developer experience — compose (PostgreSQL 18.7, Keycloak 26.8.2, Mailpit, otel-lgtm with the "BMP overview" dashboard), `local` profile seeds both test tenants and their users (`IamProvisioning`), `http/*.http`, root README; Spring Boot Docker Compose support not used (compose is started explicitly)
+- [x] T00-11 Architecture tests and documentation — `ModularityTests` (docs in `app/build/spring-modulith-docs`), `ArchitectureTest` with `HexagonalRules`/`CodingRules`/`SecurityRules`; READMEs for tenant, iam, audit
+- [x] T00-12 CI pipeline — `.github/workflows/ci.yml` (build + gates, Spectral, oasdiff breaking check on PRs, CycloneDX SBOM + Trivy, signed image push on `main`), `contracts/.spectral.yaml`; not yet run on GitHub (no remote configured)
 - [ ] Definition of Done
 
 ## Open questions

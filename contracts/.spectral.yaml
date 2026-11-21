@@ -1,0 +1,78 @@
+# Contract lint (09-testing-and-quality.md §5, 03-api-standards.md). Run:
+#   npx @stoplight/spectral-cli@6.15.0 lint "contracts/openapi/*.yaml" --ruleset contracts/.spectral.yaml --fail-severity error
+extends: ["spectral:oas"]
+
+rules:
+  # common.yaml holds shared components only, referenced from the module contracts.
+  oas3-unused-component: off
+  # Internal APIs: no public contact; common.yaml has no servers of its own.
+  info-contact: off
+  oas3-api-servers: off
+
+  operation-operationId: error
+  operation-tags: error
+  operation-description: off
+
+  bmp-operation-permission:
+    description: Every operation declares the permission it needs (x-permission), or "authenticated".
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete]"
+    then:
+      field: x-permission
+      function: truthy
+
+  bmp-operation-error-codes:
+    description: Every operation lists its business error codes (x-error-codes), possibly empty.
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete]"
+    then:
+      field: x-error-codes
+      function: defined
+
+  bmp-security-error-responses:
+    description: Every operation documents 401 and 403 as Problem Details.
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete].responses"
+    then:
+      - field: "401"
+        function: truthy
+      - field: "403"
+        function: truthy
+
+  bmp-success-response-example:
+    description: Every JSON success response has an example (or named examples).
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete].responses[?(@property.match(/^2/))].content.application/json"
+    then:
+      function: xor
+      functionOptions:
+        properties: [example, examples]
+
+  bmp-request-body-example:
+    description: Every JSON request body has an example (or named examples).
+    severity: error
+    given: "$.paths[*][get,put,post,patch,delete].requestBody.content.application/json"
+    then:
+      function: xor
+      functionOptions:
+        properties: [example, examples]
+
+  bmp-post-actions-are-idempotent:
+    description: Every POST takes the Idempotency-Key header.
+    severity: error
+    resolved: false
+    given: "$.paths[*].post"
+    then:
+      - field: parameters
+        function: truthy
+      - field: parameters
+        function: schema
+        functionOptions:
+          schema:
+            type: array
+            contains:
+              type: object
+              properties:
+                $ref:
+                  const: "./common.yaml#/components/parameters/IdempotencyKey"
+              required: ["$ref"]
