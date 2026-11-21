@@ -10,6 +10,7 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-webmvc-test")
     api("org.springframework.boot:spring-boot-starter-jackson")
     api("org.testcontainers:testcontainers-postgresql")
+    api("org.awaitility:awaitility")
     implementation("org.postgresql:postgresql")
 }
 

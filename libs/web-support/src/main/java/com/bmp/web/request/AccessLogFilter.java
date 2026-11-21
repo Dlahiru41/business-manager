@@ -16,6 +16,7 @@ import java.time.Duration;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.slf4j.event.Level;
 import org.slf4j.spi.LoggingEventBuilder;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -81,8 +82,12 @@ public class AccessLogFilter extends OncePerRequestFilter {
         event.log();
     }
 
+    /**
+     * Adds a correlation key unless the MDC already carries it: structured logging rejects duplicate keys and would
+     * drop the whole line. Inner filters clear their MDC keys before this filter logs, hence the request attributes.
+     */
     private static LoggingEventBuilder addIfPresent(LoggingEventBuilder event, String key, @Nullable String value) {
-        return value != null ? event.addKeyValue(key, value) : event;
+        return value != null && MDC.get(key) == null ? event.addKeyValue(key, value) : event;
     }
 
     private static @Nullable String attribute(HttpServletRequest request, String name) {

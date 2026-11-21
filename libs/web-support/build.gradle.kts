@@ -10,6 +10,7 @@ dependencies {
     api("org.springframework.boot:spring-boot-starter-webmvc")
     api("org.springframework.boot:spring-boot-starter-validation")
     implementation("io.micrometer:micrometer-core")
+    implementation("ch.qos.logback:logback-classic")
     implementation(libs.resilience4j.circuitbreaker)
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")

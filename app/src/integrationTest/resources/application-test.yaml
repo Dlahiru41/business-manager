@@ -1,0 +1,7 @@
+# Integration tests: structured logs as in production, every trace sampled, random management port.
+management:
+  server:
+    port: 0
+  tracing:
+    sampling:
+      probability: 1.0

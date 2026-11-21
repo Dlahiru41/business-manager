@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-05 Observability baseline
-- Next step (exact, so a new session can resume): T00-05 — logging config + masking converter, tracing/metrics, actuator on 8081, `EventBacklogHealthIndicator`, `EventContext` listener advisor (tenant/MDC/trace restore), failed-event parking and resubmission job.
+- Current task: T00-06 Security
+- Next step (exact, so a new session can resume): T00-06 — resource server + `BmpPrincipal`, `TenantContextFilter` (tenant status SPI), `PermissionEvaluator` (SPI backed by iam), CORS/headers, Keycloak realm export, `JwtTestTokens`, ArchUnit `@PreAuthorize` rule.
 
 ## Task checklist (current phase)
 
@@ -29,7 +29,7 @@ Phase 00:
 - [x] T00-02 Shared kernel (`libs/shared-kernel`)
 - [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
 - [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
-- [ ] T00-05 Observability baseline
+- [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
 - [ ] T00-06 Security
 - [ ] T00-07 Tenant module
 - [ ] T00-08 IAM module

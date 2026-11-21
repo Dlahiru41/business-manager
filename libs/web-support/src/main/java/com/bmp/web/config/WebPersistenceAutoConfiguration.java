@@ -6,10 +6,9 @@ import com.bmp.web.idempotency.IdempotencyCleanupJob;
 import com.bmp.web.idempotency.IdempotencyStore;
 import com.bmp.web.idempotency.JdbcIdempotencyStore;
 import java.time.Clock;
-import javax.sql.DataSource;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -22,7 +21,7 @@ import tools.jackson.databind.json.JsonMapper;
             "org.springframework.boot.jdbc.autoconfigure.JdbcClientAutoConfiguration",
             "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration"
         })
-@ConditionalOnBean(DataSource.class)
+@ConditionalOnProperty(prefix = "spring.datasource", name = "url")
 public class WebPersistenceAutoConfiguration {
 
     @Bean

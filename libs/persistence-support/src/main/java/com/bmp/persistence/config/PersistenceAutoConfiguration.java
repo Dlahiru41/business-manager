@@ -16,8 +16,8 @@ import net.javacrumbs.shedlock.spring.annotation.EnableSchedulerLock;
 import org.hibernate.cfg.AvailableSettings;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration;
 import org.springframework.boot.hibernate.autoconfigure.HibernatePropertiesCustomizer;
@@ -28,6 +28,7 @@ import org.springframework.boot.jpa.autoconfigure.EntityManagerFactoryDependsOnP
 import org.springframework.boot.transaction.autoconfigure.TransactionManagerCustomizers;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -57,10 +58,11 @@ public class PersistenceAutoConfiguration {
         return IdGenerator.uuidV7();
     }
 
-    /** Database-backed beans; absent when the application has no DataSource. */
+    /** Database-backed beans; absent when no database is configured ({@code spring.datasource.url}). */
     @Configuration(proxyBeanMethods = false)
-    @ConditionalOnBean(DataSource.class)
+    @ConditionalOnProperty(prefix = "spring.datasource", name = "url")
     @EnableSchedulerLock(defaultLockAtMostFor = "PT10M")
+    @Import(EventInfrastructureConfiguration.class)
     static class DatabaseConfiguration {
 
         /** JPA must wait for the schema migrations. */

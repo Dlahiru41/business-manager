@@ -26,6 +26,10 @@ public class PersistenceDefaults implements EnvironmentPostProcessor {
         defaults.put("spring.modulith.events.jdbc.schema-initialization.enabled", "false");
         defaults.put("spring.modulith.events.republish-outstanding-events-on-restart", "true");
         defaults.put("spring.modulith.detection-strategy", "explicitly-annotated");
+        // Publications stuck in a state (e.g. after a crash) are marked failed so the resubmission job retries them.
+        defaults.put("spring.modulith.events.staleness.published", "PT5M");
+        defaults.put("spring.modulith.events.staleness.processing", "PT5M");
+        defaults.put("spring.modulith.events.staleness.resubmitted", "PT5M");
         environment.getPropertySources().addLast(new MapPropertySource(SOURCE_NAME, defaults));
     }
 }

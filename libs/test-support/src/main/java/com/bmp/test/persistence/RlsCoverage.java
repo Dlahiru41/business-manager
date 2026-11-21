@@ -18,8 +18,7 @@ import java.util.List;
  */
 public final class RlsCoverage {
 
-    private static final String UNPROTECTED_TABLES =
-            """
+    private static final String UNPROTECTED_TABLES = """
             SELECT n.nspname || '.' || c.relname AS table_name, c.relrowsecurity, c.relforcerowsecurity,
                    EXISTS (SELECT 1 FROM pg_policies p
                             WHERE p.schemaname = n.nspname AND p.tablename = c.relname) AS has_policy
@@ -33,8 +32,7 @@ public final class RlsCoverage {
                               AND col.column_name = 'tenant_id')
             """;
 
-    private static final String LEDGER_WRITE_GRANTS =
-            """
+    private static final String LEDGER_WRITE_GRANTS = """
             SELECT table_schema || '.' || table_name || ':' || privilege_type
               FROM information_schema.role_table_grants
              WHERE grantee = 'bmp_app'
@@ -80,7 +78,9 @@ public final class RlsCoverage {
 
     /** Fails with every violation listed. */
     public static void assertCovered(Collection<String> schemas, Collection<String> ledgerTables) throws SQLException {
-        assertThat(violations(schemas, ledgerTables)).as("row-level security coverage").isEmpty();
+        assertThat(violations(schemas, ledgerTables))
+                .as("row-level security coverage")
+                .isEmpty();
     }
 
     private static Array textArray(Connection connection, Collection<String> values) throws SQLException {

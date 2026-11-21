@@ -1,0 +1,17 @@
+# Local development: compose stack from deploy/local, readable plain-text logs, every trace sampled.
+spring:
+  datasource:
+    password: ${BMP_APP_PASSWORD:bmp_app}
+bmp:
+  persistence:
+    migrator:
+      password: ${BMP_MIGRATOR_PASSWORD:bmp_migrator}
+    platform-admin:
+      password: ${BMP_PLATFORM_ADMIN_PASSWORD:bmp_platform_admin}
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  endpoint:
+    health:
+      show-details: always

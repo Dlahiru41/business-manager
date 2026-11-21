@@ -74,13 +74,17 @@ public final class ProblemAssert extends AbstractAssert<ProblemAssert, JsonNode>
     }
 
     public ProblemAssert hasDetail(String key, String expected) {
-        assertThat(actual.path("details").path(key).asString()).as("details.%s", key).isEqualTo(expected);
+        assertThat(actual.path("details").path(key).asString())
+                .as("details.%s", key)
+                .isEqualTo(expected);
         return this;
     }
 
     public ProblemAssert hasFieldError(String field, String code) {
         List<String> found = new ArrayList<>();
-        actual.path("errors").forEach(e -> found.add(e.path("field").asString() + ":" + e.path("code").asString()));
+        actual.path("errors")
+                .forEach(e -> found.add(
+                        e.path("field").asString() + ":" + e.path("code").asString()));
         assertThat(found).as("field errors").contains(field + ":" + code);
         return this;
     }

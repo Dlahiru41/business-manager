@@ -15,6 +15,7 @@ import com.bmp.web.problem.ProblemMessages;
 import com.bmp.web.problem.ProblemWriter;
 import com.bmp.web.request.AccessLogFilter;
 import com.bmp.web.request.MdcTaskDecorator;
+import com.bmp.web.request.ModuleMdcInterceptor;
 import com.bmp.web.request.RequestIdFilter;
 import com.bmp.web.request.RequestSizeLimitFilter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -167,6 +168,7 @@ public class WebSupportAutoConfiguration {
         return new WebMvcConfigurer() {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(new ModuleMdcInterceptor());
                 registry.addInterceptor(idempotencyInterceptor);
             }
         };

@@ -119,6 +119,8 @@ val coverageClasses =
         main.output.classesDirs.asFileTree.matching {
             exclude("**/generated/**")
             exclude("**/*MapperImpl.class")
+            // The bootstrap main() runs under bootRun / in the container, never inside a test JVM.
+            exclude("com/bmp/BmpApplication.class")
         }
     }
 
