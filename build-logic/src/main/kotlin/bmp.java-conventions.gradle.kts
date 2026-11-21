@@ -103,6 +103,7 @@ tasks.withType<Test>().configureEach {
     jvmArgs("-XX:+EnableDynamicAgentLoading", "-Xshare:off")
     systemProperty("user.timezone", "UTC")
     systemProperty("file.encoding", "UTF-8")
+    systemProperty("bmp.contracts.dir", rootProject.layout.projectDirectory.dir("contracts").asFile.absolutePath)
     testLogging {
         events("failed")
         exceptionFormat = TestExceptionFormat.FULL

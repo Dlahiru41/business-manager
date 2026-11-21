@@ -1,3 +1,4 @@
+import net.ltgt.gradle.errorprone.errorprone
 import org.openapitools.generator.gradle.plugin.tasks.GenerateTask
 
 // Conventions for a bounded-context module (one Spring Modulith application module rooted at com.bmp.<module>).
@@ -22,6 +23,7 @@ dependencies {
     add("implementation", project(":libs:web-support"))
     add("implementation", project(":libs:persistence-support"))
     add("implementation", lib("mapstruct"))
+    add("implementation", "io.micrometer:micrometer-observation")
     add("annotationProcessor", lib("mapstruct-processor"))
     add("testImplementation", project(":libs:test-support"))
 }
@@ -36,7 +38,8 @@ if (openApiSpec.exists()) {
     tasks.named<GenerateTask>("openApiGenerate") {
         inputs.dir(rootProject.layout.projectDirectory.dir("contracts/openapi"))
         generatorName.set("spring")
-        inputSpec.set(openApiSpec.absolutePath)
+        // A file: URI (percent-encoded) so relative $refs resolve even when the path contains spaces.
+        remoteInputSpec.set(openApiSpec.toURI().toString())
         outputDir.set(generatedDir)
         apiPackage.set("$generatedPackage.api")
         modelPackage.set("$generatedPackage.model")
@@ -65,10 +68,30 @@ if (openApiSpec.exists()) {
         )
     }
 
-    the<SourceSetContainer>().named("main") {
+    // Generated code is compiled in its own source set: it is not ours to fix, so it gets neither -Werror nor
+    // Error Prone. Hand-written code keeps every gate and only sees the generated classes on its classpath.
+    val sourceSets = the<SourceSetContainer>()
+    val openapi = sourceSets.create("openapi") {
         java.srcDir(generatedDir.map { it.dir("src/main/java") })
     }
-    tasks.named("compileJava") { dependsOn("openApiGenerate") }
+    configurations.named(openapi.implementationConfigurationName) {
+        extendsFrom(configurations.getByName("implementation"))
+    }
+    configurations.named(openapi.compileOnlyConfigurationName) {
+        extendsFrom(configurations.getByName("compileOnly"))
+    }
+    tasks.named<JavaCompile>(openapi.compileJavaTaskName) {
+        dependsOn("openApiGenerate")
+        options.errorprone.enabled.set(false)
+        options.compilerArgs.removeAll(listOf("-Werror", "-Xlint:all"))
+    }
+    for (name in listOf("main", "test", "integrationTest", "testFixtures")) {
+        sourceSets.named(name) {
+            compileClasspath += openapi.output
+            runtimeClasspath += openapi.output
+        }
+    }
+    tasks.named<Jar>("jar") { from(openapi.output) }
 }
 
 // Mutation testing on the module's domain package (phase gate from phase 02, 09-testing-and-quality.md §5).

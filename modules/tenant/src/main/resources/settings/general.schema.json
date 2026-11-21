@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "General",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$",
+      "default": "LKR",
+      "description": "ISO 4217; locked once business documents exist (TEN-02)."
+    },
+    "timeZone": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "default": "Asia/Colombo",
+      "description": "IANA time zone; locked like currency (TEN-02)."
+    },
+    "businessDayCutoffHour": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 23,
+      "default": 0
+    },
+    "languages": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "en",
+          "si",
+          "ta"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true,
+      "default": [
+        "en"
+      ]
+    }
+  }
+}

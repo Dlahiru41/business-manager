@@ -14,6 +14,9 @@ dependencies {
     // Consumers that use JwtTestTokens already have Spring Security through web-support.
     compileOnly("org.springframework.boot:spring-boot-starter-security-oauth2-resource-server")
     api(libs.archunit.junit5)
+    api(libs.swagger.request.validator.core)
+    api(libs.json.schema.validator)
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
     implementation("org.postgresql:postgresql")
 }
 

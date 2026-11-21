@@ -31,7 +31,7 @@ Option 1. Versions chosen:
 | Scheduling | ShedLock | 7.11.0 | |
 | Resilience | Resilience4j BOM | 2.4.0 | core modules only (circuit breaker) |
 | JDBC spans | datasource-micrometer-spring-boot | 2.3.1 | |
-| Settings schemas | networknt json-schema-validator | 3.0.9 | Jackson 3 based |
+| Settings schemas | networknt json-schema-validator | 2.0.8 | Jackson 2 API; same major as the contract validator (openapi-request-validator 3.0.0 needs 2.x), so both share one version |
 | IdP | Keycloak server image | 26.8.2 | `quay.io/keycloak/keycloak` |
 | Test | Testcontainers Keycloak | 4.4.0 | Testcontainers 2.x line |
 | Test | ArchUnit | 1.5.1 | |

@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-07 Tenant module
-- Next step (exact, so a new session can resume): T00-07 — `contracts/openapi/common.yaml` + `tenant.yaml`, AsyncAPI events, tenant migrations, domain (Tenant, Location, Setting, ReceiptTemplate), handlers, controllers, `TenantStatusProvider` impl with Caffeine cache, rules TEN-01..04, ADR-015 (event publication style).
+- Current task: T00-08 IAM module
+- Next step (exact, so a new session can resume): T00-08 — `contracts/openapi/iam.yaml`, iam migrations (app_user, role, role_permission, user_role, device), domain + handlers, `IdentityProviderGateway` (Keycloak admin REST adapter + in-memory fake), TenantCreated listener seeding system roles, `PermissionResolver`/`DeviceStatusProvider` implementations, IAM-01..03, `/me`; then the Keycloak Testcontainers IT and cross-tenant 404 coverage.
 
 ## Task checklist (current phase)
 
@@ -31,7 +31,7 @@ Phase 00:
 - [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
 - [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
 - [x] T00-06 Security — ADR-014; Keycloak Testcontainers IT and the cross-tenant 404 test need real endpoints and are added with T00-07/T00-08
-- [ ] T00-07 Tenant module
+- [x] T00-07 Tenant module — ADR-012, ADR-015; extra platform endpoints `POST /tenants/{id}/suspend|reactivate` (TEN-04 needs a way to suspend)
 - [ ] T00-08 IAM module
 - [ ] T00-09 Audit module (skeleton)
 - [ ] T00-10 Local environment and developer experience
@@ -43,6 +43,7 @@ Phase 00:
 
 _One line each: date, question, assumption taken, ADR link._
 
+- 2026-11-21 — Settings sanity limits (returnWindowDays ≤ 365, offlineMaxHours ≤ 720, periodLockDays ≤ 31) and numbering prefixes (PO-, GRN-, CN-) are assumptions in the schemas; confirm with the client.
 - 2026-11-21 — Default role permissions follow 08-security.md §3 literally, so only OWNER has `tenant:read`/`tenant:*`; MANAGER etc. may need `tenant:read` for settings — assumption: least privilege, tenants extend roles via the iam API (ADR-014).
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 

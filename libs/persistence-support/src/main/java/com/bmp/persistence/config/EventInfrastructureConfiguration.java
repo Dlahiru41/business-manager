@@ -5,6 +5,7 @@ import com.bmp.persistence.event.EventContext;
 import com.bmp.persistence.event.EventContextInterceptor;
 import com.bmp.persistence.event.EventMetadataSource;
 import com.bmp.persistence.event.EventResubmissionJob;
+import com.bmp.persistence.event.EventStamps;
 import com.bmp.persistence.event.FailedEventStore;
 import com.bmp.shared.id.IdGenerator;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -45,6 +46,11 @@ class EventInfrastructureConfiguration {
     @Bean
     EventMetadataSource eventMetadataSource(ObjectProvider<Tracer> tracer) {
         return new EventMetadataSource(tracer.getIfUnique());
+    }
+
+    @Bean
+    EventStamps eventStamps(IdGenerator ids, Clock clock, EventMetadataSource eventMetadataSource) {
+        return new EventStamps(ids, clock, eventMetadataSource);
     }
 
     @Bean

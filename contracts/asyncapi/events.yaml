@@ -1,0 +1,253 @@
+asyncapi: 3.0.0
+info:
+  title: BMP domain events
+  version: 1.0.0
+  description: |
+    Events published by the platform modules (docs/reference/event-catalogue.md, 07-events-and-messaging.md).
+    Phases 00-05 deliver them in-process through the Spring Modulith event publication registry (outbox); phase 06
+    externalizes them to Kafka. Type names: `bmp.<module>.<event-kebab>.v<N>`; topics `bmp.<module>.<aggregate>`,
+    key = aggregate id. Payloads carry ids, never personal data. Consumers must ignore unknown fields; producers add
+    fields only (a breaking change is a new version).
+
+channels:
+  tenantTenant:
+    address: bmp.tenant.tenant
+    messages:
+      TenantCreated:
+        $ref: "#/components/messages/TenantCreated"
+      SettingsChanged:
+        $ref: "#/components/messages/SettingsChanged"
+  tenantLocation:
+    address: bmp.tenant.location
+    messages:
+      LocationCreated:
+        $ref: "#/components/messages/LocationCreated"
+  iamDevice:
+    address: bmp.iam.device
+    messages:
+      DeviceRegistered:
+        $ref: "#/components/messages/DeviceRegistered"
+
+operations:
+  publishTenantEvents:
+    action: send
+    channel:
+      $ref: "#/channels/tenantTenant"
+  publishLocationEvents:
+    action: send
+    channel:
+      $ref: "#/channels/tenantLocation"
+  publishDeviceEvents:
+    action: send
+    channel:
+      $ref: "#/channels/iamDevice"
+
+components:
+  messages:
+    TenantCreated:
+      name: bmp.tenant.tenant-created.v1
+      title: Tenant created
+      summary: A tenant was created; consumers seed their per-tenant defaults (iam seeds system roles).
+      payload:
+        $ref: "#/components/schemas/TenantCreated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f70
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 01934f5a-6d1c-7000-8000-000000000a01
+            aggregateVersion: 0
+            metadata:
+              requestId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f71
+            businessType: RETAIL_GROCERY
+            currency: LKR
+            timeZone: Asia/Colombo
+            businessDayCutoffHour: 0
+    SettingsChanged:
+      name: bmp.tenant.settings-changed.v1
+      title: Settings changed
+      summary: Settings of one group changed; aggregate version is the new group version.
+      payload:
+        $ref: "#/components/schemas/SettingsChanged"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f72
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:45:00Z"
+            aggregateId: 01934f5a-6d1c-7000-8000-000000000a01
+            aggregateVersion: 3
+            metadata: {}
+            group: sales
+            changes:
+              - key: maxCashierDiscountPct
+                value: '"7.50"'
+    LocationCreated:
+      name: bmp.tenant.location-created.v1
+      title: Location created
+      summary: A location was created; inventory keeps a local replica.
+      payload:
+        $ref: "#/components/schemas/LocationCreated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f73
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 01934f5a-6d1c-7000-8000-000000000c01
+            aggregateVersion: 0
+            metadata: {}
+            locationId: 01934f5a-6d1c-7000-8000-000000000c01
+            name: Main shop
+            type: SHOP
+    DeviceRegistered:
+      name: bmp.iam.device-registered.v1
+      title: Device registered
+      summary: A till was registered and received its credential; sync and sales prepare for it.
+      payload:
+        $ref: "#/components/schemas/DeviceRegistered"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f74
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T10:00:00Z"
+            aggregateId: 01934f5a-6d1c-7000-8000-000000000e01
+            aggregateVersion: 0
+            metadata: {}
+            deviceId: 01934f5a-6d1c-7000-8000-000000000e01
+            locationId: 01934f5a-6d1c-7000-8000-000000000c01
+
+  schemas:
+    Uuid:
+      type: string
+      pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    EventMetadata:
+      type: object
+      additionalProperties: false
+      description: Actor, request and trace of the publisher (ids only).
+      properties:
+        actorId:
+          $ref: "#/components/schemas/Uuid"
+        deviceId:
+          $ref: "#/components/schemas/Uuid"
+        requestId:
+          type: string
+        traceparent:
+          type: string
+    TenantCreated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, businessType, currency,
+                 timeZone, businessDayCutoffHour]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        businessType:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timeZone:
+          type: string
+        businessDayCutoffHour:
+          type: integer
+          minimum: 0
+          maximum: 23
+        templatePackId:
+          type: string
+    SettingsChanged:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, group, changes]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 1
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        group:
+          type: string
+          enum: [general, inventory, sales, pricing, tax, finance, payments, numbering]
+        changes:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [key, value]
+            properties:
+              key:
+                type: string
+              value:
+                type: string
+                description: The new value as JSON text.
+    LocationCreated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, locationId, name, type]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        locationId:
+          $ref: "#/components/schemas/Uuid"
+        name:
+          type: string
+        type:
+          type: string
+          enum: [SHOP, STORE, WAREHOUSE]
+    DeviceRegistered:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, deviceId, locationId]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        deviceId:
+          $ref: "#/components/schemas/Uuid"
+        registerId:
+          $ref: "#/components/schemas/Uuid"
+        locationId:
+          $ref: "#/components/schemas/Uuid"

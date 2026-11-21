@@ -18,6 +18,7 @@ import com.bmp.web.request.MdcTaskDecorator;
 import com.bmp.web.request.ModuleMdcInterceptor;
 import com.bmp.web.request.RequestIdFilter;
 import com.bmp.web.request.RequestSizeLimitFilter;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.nio.charset.StandardCharsets;
@@ -118,13 +119,18 @@ public class WebSupportAutoConfiguration {
         return new BmpJacksonModule();
     }
 
-    /** Requests reject unknown properties to catch typos (03-api-standards.md §3). */
+    /**
+     * Requests reject unknown properties to catch typos (03-api-standards.md §3); absent optional values are omitted
+     * instead of written as {@code null}, as the contracts declare them.
+     */
     @Bean
     JsonMapperBuilderCustomizer bmpStrictJson() {
         return builder -> builder.enable(
-                DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
-                DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES,
-                DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+                        DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES,
+                        DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES,
+                        DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+                .changeDefaultPropertyInclusion(
+                        inclusion -> inclusion.withValueInclusion(JsonInclude.Include.NON_NULL));
     }
 
     @Bean
