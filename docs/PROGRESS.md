@@ -19,14 +19,14 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-02 Shared kernel
-- Next step (exact, so a new session can resume): implement `libs/shared-kernel` (T00-02) with unit tests.
+- Current task: T00-03 Web support
+- Next step (exact, so a new session can resume): implement `libs/web-support` (T00-03).
 
 ## Task checklist (current phase)
 
 Phase 00:
 - [x] T00-01 Repository and build scaffold
-- [ ] T00-02 Shared kernel (`libs/shared-kernel`)
+- [x] T00-02 Shared kernel (`libs/shared-kernel`)
 - [ ] T00-03 Web support (`libs/web-support`)
 - [ ] T00-04 Persistence support (`libs/persistence-support`)
 - [ ] T00-05 Observability baseline
