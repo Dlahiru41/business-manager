@@ -1,0 +1,64 @@
+# Local development stack (docs/standards/05-logging-and-observability.md §10, CLAUDE.md §2).
+#   docker compose -f deploy/local/compose.yaml up -d
+# Values come from deploy/local/.env (copy .env.example); every value has a local-only default.
+name: bmp
+
+services:
+  postgres:
+    image: postgres:18.7-alpine
+    environment:
+      POSTGRES_DB: bmp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${BMP_POSTGRES_PASSWORD:-postgres}
+      BMP_MIGRATOR_PASSWORD: ${BMP_MIGRATOR_PASSWORD:-bmp_migrator}
+      BMP_APP_PASSWORD: ${BMP_APP_PASSWORD:-bmp_app}
+      BMP_PLATFORM_ADMIN_PASSWORD: ${BMP_PLATFORM_ADMIN_PASSWORD:-bmp_platform_admin}
+    ports:
+      # Change BMP_POSTGRES_PORT if a PostgreSQL installed on the machine already uses 5432, and point the app at it
+      # with BMP_DB_URL=jdbc:postgresql://localhost:<port>/bmp.
+      - "${BMP_POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bmp"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: ["start-dev", "--import-realm", "--http-port=8180", "--health-enabled=true"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${BMP_KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${BMP_KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Placeholders in realm-bmp.json:
+      BMP_KEYCLOAK_ADMIN_CLIENT_SECRET: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:-local-dev-admin-secret}
+      BMP_DEV_USER_PASSWORD: ${BMP_DEV_USER_PASSWORD:-Dev-Passw0rd!}
+      BMP_SMTP_HOST: mailpit
+      BMP_SMTP_PORT: "1025"
+    ports:
+      - "8180:8180"
+    volumes:
+      - ./keycloak/realm-bmp.json:/opt/keycloak/data/import/realm-bmp.json:ro
+    depends_on:
+      - mailpit
+
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    ports:
+      - "8025:8025" # web UI
+      - "1025:1025" # SMTP
+
+  lgtm:
+    image: grafana/otel-lgtm:0.40.0
+    ports:
+      - "3000:3000" # Grafana (admin/admin)
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP: traces and metrics from the app
+    volumes:
+      - ./grafana/provisioning/bmp-dashboards.yaml:/otel-lgtm/grafana/conf/provisioning/dashboards/bmp-dashboards.yaml:ro
+      - ./grafana/dashboards:/otel-lgtm/bmp-dashboards:ro
+
+volumes:
+  postgres-data:

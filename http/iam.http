@@ -1,0 +1,84 @@
+# IAM module (contracts/openapi/iam.yaml). Get tokens with auth.http first.
+
+### Who am I
+GET {{baseUrl}}/api/v1/me
+Authorization: Bearer {{ownerToken}}
+
+### My permissions
+GET {{baseUrl}}/api/v1/me/permissions
+Authorization: Bearer {{ownerToken}}
+
+### Roles (system roles first)
+GET {{baseUrl}}/api/v1/roles
+Authorization: Bearer {{ownerToken}}
+
+### Create a custom role
+POST {{baseUrl}}/api/v1/roles
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "SUPERVISOR{{$randomInt}}", "name": "Shift supervisor", "permissions": ["sales:*", "catalog:read"]}
+
+### Users
+GET {{baseUrl}}/api/v1/users
+Authorization: Bearer {{ownerToken}}
+
+### Create a user (Keycloak sends the "set your password" mail to Mailpit: http://localhost:8025)
+POST {{baseUrl}}/api/v1/users
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"username": "cashier{{$randomInt}}", "email": "cashier{{$randomInt}}@example.invalid", "displayName": "New cashier",
+ "roles": [{"code": "CASHIER"}]}
+
+> {% client.global.set("userId", response.body.id); client.global.set("userEtag", response.headers.valueOf("ETag")); %}
+
+### Disable the user
+PATCH {{baseUrl}}/api/v1/users/{{userId}}
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{userEtag}}
+
+{"status": "DISABLED"}
+
+### Register a till (the secret is shown once)
+GET {{baseUrl}}/api/v1/locations
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("shopId", response.body.items[0].id); %}
+
+###
+POST {{baseUrl}}/api/v1/devices
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"name": "Till 1", "locationId": "{{shopId}}"}
+
+> {%
+    client.global.set("deviceId", response.body.device.id);
+    client.global.set("deviceClientId", response.body.device.clientId);
+    client.global.set("deviceSecret", response.body.clientSecret);
+%}
+
+### The till signs in with its client credential
+POST {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=client_credentials&client_id={{deviceClientId}}&client_secret={{deviceSecret}}
+
+> {% client.global.set("deviceToken", response.body.access_token); %}
+
+### The till calls the API
+GET {{baseUrl}}/api/v1/me
+Authorization: Bearer {{deviceToken}}
+
+### Revoke the till (its token is rejected at once afterwards: 403 DEVICE_REVOKED)
+POST {{baseUrl}}/api/v1/devices/{{deviceId}}/revoke
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"reason": "Till replaced"}

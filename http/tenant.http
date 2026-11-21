@@ -1,0 +1,57 @@
+# Tenant module (contracts/openapi/tenant.yaml). Get tokens with auth.http first.
+
+### The caller's tenant
+GET {{baseUrl}}/api/v1/tenant
+Authorization: Bearer {{ownerToken}}
+
+### Locations
+GET {{baseUrl}}/api/v1/locations
+Authorization: Bearer {{ownerToken}}
+
+### Create a location
+POST {{baseUrl}}/api/v1/locations
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"name": "Store room {{$randomInt}}", "type": "STORE", "address": {"line1": "12 Main Street", "city": "Kandy"}}
+
+> {% client.global.set("locationId", response.body.id); %}
+
+### All settings
+GET {{baseUrl}}/api/v1/settings
+Authorization: Bearer {{ownerToken}}
+
+### Sales settings (keeps the ETag for the update below)
+GET {{baseUrl}}/api/v1/settings/sales
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("salesEtag", response.headers.valueOf("ETag")); %}
+
+### Update sales settings
+PATCH {{baseUrl}}/api/v1/settings/sales
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{salesEtag}}
+
+{"values": {"returnWindowDays": 10}}
+
+### Receipt templates
+GET {{baseUrl}}/api/v1/receipt-templates
+Authorization: Bearer {{ownerToken}}
+
+### Create a tenant (platform administrator)
+POST {{baseUrl}}/api/v1/tenants
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"name": "Demo shop {{$randomInt}}", "businessType": "RETAIL_GROCERY"}
+
+### A cashier may not change settings (403 ACCESS_DENIED)
+PATCH {{baseUrl}}/api/v1/settings/sales
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+If-Match: {{salesEtag}}
+
+{"values": {"returnWindowDays": 30}}

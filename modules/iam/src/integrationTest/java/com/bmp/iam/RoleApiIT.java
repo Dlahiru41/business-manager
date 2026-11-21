@@ -7,9 +7,13 @@ import static com.bmp.iam.IamApi.json;
 import static com.bmp.iam.IamApi.token;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.bmp.iam.api.IamProvisioning;
+import com.bmp.iam.api.dto.ExistingAccount;
 import com.bmp.iam.application.command.SeedSystemRolesHandler;
 import com.bmp.shared.context.TenantContext;
+import com.bmp.shared.error.BmpException;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
 import com.bmp.shared.security.SystemRole;
@@ -45,6 +49,9 @@ class RoleApiIT {
 
     @Autowired
     SeedSystemRolesHandler seeder;
+
+    @Autowired
+    IamProvisioning provisioning;
 
     private IamApi api;
     private TenantId tenant;
@@ -194,5 +201,23 @@ class RoleApiIT {
         assertThatProblem(missingUpdate).hasStatus(404).hasCode("ROLE_NOT_FOUND");
         assertThatProblem(forbidden).hasStatus(403).hasCode("ACCESS_DENIED");
         CONTRACT.assertConforms(missing);
+    }
+
+    @Test
+    void provisionsExistingAccountsOnceWithoutTheIdentityProvider() {
+        UserId subject = UserId.of(UUID.randomUUID());
+        ExistingAccount account = new ExistingAccount(subject, "Seeded owner", List.of("OWNER", "CASHIER"));
+
+        provisioning.provision(tenant, account);
+        provisioning.provision(tenant, new ExistingAccount(subject, "Renamed", List.of("CASHIER")));
+
+        JsonNode user = json(api.get("/api/v1/users/" + subject, owner));
+        assertThat(user.path("displayName").asString()).isEqualTo("Seeded owner");
+        assertThat(user.path("roles")).hasSize(2);
+        assertThatThrownBy(() -> provisioning.provision(
+                        tenant, new ExistingAccount(UserId.of(UUID.randomUUID()), "X", List.of("NO_SUCH_ROLE"))))
+                .isInstanceOfSatisfying(
+                        BmpException.class,
+                        e -> assertThat(e.errorCode().code()).isEqualTo("UNKNOWN_ROLE"));
     }
 }

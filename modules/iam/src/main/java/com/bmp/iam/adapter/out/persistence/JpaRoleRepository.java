@@ -21,4 +21,11 @@ interface JpaRoleRepository extends JpaRepository<Role, UUID>, RoleRepository {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Role r where r.code = :code")
     Optional<Role> lockByCode(String code);
+
+    @Override
+    @Query(value = """
+                    SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(CAST(platform.current_tenant_id() AS text),
+                                                                                   20))) AS seeding
+                    """, nativeQuery = true)
+    int lockForSeeding();
 }

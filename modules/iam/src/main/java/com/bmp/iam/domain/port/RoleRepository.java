@@ -26,6 +26,14 @@ public interface RoleRepository {
      */
     Optional<Role> lockByCode(String code);
 
+    /**
+     * Takes the tenant's seeding lock until the transaction ends, so that concurrent seeders (the {@code TenantCreated}
+     * listener and provisioning) never both insert the system roles.
+     *
+     * @return always 1
+     */
+    int lockForSeeding();
+
     Role save(Role role);
 
     /** Saves and flushes, so the returned entity carries its new version. */

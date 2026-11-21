@@ -8,7 +8,9 @@ import com.bmp.persistence.event.EventResubmissionJob;
 import com.bmp.persistence.event.EventStamps;
 import com.bmp.persistence.event.FailedEventStore;
 import com.bmp.shared.id.IdGenerator;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.binder.MeterBinder;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import io.micrometer.tracing.Tracer;
 import io.micrometer.tracing.propagation.Propagator;
@@ -93,6 +95,19 @@ class EventInfrastructureConfiguration {
             Clock clock) {
         return new EventResubmissionJob(
                 failedPublications, failedEventStore, meters.getIfUnique(SimpleMeterRegistry::new), clock);
+    }
+
+    /** Gauge {@code bmp.events.incomplete}: publications not completed yet (abandoned ones excluded). */
+    @Bean
+    MeterBinder eventBacklogGauge(JdbcClient jdbcClient) {
+        return registry -> Gauge.builder(
+                        "bmp.events.incomplete",
+                        () -> jdbcClient.sql("""
+                                SELECT count(*) FROM platform.event_publication
+                                 WHERE completion_date IS NULL AND (status IS NULL OR status <> 'ABANDONED')
+                                """).query(Long.class).single())
+                .description("Event publications not completed yet")
+                .register(registry);
     }
 
     @Bean(name = "eventBacklog")

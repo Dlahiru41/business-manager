@@ -41,6 +41,7 @@ public class SeedSystemRolesHandler {
     @Transactional
     public int seed() {
         TenantId tenant = TenantContext.require();
+        roles.lockForSeeding();
         int created = 0;
         for (SystemRole system : Arrays.stream(SystemRole.values())
                 .filter(SystemRole::isTenantRole)

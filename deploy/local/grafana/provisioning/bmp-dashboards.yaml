@@ -1,0 +1,9 @@
+apiVersion: 1
+
+providers:
+  - name: "BMP"
+    folder: "BMP"
+    type: file
+    options:
+      path: /otel-lgtm/bmp-dashboards
+      foldersFromFilesStructure: false

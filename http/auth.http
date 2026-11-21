@@ -1,0 +1,26 @@
+# Tokens from the local Keycloak (deploy/local/compose.yaml). Run once per session; the tokens are stored as globals.
+# Copy http-client.private.env.json.example to http-client.private.env.json (git-ignored) and choose the "local" env.
+
+### Pilot shop owner
+POST {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username={{ownerUser}}&password={{password}}
+
+> {% client.global.set("ownerToken", response.body.access_token); %}
+
+### Pilot shop cashier
+POST {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username={{cashierUser}}&password={{password}}
+
+> {% client.global.set("cashierToken", response.body.access_token); %}
+
+### Platform administrator
+POST {{keycloakUrl}}/realms/{{realm}}/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=password&client_id={{clientId}}&username={{adminUser}}&password={{password}}
+
+> {% client.global.set("adminToken", response.body.access_token); %}

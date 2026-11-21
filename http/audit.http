@@ -1,0 +1,9 @@
+# Audit module (contracts/openapi/audit.yaml). Get tokens with auth.http first.
+
+### Newest audit records
+GET {{baseUrl}}/api/v1/audit-records?limit=20
+Authorization: Bearer {{ownerToken}}
+
+### Records of devices
+GET {{baseUrl}}/api/v1/audit-records?resourceType=devices
+Authorization: Bearer {{ownerToken}}
