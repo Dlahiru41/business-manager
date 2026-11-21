@@ -26,30 +26,6 @@
   "roles": {
     "realm": [
       {
-        "name": "OWNER",
-        "description": "All tenant permissions"
-      },
-      {
-        "name": "MANAGER",
-        "description": "Catalog, pricing, inventory, procurement, sales, payments, reports"
-      },
-      {
-        "name": "CASHIER",
-        "description": "Billing at the till"
-      },
-      {
-        "name": "STOREKEEPER",
-        "description": "Receiving, transformations, counts"
-      },
-      {
-        "name": "ACCOUNTANT",
-        "description": "Finance and reports"
-      },
-      {
-        "name": "DEVICE",
-        "description": "A registered till (service accounts of device clients)"
-      },
-      {
         "name": "platform_admin",
         "description": "Operates the platform; may act for a tenant via X-Tenant-Id (audited)"
       }
@@ -123,9 +99,10 @@
         {
           "name": "roles",
           "protocol": "openid-connect",
-          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
           "consentRequired": false,
           "config": {
+            "user.attribute": "bmp_roles",
             "claim.name": "roles",
             "jsonType.label": "String",
             "multivalued": "true",
@@ -159,7 +136,16 @@
       "standardFlowEnabled": false,
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": true
+      "serviceAccountsEnabled": true,
+      "defaultClientScopes": [
+        "kc-admin-api",
+        "basic",
+        "profile",
+        "email",
+        "roles",
+        "web-origins",
+        "acr"
+      ]
     }
   ],
   "users": [
@@ -199,12 +185,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "OWNER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a01"
+        ],
+        "bmp_roles": [
+          "OWNER"
         ]
       }
     },
@@ -224,12 +212,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "MANAGER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a01"
+        ],
+        "bmp_roles": [
+          "MANAGER"
         ]
       }
     },
@@ -249,12 +239,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "CASHIER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a01"
+        ],
+        "bmp_roles": [
+          "CASHIER"
         ]
       }
     },
@@ -274,12 +266,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "STOREKEEPER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a01"
+        ],
+        "bmp_roles": [
+          "STOREKEEPER"
         ]
       }
     },
@@ -299,12 +293,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "ACCOUNTANT"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a01"
+        ],
+        "bmp_roles": [
+          "ACCOUNTANT"
         ]
       }
     },
@@ -324,12 +320,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "OWNER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a02"
+        ],
+        "bmp_roles": [
+          "OWNER"
         ]
       }
     },
@@ -349,12 +347,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "MANAGER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a02"
+        ],
+        "bmp_roles": [
+          "MANAGER"
         ]
       }
     },
@@ -374,12 +374,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "CASHIER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a02"
+        ],
+        "bmp_roles": [
+          "CASHIER"
         ]
       }
     },
@@ -399,12 +401,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "STOREKEEPER"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a02"
+        ],
+        "bmp_roles": [
+          "STOREKEEPER"
         ]
       }
     },
@@ -424,12 +428,14 @@
         }
       ],
       "realmRoles": [
-        "default-roles-bmp",
-        "ACCOUNTANT"
+        "default-roles-bmp"
       ],
       "attributes": {
         "tenant_id": [
           "01934f5a-6d1c-7000-8000-000000000a02"
+        ],
+        "bmp_roles": [
+          "ACCOUNTANT"
         ]
       }
     },
@@ -464,5 +470,8 @@
         }
       }
     ]
+  },
+  "attributes": {
+    "allowedProtocolMapperTypesForClientAdministrators": "oidc-hardcoded-claim-mapper,oidc-audience-mapper"
   }
 }

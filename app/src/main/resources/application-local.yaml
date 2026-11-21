@@ -3,6 +3,9 @@ spring:
   datasource:
     password: ${BMP_APP_PASSWORD:bmp_app}
 bmp:
+  iam:
+    keycloak:
+      client-secret: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-admin-secret}
   persistence:
     migrator:
       password: ${BMP_MIGRATOR_PASSWORD:bmp_migrator}

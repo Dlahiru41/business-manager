@@ -6,6 +6,7 @@ dependencies {
     implementation(project(":libs:web-support"))
     implementation(project(":libs:persistence-support"))
     implementation(project(":modules:tenant"))
+    implementation(project(":modules:iam"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
     implementation("io.micrometer:micrometer-registry-prometheus")

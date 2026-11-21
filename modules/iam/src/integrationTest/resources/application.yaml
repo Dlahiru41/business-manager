@@ -1,0 +1,8 @@
+bmp:
+  security:
+    issuer-uri: https://issuer.test.bmp/realms/bmp
+  iam:
+    keycloak:
+      # Never called in these tests: FakeIdentityProvider replaces the gateway (KeycloakIdentityProviderIT uses a real one).
+      base-url: http://localhost:1
+      client-secret: test-only-not-a-secret

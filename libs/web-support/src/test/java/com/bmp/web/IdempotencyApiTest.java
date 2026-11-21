@@ -151,4 +151,25 @@ class IdempotencyApiTest {
 
         assertThat(create(key, BODY)).hasStatus(201);
     }
+
+    @Test
+    void shouldNeverStoreRedactedFieldsAndReplayWithoutThem() {
+        String key = UUID.randomUUID().toString();
+
+        MvcTestResult first = mvc.post()
+                .uri("/test/credentials")
+                .header("Idempotency-Key", key)
+                .exchange();
+        MvcTestResult replay = mvc.post()
+                .uri("/test/credentials")
+                .header("Idempotency-Key", key)
+                .exchange();
+
+        assertThat(first).hasStatus(201).bodyJson().extractingPath("$.secret").isEqualTo("one-time-1");
+        assertThat(replay).hasStatus(201).hasHeader("Idempotent-Replayed", "true");
+        assertThat(replay).bodyJson().doesNotHavePath("$.secret");
+        assertThat(replay).bodyJson().extractingPath("$.id").isEqualTo(DummyController.THING_ID.toString());
+        assertThat(store.storedBodies()).noneMatch(body -> body.contains("one-time"));
+        assertThat(DummyController.CREATIONS).hasValue(1);
+    }
 }

@@ -68,6 +68,15 @@ public class DummyController {
                 .body(thing);
     }
 
+    public record Credential(UUID id, String secret) {}
+
+    @Idempotent(redact = {"secret"})
+    @PostMapping("/credentials")
+    ResponseEntity<Credential> issue() {
+        CREATIONS.incrementAndGet();
+        return ResponseEntity.status(201).body(new Credential(THING_ID, "one-time-" + CREATIONS.get()));
+    }
+
     @Idempotent
     @PostMapping("/explode")
     ResponseEntity<Void> explode() {

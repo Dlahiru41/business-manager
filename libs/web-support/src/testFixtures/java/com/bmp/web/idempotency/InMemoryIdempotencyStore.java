@@ -2,7 +2,9 @@ package com.bmp.web.idempotency;
 
 import com.bmp.shared.id.TenantId;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Thread-safe in-memory {@link IdempotencyStore} for tests that do not need the database. */
@@ -50,6 +52,16 @@ public class InMemoryIdempotencyStore implements IdempotencyStore {
     /** Claims {@code key} without completing it, to simulate a request still in progress. */
     public void claim(TenantId tenant, String key, String requestHash, Instant expiresAt) {
         entries.put(id(tenant, key), new Entry(requestHash, null, expiresAt));
+    }
+
+    /** Every response body stored so far, to assert that nothing secret was persisted. */
+    public List<String> storedBodies() {
+        return entries.values().stream()
+                .map(Entry::response)
+                .filter(Objects::nonNull)
+                .map(StoredResponse::body)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     public void clear() {

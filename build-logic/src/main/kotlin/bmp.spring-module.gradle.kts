@@ -63,6 +63,8 @@ if (openApiSpec.exists()) {
                 "documentationProvider" to "none",
                 "annotationLibrary" to "none",
                 "dateLibrary" to "java8",
+                // Absent containers stay null, so PATCH can tell "not sent" from "sent empty".
+                "containerDefaultToNull" to "true",
                 "sourceFolder" to "src/main/java",
             ),
         )

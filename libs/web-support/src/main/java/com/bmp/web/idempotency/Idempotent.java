@@ -14,4 +14,11 @@ import java.lang.annotation.Target;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
-public @interface Idempotent {}
+public @interface Idempotent {
+
+    /**
+     * Top-level response fields removed from the copy stored for replay, e.g. a one-time secret that must never be
+     * persisted. A replay then answers without them.
+     */
+    String[] redact() default {};
+}

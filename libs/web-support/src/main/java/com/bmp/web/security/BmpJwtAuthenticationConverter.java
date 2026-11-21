@@ -3,6 +3,7 @@ package com.bmp.web.security;
 import com.bmp.shared.id.DeviceId;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
+import com.bmp.shared.security.SystemRole;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -18,7 +19,8 @@ import org.springframework.security.oauth2.server.resource.InvalidBearerTokenExc
 
 /**
  * Turns a validated JWT into a {@link BmpAuthentication}: {@code sub} (UUID) becomes the user id, {@code tenant_id}
- * and {@code device_id} the tenant and device, {@code roles} (or Keycloak's {@code realm_access.roles}) the roles.
+ * and {@code device_id} the tenant and device, {@code roles} the tenant roles, and {@code platform_admin} in Keycloak's
+ * {@code realm_access.roles} the platform role.
  * Malformed identity claims make the token invalid (401), they are never guessed.
  */
 public class BmpJwtAuthenticationConverter implements Converter<Jwt, AbstractAuthenticationToken> {
@@ -50,9 +52,12 @@ public class BmpJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         if (flat != null) {
             roles.addAll(flat);
         }
+        // Realm roles only ever grant the platform role (ADR-016); Keycloak's built-in realm roles are ignored.
         Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
-        if (realmAccess != null && realmAccess.get("roles") instanceof Collection<?> realmRoles) {
-            realmRoles.forEach(role -> roles.add(String.valueOf(role)));
+        if (realmAccess != null
+                && realmAccess.get("roles") instanceof Collection<?> realmRoles
+                && realmRoles.contains(SystemRole.PLATFORM_ADMIN.code())) {
+            roles.add(SystemRole.PLATFORM_ADMIN.code());
         }
         return roles;
     }

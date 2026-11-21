@@ -5,3 +5,8 @@ management:
   tracing:
     sampling:
       probability: 1.0
+bmp:
+  iam:
+    keycloak:
+      # Never called by these tests; the real adapter is covered by the iam module's KeycloakIdentityProviderIT.
+      client-secret: test-only-not-a-secret

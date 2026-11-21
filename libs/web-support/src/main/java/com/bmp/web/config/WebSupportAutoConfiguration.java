@@ -166,7 +166,8 @@ public class WebSupportAutoConfiguration {
                 new RequestHasher(jsonMapper),
                 clock,
                 properties.idempotencyTtl(),
-                meters.getIfUnique(SimpleMeterRegistry::new));
+                meters.getIfUnique(SimpleMeterRegistry::new),
+                jsonMapper);
     }
 
     @Bean

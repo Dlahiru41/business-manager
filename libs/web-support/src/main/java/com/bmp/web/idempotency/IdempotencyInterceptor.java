@@ -24,6 +24,10 @@ import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.util.ContentCachingResponseWrapper;
 import org.springframework.web.util.WebUtils;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Enforces {@link Idempotent} (03-api-standards.md §5): claims the key before the handler runs, replays stored
@@ -48,9 +52,16 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     private final Clock clock;
     private final Duration ttl;
     private final Counter replays;
+    private final JsonMapper json;
 
     public IdempotencyInterceptor(
-            IdempotencyStore store, RequestHasher hasher, Clock clock, Duration ttl, MeterRegistry meters) {
+            IdempotencyStore store,
+            RequestHasher hasher,
+            Clock clock,
+            Duration ttl,
+            MeterRegistry meters,
+            JsonMapper json) {
+        this.json = json;
         this.store = store;
         this.hasher = hasher;
         this.clock = clock;
@@ -63,7 +74,9 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws IOException {
-        if (!(handler instanceof HandlerMethod method) || !method.hasMethodAnnotation(Idempotent.class)) {
+        Idempotent idempotent =
+                handler instanceof HandlerMethod method ? method.getMethodAnnotation(Idempotent.class) : null;
+        if (idempotent == null) {
             return true;
         }
         String key = requireKey(request.getHeader(HEADER));
@@ -72,7 +85,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
         Instant now = clock.instant();
         return switch (store.begin(scope, key, hash, now, now.plus(ttl))) {
             case IdempotencyStore.Started _ -> {
-                request.setAttribute(CLAIM, new Claim(scope, key));
+                request.setAttribute(CLAIM, new Claim(scope, key, List.of(idempotent.redact())));
                 yield true;
             }
             case IdempotencyStore.Replay replay -> {
@@ -97,7 +110,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
             store.release(claim.scope(), claim.key());
             return;
         }
-        store.complete(claim.scope(), claim.key(), capture(response, status));
+        store.complete(claim.scope(), claim.key(), capture(response, status, claim.redact()));
     }
 
     private static String requireKey(@Nullable String header) {
@@ -134,7 +147,7 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
         }
     }
 
-    private static IdempotencyStore.StoredResponse capture(HttpServletResponse response, int status) {
+    private IdempotencyStore.StoredResponse capture(HttpServletResponse response, int status, List<String> redact) {
         Map<String, String> headers = new LinkedHashMap<>();
         for (String name : REPLAYED_HEADERS) {
             String value = response.getHeader(name);
@@ -146,8 +159,25 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
                 WebUtils.getNativeResponse(response, ContentCachingResponseWrapper.class);
         byte[] content = cached != null ? cached.getContentAsByteArray() : new byte[0];
         String body = content.length == 0 ? null : new String(content, StandardCharsets.UTF_8);
-        return new IdempotencyStore.StoredResponse(status, headers, body);
+        return new IdempotencyStore.StoredResponse(status, headers, redacted(body, redact));
     }
 
-    private record Claim(TenantId scope, String key) {}
+    /** Removes one-time secrets from the copy kept for replay; the live response is unaffected. */
+    private @Nullable String redacted(@Nullable String body, List<String> fields) {
+        if (body == null || fields.isEmpty()) {
+            return body;
+        }
+        try {
+            JsonNode tree = json.readTree(body);
+            if (tree instanceof ObjectNode object) {
+                fields.forEach(object::remove);
+                return json.writeValueAsString(object);
+            }
+            return body;
+        } catch (JacksonException notJson) {
+            return null;
+        }
+    }
+
+    private record Claim(TenantId scope, String key, List<String> redact) {}
 }

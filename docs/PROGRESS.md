@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: T00-08 IAM module
-- Next step (exact, so a new session can resume): T00-08 — `contracts/openapi/iam.yaml`, iam migrations (app_user, role, role_permission, user_role, device), domain + handlers, `IdentityProviderGateway` (Keycloak admin REST adapter + in-memory fake), TenantCreated listener seeding system roles, `PermissionResolver`/`DeviceStatusProvider` implementations, IAM-01..03, `/me`; then the Keycloak Testcontainers IT and cross-tenant 404 coverage.
+- Current task: T00-09 Audit module (skeleton)
+- Next step (exact, so a new session can resume): T00-09 — finish `modules/audit` tests (hash-chain tamper IT, interceptor and event listener ITs, contract validation), add `modules:audit` to the app, build, commit; then T00-10.
 
 ## Task checklist (current phase)
 
@@ -32,7 +32,7 @@ Phase 00:
 - [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
 - [x] T00-06 Security — ADR-014; Keycloak Testcontainers IT and the cross-tenant 404 test need real endpoints and are added with T00-07/T00-08
 - [x] T00-07 Tenant module — ADR-012, ADR-015; extra platform endpoints `POST /tenants/{id}/suspend|reactivate` (TEN-04 needs a way to suspend)
-- [ ] T00-08 IAM module
+- [x] T00-08 IAM module — ADR-016 (tenant roles as the `bmp_roles` user attribute; Keycloak 26.8 needs `kc-admin-api` and a mapper allow-list); `@Idempotent(redact)` keeps device secrets out of replay storage; generator option `containerDefaultToNull` (PATCH can tell "absent" from "empty", fixes receipt-template PATCH clearing omitted JSON fields)
 - [ ] T00-09 Audit module (skeleton)
 - [ ] T00-10 Local environment and developer experience
 - [ ] T00-11 Architecture tests and documentation
@@ -45,6 +45,8 @@ _One line each: date, question, assumption taken, ADR link._
 
 - 2026-11-21 — Settings sanity limits (returnWindowDays ≤ 365, offlineMaxHours ≤ 720, periodLockDays ≤ 31) and numbering prefixes (PO-, GRN-, CN-) are assumptions in the schemas; confirm with the client.
 - 2026-11-21 — Default role permissions follow 08-security.md §3 literally, so only OWNER has `tenant:read`/`tenant:*`; MANAGER etc. may need `tenant:read` for settings — assumption: least privilege, tenants extend roles via the iam API (ADR-014).
+- 2026-11-22 — Users without e-mail get their first password from an administrator in the Keycloak console (no API for it in phase 00); disabled users keep already-issued access tokens until they expire (≤ 15 min). Assumption: acceptable for the pilot (ADR-016).
+- 2026-11-22 — Location scope of role grants is stored and returned but not yet enforced; enforcement belongs to the handlers of location-bound modules (inventory, sales) from phase 02.
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:
