@@ -6,7 +6,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
-| 00 | Foundation | not started | | |
+| 00 | Foundation | in progress | phase/00-foundation | |
 | 01 | Catalog and pricing | not started | | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
@@ -18,13 +18,26 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase:
-- Current task:
-- Next step (exact, so a new session can resume):
+- Phase: 00 — Foundation
+- Current task: T00-02 Shared kernel
+- Next step (exact, so a new session can resume): implement `libs/shared-kernel` (T00-02) with unit tests.
 
 ## Task checklist (current phase)
 
-_Copy the phase's task list here when the phase starts and tick items as they finish._
+Phase 00:
+- [x] T00-01 Repository and build scaffold
+- [ ] T00-02 Shared kernel (`libs/shared-kernel`)
+- [ ] T00-03 Web support (`libs/web-support`)
+- [ ] T00-04 Persistence support (`libs/persistence-support`)
+- [ ] T00-05 Observability baseline
+- [ ] T00-06 Security
+- [ ] T00-07 Tenant module
+- [ ] T00-08 IAM module
+- [ ] T00-09 Audit module (skeleton)
+- [ ] T00-10 Local environment and developer experience
+- [ ] T00-11 Architecture tests and documentation
+- [ ] T00-12 CI pipeline
+- [ ] Definition of Done
 
 ## Open questions
 
