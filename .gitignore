@@ -1,9 +1,12 @@
-# Build output
+# Build output. IDE output folders (out/, bin/) are ignored, but never source packages of the same name such as
+# adapter/out/ (hexagonal outbound adapters).
 build/
 out/
+bin/
+!**/src/**/out/
+!**/src/**/bin/
 .gradle/
 .kotlin/
-bin/
 
 # IDE
 .idea/
