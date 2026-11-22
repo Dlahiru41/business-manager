@@ -85,6 +85,14 @@ Module documentation (PlantUML and canvases) is written to `app/build/spring-mod
 Contracts live in [contracts/](contracts/) (OpenAPI 3.1 per module, AsyncAPI 3.0 for events); controller interfaces
 and DTOs are generated from them.
 
+## Working together
+
+Each phase of `docs/phases/` is built on its own branch `phase/NN-short-name`. Pushing a new phase branch triggers
+`.github/workflows/phase-started.yml`, which opens a "Phase NN started" issue assigned to whoever started it and
+@mentions everyone in the repository variable `PHASE_WATCHERS` (Settings → Secrets and variables → Actions →
+Variables, e.g. `alice, bob`); without it, all collaborators are mentioned. GitHub then notifies them by web, mobile
+and e-mail according to their notification settings. Close the issue when the phase is merged into `main`.
+
 ## Troubleshooting
 
 - **Port already in use** (5432, 8180, 3000, 8025, 4317/4318): stop the other service or change the left side of the

@@ -148,6 +148,7 @@ docker compose -f deploy/local/compose.yaml up -d
 
 - **Conventional Commits:** `feat(catalog): generate variant matrix with exclusions`, `fix(inventory): ...`, `test(...)`, `refactor(...)`, `docs(...)`, `build(...)`, `chore(...)`.
 - Work on a branch per phase: `phase/NN-short-name`. Merge to `main` only when the phase's Definition of Done passes.
+- Push a new phase branch to GitHub as soon as it is created, before any code: `.github/workflows/phase-started.yml` opens a "Phase NN started" issue that notifies the other contributors (repository variable `PHASE_WATCHERS`). Close that issue when the phase is merged.
 - End commit messages with the attribution lines your environment requires.
 
 ---

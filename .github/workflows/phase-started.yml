@@ -1,0 +1,105 @@
+# Tells the team that someone started a phase. Starting a phase means pushing its branch `phase/NN-short-name`
+# (CLAUDE.md §4), so this runs once, when such a branch is created, and opens a "Phase NN started" issue that
+# @mentions the other contributors; GitHub notifies everyone mentioned (web, mobile and e-mail per their settings).
+#
+# Who is notified: the logins in the repository variable PHASE_WATCHERS (Settings → Secrets and variables → Actions →
+# Variables, e.g. "alice, bob"). Without it, the repository's collaborators are used. The person who started the
+# phase is never mentioned, only assigned.
+name: phase-started
+
+on:
+  create:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  announce:
+    if: github.event.ref_type == 'branch' && startsWith(github.event.ref, 'phase/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.ref }}
+      - name: Open the "phase started" issue
+        uses: actions/github-script@v8
+        env:
+          WATCHERS: ${{ vars.PHASE_WATCHERS }}
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const branch = context.payload.ref;
+            const starter = context.actor;
+            const number = (/^phase\/(\d{2})/.exec(branch) || [])[1];
+            if (!number) {
+              core.notice(`${branch} does not start with phase/NN; nothing to announce.`);
+              return;
+            }
+
+            // Phase name and goal from docs/phases/phase-NN-*.md on the new branch.
+            const file = fs.readdirSync('docs/phases').find(f => f.startsWith(`phase-${number}-`));
+            let name = branch;
+            let goal = '';
+            if (file) {
+              const lines = fs.readFileSync(`docs/phases/${file}`, 'utf8').split('\n');
+              name = (lines.find(l => l.startsWith('# ')) || `# ${branch}`).replace(/^#\s*/, '');
+              const goalAt = lines.findIndex(l => /^##\s+Goal/.test(l));
+              if (goalAt >= 0) {
+                goal = lines.slice(goalAt + 1).join('\n').split(/\n##\s/)[0].trim();
+              }
+            }
+            const title = `Phase ${number} started: ${name.replace(/^Phase\s+\d+\s*[—-]\s*/, '')}`;
+
+            // Once per phase: a re-created branch does not announce twice.
+            const label = 'phase';
+            try {
+              await github.rest.issues.getLabel({ owner, repo, name: label });
+            } catch (e) {
+              if (e.status !== 404) throw e;
+              await github.rest.issues.createLabel({
+                owner, repo, name: label, color: '1d76db', description: 'Phase started / in progress'
+              });
+            }
+            const announced = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'all', labels: label, per_page: 100
+            });
+            if (announced.some(issue => issue.title === title)) {
+              core.notice(`"${title}" was already announced.`);
+              return;
+            }
+
+            // Who to tell: PHASE_WATCHERS, else every collaborator; never the starter.
+            let watchers = (process.env.WATCHERS || '')
+              .split(/[\s,]+/).map(w => w.replace(/^@/, '')).filter(Boolean);
+            if (watchers.length === 0) {
+              try {
+                const collaborators = await github.paginate(github.rest.repos.listCollaborators, {
+                  owner, repo, per_page: 100
+                });
+                watchers = collaborators.map(c => c.login);
+              } catch (e) {
+                core.warning(`Cannot list collaborators (${e.status}); set the PHASE_WATCHERS variable.`);
+              }
+            }
+            watchers = [...new Set(watchers)].filter(w => w.toLowerCase() !== starter.toLowerCase());
+
+            const tree = `${context.serverUrl}/${owner}/${repo}/tree/${branch}`;
+            const plan = file ? `${context.serverUrl}/${owner}/${repo}/blob/${branch}/docs/phases/${file}` : tree;
+            const body = [
+              `@${starter} started **${name}** on branch [\`${branch}\`](${tree}).`,
+              '',
+              goal ? `**Goal**\n\n${goal}\n` : '',
+              `Phase plan: ${plan}`,
+              'Progress is tracked in `docs/PROGRESS.md` on that branch. Please avoid starting the same phase in parallel;',
+              'comment here to coordinate, and close this issue when the phase is merged into `main`.',
+              '',
+              watchers.length ? `cc ${watchers.map(w => '@' + w).join(' ')}` : '_No one to notify: set PHASE_WATCHERS._'
+            ].join('\n');
+
+            const issue = await github.rest.issues.create({
+              owner, repo, title, body, labels: [label], assignees: [starter]
+            });
+            core.notice(`Announced in ${issue.data.html_url} (notified: ${watchers.join(', ') || 'nobody'}).`);
