@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: Definition of Done
-- Next step (exact, so a new session can resume): run the Definition of Done checks, then the `code-reviewer` subagent on `git diff main...HEAD`, with `/run-phase 01`.
+- Current task: phase complete; Definition of Done passed and review findings fixed (see the summary below)
+- Next step (exact, so a new session can resume): merge `phase/01-catalog-and-pricing` into `main` when the owner approves, close the "Phase 01 started" issue, then `/run-phase 02`.
 
 ## Task checklist (current phase)
 
@@ -32,14 +32,14 @@ Phase 01:
 - [x] T01-05 Pricing module: replicas and domain — pure `PriceResolver`/`TaxCalculator`/`PriceSchedule`; `variant_price_ref` replica keeps the highest `aggregateVersion`, early deactivations leave a tombstone; Retail/Wholesale seeded on `TenantCreated`; pricing implements the catalog's `TaxCategoryLookup` SPI (ADR-021)
 - [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
 - [x] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT` — `PilotShopFixture` in `libs/test-support` (public API only, contract-checked, placeholder prices/VAT/density documented); kilogram prices of loose goods start at `minQty` 0.001 so 0.75 kg is priced (ADR-021 item 10)
-- [ ] Definition of Done
+- [x] Definition of Done
   - [x] Every CAT-xx and PRC-xx rule has a named test (`cat01…`–`cat14…`, `prc01…`–`prc10…`)
   - [x] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14) — `CatalogPricingFlowIT.cat14AMeasuredOilYieldResizesTheCanForLaterConversions`
   - [x] OpenAPI conformance validated in all API tests; Spectral clean (6.15.0, 0 errors)
   - [x] Tenant isolation ITs for catalog and pricing (`CatalogIsolationIT`, `PricingIsolationIT`)
   - [x] Module READMEs, `.http` files, AsyncAPI updated (AsyncAPI CLI: valid)
   - [x] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim) — 85% and 92%
-  - [ ] PROGRESS summary written
+  - [x] PROGRESS summary written
 
 ## Open questions
 
@@ -130,3 +130,40 @@ network data, owner-free runtime, local credentials outside the jar); the rest a
   observability work of phase 06.
 - Failed-event administration is a job and a store, without an admin endpoint yet.
 - `si`/`ta` messages are English placeholders.
+
+### Phase 01 — Catalog and pricing (2026-11-22)
+
+**Built.**
+- `catalog`: dynamic product model with templates (SIMPLE, VARIANT_MATRIX, BULK_BREAK, BRANDED_PACKET, LOOSE_REPACK,
+  RECIPE, SERVICE), units of measure (standard + tenant), product conversions and a unit converter, variant matrix
+  generation with exclusions and SKU generation, packaging units with stock states and barcodes, transformation
+  definitions with frozen published versions, categories, catalog snapshots for tills (ETag/304) and full snapshot
+  events (CAT-01..CAT-14). Schema `catalog` under RLS; per-tenant `catalog_revision` orders till deltas.
+- `pricing`: price lists (Retail/Wholesale seeded per tenant), dated prices with an append-only version ledger and
+  change summaries, bulk upsert (≤ 1,000 rows, If-Match, Idempotency-Key), list snapshots, price rules (quantity
+  breaks, promotions, markups), tax categories and dated rates, pure basket resolution with line outcomes, list
+  version and source (PRC-01..PRC-10). A replica of sellable variants fed by catalog events; the catalog checks tax
+  categories through a pricing SPI.
+- `tenant`: setting `pricing.priceChangesRequireOwner` (PRC-08) and `TenantQueries.setting/currentTenant`.
+- `libs/test-support`: `PilotShopFixture` (the pilot shop through the public API, placeholder prices);
+  `app`: `CatalogPricingFlowIT` (mixed retail and wholesale baskets, VAT, the 300-egg break, CAT-14 oil yield).
+- Contracts `catalog.yaml`, `pricing.yaml`, AsyncAPI channels; READMEs and `http/catalog.http`, `http/pricing.http`.
+
+**Verified.** `./gradlew build` green with every gate; a named test per CAT/PRC rule; isolation ITs for both modules;
+Spectral 6.15.0 clean; AsyncAPI valid; PIT 85 % (`catalog.domain`) and 92 % (`pricing.domain`).
+
+**ADRs.** 019 catalog snapshot events and versions · 020 catalog modelling choices · 021 pricing modelling choices.
+
+**Review.** The `code-reviewer` agent found no BLOCKER and 5 MAJOR issues, all fixed: prices that already applied
+could be rewritten (now only the future changes, `PRICE_IN_FORCE`); nested `REQUIRES_NEW` tenant reads on the resolve
+path could exhaust the pool; a changed tenant currency made every basket fail; regenerated variants got no template
+definitions; the prices ETag could be newer than the page (lost update). Fixed minors: CAT-07 on unit reactivation,
+definition line quantities at storage scale, own packets added later (state, REPACK definition, UUIDv7 id),
+serialised category moves, 400 for foreign or stale cursors, resolution loads only prices valid at the instant,
+tenant predicates on JDBC reads, seeded lists follow `pricesTaxInclusive`. The rest is listed under open questions.
+
+**Limitations / carried forward.**
+- Pilot prices, the 18 % VAT on oil and the oil density are placeholders; the client's figures are open (§9).
+- Weighed units need a price `minQty` below 1 to sell fractions (ADR-021 item 10); MANAGER lacks `pricing:read`.
+- Till caching of list status/priority and of rules, rule history, and query-count/concurrency tests are deferred
+  (open questions above).
