@@ -583,15 +583,11 @@ paths:
         - name: include
           in: query
           required: false
-          description: "`variants` adds the variants; `units` adds them with their packaging units."
-          style: form
-          explode: false
+          description: "`variants` adds the variants; `units` adds them with their packaging units (comma-separated)."
           schema:
-            type: array
-            maxItems: 2
-            items:
-              type: string
-              enum: [variants, units]
+            type: string
+            pattern: '^(variants|units)(,(variants|units))?$'
+            example: variants,units
       responses:
         "200":
           description: The product.
@@ -1634,6 +1630,8 @@ paths:
                         variantId: 0193b000-0000-7000-8000-000000000211
                         stockState: OPEN
                         qtyBase: "19565.28"
+                        packagingUnitId: 0193b000-0000-7000-8000-000000000312
+                        qty: "1"
                         costSharePct: "100"
                     version: 1
                     createdAt: "2026-11-21T09:42:13Z"
@@ -2468,7 +2466,6 @@ components:
           description: Overrides the template's states.
           minItems: 1
           maxItems: 20
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/StockState"
         sellMode:
@@ -2701,7 +2698,6 @@ components:
           type: array
           minItems: 1
           maxItems: 20
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/StockState"
         sellMode:
@@ -2727,7 +2723,6 @@ components:
           type: array
           minItems: 1
           maxItems: 20
-          uniqueItems: true
           items:
             $ref: "#/components/schemas/StockState"
         sellMode:
@@ -2784,7 +2779,9 @@ components:
         packagingUnitId:
           type: string
           format: uuid
-          description: When the line is a number of packaging units; `qtyBase` then follows the unit's size.
+          description: |
+            When the line is a number of packaging units; `qtyBase` then follows the unit's size (also after a
+            conversion change, CAT-14). The unit only sizes the line; `stockState` says where stock moves.
         qty:
           type: string
         costSharePct:

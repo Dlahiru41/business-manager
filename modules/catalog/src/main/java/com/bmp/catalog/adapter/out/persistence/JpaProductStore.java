@@ -9,6 +9,7 @@ import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -30,6 +31,11 @@ class JpaProductStore implements ProductRepository {
     @Override
     public Optional<Product> findById(UUID id) {
         return products.findById(id);
+    }
+
+    @Override
+    public List<Product> findAllById(Collection<UUID> ids) {
+        return ids.isEmpty() ? List.of() : products.findAllById(ids);
     }
 
     @Override

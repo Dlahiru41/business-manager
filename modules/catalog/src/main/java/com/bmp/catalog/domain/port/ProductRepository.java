@@ -3,6 +3,7 @@ package com.bmp.catalog.domain.port;
 import com.bmp.catalog.domain.model.CatalogStatus;
 import com.bmp.catalog.domain.model.Product;
 import com.bmp.catalog.domain.model.ProductTemplate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,6 +13,8 @@ import org.jspecify.annotations.Nullable;
 public interface ProductRepository {
 
     Optional<Product> findById(UUID id);
+
+    List<Product> findAllById(Collection<UUID> ids);
 
     Product save(Product product);
 

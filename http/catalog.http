@@ -1,0 +1,180 @@
+# Catalog module (contracts/openapi/catalog.yaml). Get tokens with auth.http first.
+# Creates the pilot shop products: eggs (variant matrix), cooking oil (bulk break), branded soya, Karola (loose repack).
+
+### Product templates and their defaults
+GET {{baseUrl}}/api/v1/product-templates
+Authorization: Bearer {{ownerToken}}
+
+### Units of measure (standard first)
+GET {{baseUrl}}/api/v1/units
+Authorization: Bearer {{ownerToken}}
+
+### Add a tenant unit
+POST {{baseUrl}}/api/v1/units
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "bushel{{$randomInt}}", "name": "Bushel", "dimension": "VOLUME", "toSiFactor": "35.2391"}
+
+### Category
+POST {{baseUrl}}/api/v1/categories
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"name": "Dry goods {{$randomInt}}"}
+
+> {% client.global.set("categoryId", response.body.id); %}
+
+### Eggs: colour x size minus Golden Yellow XS/S/M = 12 variants
+POST {{baseUrl}}/api/v1/products
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "EGG", "name": "Eggs", "template": "VARIANT_MATRIX", "baseUnit": "piece",
+ "attributes": [
+   {"code": "COLOUR", "name": "Colour", "values": [{"code": "RED", "value": "Red"}, {"code": "WHITE", "value": "White"},
+                                                  {"code": "GOLDEN_YELLOW", "value": "Golden Yellow"}]},
+   {"code": "SIZE", "name": "Size", "values": [{"value": "XS"}, {"value": "S"}, {"value": "M"}, {"value": "L"}, {"value": "XL"}]}],
+ "exclusions": [{"COLOUR": "GOLDEN_YELLOW", "SIZE": "XS"}, {"COLOUR": "GOLDEN_YELLOW", "SIZE": "S"},
+                {"COLOUR": "GOLDEN_YELLOW", "SIZE": "M"}],
+ "packagingUnits": [{"code": "tray", "name": "Tray of 30", "qtyInBase": "30", "canBuy": true, "canSell": true}]}
+
+> {% client.global.set("eggsId", response.body.id); %}
+
+### Cooking oil: 18 kg can (sealed) opened into bottles; the OPEN definition is created and published
+POST {{baseUrl}}/api/v1/products
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "OIL", "name": "Cooking oil", "template": "BULK_BREAK", "baseUnit": "ml",
+ "conversions": [{"fromUnit": "kg", "toUnit": "ml", "factor": "1086.96", "source": "DENSITY"}],
+ "packagingUnits": [
+   {"code": "can", "name": "Can 18 kg", "definedAs": {"value": "18", "unit": "kg"}, "canBuy": true, "canSell": true},
+   {"code": "bottle-1000", "name": "Bottle 1000 ml", "qtyInBase": "1000", "canSell": true, "isDefaultSell": true},
+   {"code": "bottle-750", "name": "Bottle 750 ml", "qtyInBase": "750", "canSell": true},
+   {"code": "bottle-375", "name": "Bottle 375 ml", "qtyInBase": "375", "canSell": true},
+   {"code": "bottle-187", "name": "Bottle 187.5 ml", "qtyInBase": "187.5", "canSell": true}]}
+
+> {%
+client.global.set("oilId", response.body.id);
+client.global.set("oilEtag", response.headers.valueOf("ETag"));
+client.global.set("oilVariantId", response.body.variants[0].id);
+client.global.set("canId", response.body.variants[0].packagingUnits.find(u => u.code === "can").id);
+%}
+
+### Branded soya: 2 brands x 2 packet sizes
+POST {{baseUrl}}/api/v1/products
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "SOYA", "name": "Soya meat", "template": "BRANDED_PACKET",
+ "attributes": [
+   {"code": "BRAND", "name": "Brand", "values": [{"code": "MSL", "value": "MySoy"}, {"code": "VTM", "value": "Vitamin Soy"}]},
+   {"code": "SIZE", "name": "Packet size", "values": [{"code": "G90", "value": "90 g"}, {"code": "G180", "value": "180 g"}]}]}
+
+### Karola: loose by weight with own 250 g and 500 g packets (REPACK definitions)
+POST {{baseUrl}}/api/v1/products
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "KAROLA", "name": "Karola (dried fish)", "template": "LOOSE_REPACK", "baseUnit": "g",
+ "packagingUnits": [
+   {"code": "kg", "name": "Kilogram", "definedAs": {"value": "1", "unit": "kg"}, "canBuy": true, "canSell": true},
+   {"code": "packet-250", "name": "Packet 250 g", "qtyInBase": "250", "canSell": true},
+   {"code": "packet-500", "name": "Packet 500 g", "qtyInBase": "500", "canSell": true}]}
+
+### Products
+GET {{baseUrl}}/api/v1/products?q=oil
+Authorization: Bearer {{ownerToken}}
+
+### One product with its variants and packaging units
+GET {{baseUrl}}/api/v1/products/{{oilId}}?include=variants,units
+Authorization: Bearer {{ownerToken}}
+
+### Measured oil yield: the can becomes 19,575 ml, the OPEN definition gets version 2 (CAT-14)
+PUT {{baseUrl}}/api/v1/products/{{oilId}}/conversions
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{oilEtag}}
+
+{"conversions": [{"fromUnit": "kg", "toUnit": "ml", "factor": "1087.5", "source": "MEASURED_YIELD"}]}
+
+### Rename the product (take the ETag from the previous response)
+PATCH {{baseUrl}}/api/v1/products/{{oilId}}
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: W/"1"
+
+{"name": "Coconut cooking oil"}
+
+### Attributes of the eggs
+GET {{baseUrl}}/api/v1/products/{{eggsId}}/attributes
+Authorization: Bearer {{ownerToken}}
+
+### Regenerate the egg matrix (dry run)
+POST {{baseUrl}}/api/v1/products/{{eggsId}}/variants:generate
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"dryRun": true}
+
+### Variants of the eggs
+GET {{baseUrl}}/api/v1/products/{{eggsId}}/variants
+Authorization: Bearer {{ownerToken}}
+
+### Sellable variants across products
+GET {{baseUrl}}/api/v1/variants?sellable=true
+Authorization: Bearer {{ownerToken}}
+
+### Look a variant up by SKU
+GET {{baseUrl}}/api/v1/variants:lookup?sku=EGG-RED-L
+Authorization: Bearer {{ownerToken}}
+
+### Packaging units of the oil
+GET {{baseUrl}}/api/v1/variants/{{oilVariantId}}/packaging-units
+Authorization: Bearer {{ownerToken}}
+
+### Add a 500 ml bottle
+POST {{baseUrl}}/api/v1/variants/{{oilVariantId}}/packaging-units
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "bottle-500-{{$randomInt}}", "name": "Bottle 500 ml", "qtyInBase": "500", "canSell": true}
+
+### Barcode on the can
+POST {{baseUrl}}/api/v1/packaging-units/{{canId}}/barcodes
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "4792173{{$randomInt}}"}
+
+### Look up by barcode (use the code above)
+GET {{baseUrl}}/api/v1/variants:lookup?barcode=4792173000011
+Authorization: Bearer {{ownerToken}}
+
+### Transformation definitions of the oil
+GET {{baseUrl}}/api/v1/transformation-definitions?variantId={{oilVariantId}}
+Authorization: Bearer {{ownerToken}}
+
+### Deactivate the oil variant
+POST {{baseUrl}}/api/v1/variants/{{oilVariantId}}/deactivate
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### Reactivate it
+POST {{baseUrl}}/api/v1/variants/{{oilVariantId}}/reactivate
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### Catalog snapshot for tills (send the ETag back as If-None-Match to get 304)
+GET {{baseUrl}}/api/v1/catalog/snapshot
+Authorization: Bearer {{cashierToken}}

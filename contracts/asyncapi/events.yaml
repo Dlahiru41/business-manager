@@ -374,6 +374,7 @@ components:
                 variantId: 0193b000-0000-7000-8000-000000000211
                 stockState: OPEN
                 qtyBase: "19565.28"
+                packagingUnitId: 0193b000-0000-7000-8000-000000000312
                 costSharePct: "100"
     TransformationDefinitionRetired:
       name: bmp.catalog.transformation-definition-retired.v1

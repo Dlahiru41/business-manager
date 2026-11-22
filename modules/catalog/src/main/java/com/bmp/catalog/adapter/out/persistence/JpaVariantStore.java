@@ -14,8 +14,10 @@ import jakarta.persistence.criteria.Root;
 import jakarta.persistence.criteria.Subquery;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -86,6 +88,21 @@ class JpaVariantStore implements VariantRepository {
                 .setMaxResults(1)
                 .getResultList()
                 .isEmpty();
+    }
+
+    @Override
+    public Map<UUID, Long> countByProducts(Collection<UUID> productIds) {
+        if (productIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, Long> counts = new HashMap<>();
+        em.createQuery(
+                        "select v.productId, count(v) from Variant v where v.productId in :ids group by v.productId",
+                        Object[].class)
+                .setParameter("ids", productIds)
+                .getResultList()
+                .forEach(row -> counts.put((UUID) row[0], (Long) row[1]));
+        return counts;
     }
 
     @Override

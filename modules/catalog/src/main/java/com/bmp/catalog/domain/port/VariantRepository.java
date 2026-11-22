@@ -4,6 +4,7 @@ import com.bmp.catalog.domain.model.CatalogStatus;
 import com.bmp.catalog.domain.model.Variant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +29,9 @@ public interface VariantRepository {
     List<Variant> findByProduct(UUID productId);
 
     boolean existsByProduct(UUID productId);
+
+    /** The number of variants of each product (products without variants are absent). */
+    Map<UUID, Long> countByProducts(Collection<UUID> productIds);
 
     /** SKUs in use that start with the prefix, for de-duplication (CAT-06). */
     Set<String> skusStartingWith(String prefix);
