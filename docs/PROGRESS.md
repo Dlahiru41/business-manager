@@ -6,7 +6,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
-| 00 | Foundation | in progress (all tasks and local DoD done; awaiting first CI run) | phase/00-foundation | |
+| 00 | Foundation | done (CI run on GitHub pending) | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | not started | | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: phase close-out
-- Next step (exact, so a new session can resume): add a GitHub remote and push `phase/00-foundation`; when every job of `.github/workflows/ci.yml` is green, tick the last DoD item, set the phase to `done` and merge into `main` (then start `/run-phase 01`).
+- Current task: none (phase 00 merged into `main` on 2026-11-22)
+- Next step (exact, so a new session can resume): add a GitHub remote and push `main`; when every job of `.github/workflows/ci.yml` is green, tick the last DoD item below. Then start phase 01 with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
@@ -42,7 +42,7 @@ Phase 00:
   - [x] With tokens from local Keycloak: location created, settings read and updated, user created, device registered (curl run of the `http/*.http` flows)
   - [x] Tenant isolation, RLS coverage, idempotency, problem details, security (401/403/404, per operation from the contracts) tests green
   - [x] Logs are ECS JSON with trace/tenant/request ids outside `local` (`ObservabilityIT`); traces visible in local Grafana
-  - [ ] All quality gates green in CI — run locally (build, Spectral, Trivy); waiting for the first GitHub run
+  - [ ] All quality gates green in CI — run locally (build, Spectral, Trivy); waiting for the first GitHub run. The owner chose to merge into `main` before it (2026-11-22).
   - [x] ADR-011, ADR-012 and the event publication style ADR (ADR-015) written
   - [x] Phase summary written; `code-reviewer` run, every BLOCKER (none) and MAJOR (8) fixed
 
