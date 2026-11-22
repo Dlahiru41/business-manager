@@ -7,7 +7,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
-| 01 | Catalog and pricing | in progress | phase/01-catalog-and-pricing | |
+| 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
 | 04 | Finance and reporting | not started | | |
@@ -18,9 +18,9 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: phase complete; Definition of Done passed and review findings fixed (see the summary below)
-- Next step (exact, so a new session can resume): merge `phase/01-catalog-and-pricing` into `main` when the owner approves, close the "Phase 01 started" issue, then `/run-phase 02`.
+- Phase: 01 — Catalog and pricing (started and closed 2026-11-22, branch `phase/01-catalog-and-pricing`)
+- Current task: none (phase 01 merged into `main` locally on 2026-11-22; CI green on the phase branch at `3c2dfa2`)
+- Next step (exact, so a new session can resume): push `main`, close the "Phase 01 started" issue (#1), then start phase 02 with `/run-phase 02`.
 
 ## Task checklist (current phase)
 
