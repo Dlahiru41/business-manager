@@ -27,6 +27,10 @@ import org.jspecify.annotations.Nullable;
  *   <li>a row with the {@code validFrom} of an existing price of the same key changes that price;
  *   <li>any other overlap with a window of the same key is {@code PRICE_OVERLAP}.
  * </ul>
+ *
+ * <p>A change only ever affects the future (ADR-021): a new row may not start before now, and a price whose window
+ * began before now keeps its amount and may only get a new end that is not before now; anything else is
+ * {@code PRICE_IN_FORCE}. So the price a sale used is still found for its instant afterwards.
  */
 public final class PriceSchedule {
 
@@ -93,12 +97,19 @@ public final class PriceSchedule {
                     .findFirst();
             if (same.isPresent()) {
                 Price price = same.get();
+                requireOnlyFutureChanges(price, row, now);
                 BigDecimal previousAmount = price.amount();
                 Instant previousTo = price.validTo();
                 requireFree(windows, row.key(), from, row.validTo(), price);
                 price.change(row.amount(), row.validTo(), listVersion);
                 changes.add(new Change(PriceChangeKind.UPDATED, price, previousAmount, previousTo));
                 continue;
+            }
+            if (from.isBefore(now)) {
+                throw new BusinessRuleViolation(
+                        PricingErrorCode.PRICE_IN_FORCE,
+                        "A new price cannot start in the past",
+                        Map.of("validFrom", from.toString()));
             }
             Price ended = null;
             if (row.validFrom() == null) {
@@ -119,6 +130,22 @@ public final class PriceSchedule {
             changes.add(new Change(PriceChangeKind.CREATED, created, null, null));
         }
         return changes;
+    }
+
+    /** Changes of a price that already applied may not reach before now: same amount, old and new end not past. */
+    private static void requireOnlyFutureChanges(Price price, Row row, Instant now) {
+        if (!price.validFrom().isBefore(now)) {
+            return;
+        }
+        boolean amountChanged = price.amount().compareTo(row.amount()) != 0;
+        boolean endedBefore = price.validTo() != null && price.validTo().isBefore(now);
+        boolean endsBefore = row.validTo() != null && row.validTo().isBefore(now);
+        if (amountChanged || endedBefore || endsBefore) {
+            throw new BusinessRuleViolation(
+                    PricingErrorCode.PRICE_IN_FORCE,
+                    "A price that already applied cannot be changed before now",
+                    Map.of("priceId", price.id(), "validFrom", price.validFrom().toString()));
+        }
     }
 
     private static void requireDistinct(List<Row> rows) {

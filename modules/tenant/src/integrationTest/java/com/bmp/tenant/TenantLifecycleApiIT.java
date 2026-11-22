@@ -7,6 +7,7 @@ import static com.bmp.tenant.TenantApi.token;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.security.SystemRole;
 import com.bmp.tenant.api.TenantProvisioning;
@@ -198,5 +199,8 @@ class TenantLifecycleApiIT {
         assertThat(first.businessDayCutoffHour()).isEqualTo(4);
         assertThat(queries.findTenant(id)).contains(first);
         assertThat(queries.findTenant(TenantId.of(UUID.randomUUID()))).isEmpty();
+        assertThat(TenantContext.callWith(id, () -> queries.currentTenant()))
+                .as("the tenant of the context, read in the caller's transaction")
+                .contains(first);
     }
 }

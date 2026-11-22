@@ -8,8 +8,14 @@ import java.util.Optional;
 /** Read-only questions other modules may ask the tenant module. */
 public interface TenantQueries {
 
-    /** The tenant, read in its own tenant context. */
+    /** The tenant, read in its own tenant context (a transaction of its own). */
     Optional<TenantSummary> findTenant(TenantId tenant);
+
+    /**
+     * The tenant of the current context, read in the caller's transaction (no second connection), e.g. for its
+     * currency and time zone on a request path.
+     */
+    Optional<TenantSummary> currentTenant();
 
     /** Whether the location exists and is active in the current tenant. */
     boolean isActiveLocation(LocationId location);

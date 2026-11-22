@@ -52,7 +52,8 @@ public class PriceList implements Auditable {
     @Column(name = "customer_id", updatable = false)
     private @Nullable UUID customerId;
 
-    @Column(nullable = false, updatable = false)
+    // Changes only through adoptCurrency, while the list has never held a price.
+    @Column(nullable = false)
     private String currency;
 
     @Column(name = "tax_inclusive", nullable = false, updatable = false)
@@ -138,6 +139,21 @@ public class PriceList implements Auditable {
 
     public void activate() {
         this.status = PricingStatus.ACTIVE;
+    }
+
+    /**
+     * Follows a change of the tenant currency while the list has never held a price (version 0); a list with prices
+     * keeps the currency of its amounts and no longer takes part in resolution (ADR-021).
+     *
+     * @return whether the currency changed
+     */
+    public boolean adoptCurrency(String newCurrency) {
+        Objects.requireNonNull(newCurrency, "newCurrency");
+        if (currentVersion > 0 || currency.equals(newCurrency)) {
+            return false;
+        }
+        this.currency = newCurrency;
+        return true;
     }
 
     /** Rule PRC-03: takes the next price version for a change of this list's prices. */

@@ -1,6 +1,5 @@
 package com.bmp.pricing.application;
 
-import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.error.PlatformErrorCode;
 import com.bmp.shared.error.TechnicalException;
 import com.bmp.tenant.api.TenantQueries;
@@ -21,13 +20,14 @@ public class PricingSettings {
         this.tenants = tenants;
     }
 
+    /** The current tenant, read in the caller's transaction; read it once per request. */
     public TenantSummary tenant() {
-        return tenants.findTenant(TenantContext.require())
+        return tenants.currentTenant()
                 .orElseThrow(() -> new TechnicalException(PlatformErrorCode.TENANT_CONTEXT_MISSING, Map.of(), null));
     }
 
-    public ZoneId zone() {
-        return ZoneId.of(tenant().timeZone());
+    public static ZoneId zone(TenantSummary tenant) {
+        return ZoneId.of(tenant.timeZone());
     }
 
     /** PRC-05: derive unit prices from the base unit when no price exists. */

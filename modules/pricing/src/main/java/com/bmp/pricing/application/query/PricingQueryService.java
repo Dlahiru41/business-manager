@@ -86,15 +86,17 @@ public class PricingQueryService {
         return PriceListView.of(loader.list(id));
     }
 
+    /** A page of prices with the list's price version, read first (see {@link PricePageView}). */
     @Transactional(readOnly = true)
-    public PageResponse<PriceView> prices(
+    public PricePageView prices(
             UUID listId, @Nullable UUID variantId, @Nullable UUID unitId, @Nullable Instant at, PageQuery query) {
         PriceList list = loader.list(listId);
+        int version = list.currentVersion();
         List<PriceView> page =
                 prices.findPage(listId, variantId, unitId, at, afterId(query), query.fetchSize()).stream()
                         .map(p -> PriceView.of(p, list.currency()))
                         .toList();
-        return PageResponse.of(page, query, p -> List.of(p.id().toString()));
+        return new PricePageView(version, PageResponse.of(page, query, p -> List.of(p.id().toString())));
     }
 
     @Transactional(readOnly = true)

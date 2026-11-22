@@ -39,7 +39,7 @@ public final class PriceResolver {
     private PriceResolver() {}
 
     public static ResolvedBasket resolve(ResolutionRequest request, PricingData data) {
-        List<PriceList> candidates = candidates(request, data.lists());
+        List<PriceList> candidates = candidates(request, data.lists(), data.currency());
         List<ResolvedLine> lines = new ArrayList<>();
         for (ResolutionRequest.Line line : request.lines()) {
             lines.add(line(request, line, candidates, data));
@@ -60,10 +60,14 @@ public final class PriceResolver {
         return new ResolvedBasket(request.channel(), data.currency(), request.at(), lines, net, tax, discount, total);
     }
 
-    /** Rule PRC-04: the lists that may price the basket, in the order they are tried. */
-    static List<PriceList> candidates(ResolutionRequest request, List<PriceList> lists) {
+    /**
+     * Rule PRC-04: the lists that may price the basket, in the order they are tried. Only lists in the basket's
+     * currency take part, so a list left in a former tenant currency leaves lines unpriced instead of failing.
+     */
+    static List<PriceList> candidates(ResolutionRequest request, List<PriceList> lists, CurrencyCode currency) {
         return lists.stream()
                 .filter(l -> l.serves(request.channel(), request.customerId(), request.customerGroupId()))
+                .filter(l -> currency(l).equals(currency))
                 .sorted(Comparator.comparing(PriceList::scope)
                         .thenComparingInt(PriceList::priority)
                         .thenComparing(PriceList::code))

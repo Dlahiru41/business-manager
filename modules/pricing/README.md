@@ -42,6 +42,7 @@ In (idempotent through the inbox):
 | Event | Effect |
 | --- | --- |
 | `TenantCreated` | seeds the `RETAIL` and `WHOLESALE` lists in the tenant currency |
+| `SettingsChanged` (`general.currency`) | lists that never held a price follow the new currency; lists with prices keep theirs and stop pricing baskets (ADR-021 item 11) |
 | `VariantCreated`, `VariantUpdated`, `VariantDeactivated` | keep `variant_price_ref`, the module's replica of sellable variants and their units; the highest `aggregateVersion` wins, a deactivation that arrives first leaves a tombstone |
 
 ## Public API for other modules

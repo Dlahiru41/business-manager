@@ -33,12 +33,12 @@ Phase 01:
 - [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
 - [x] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT` — `PilotShopFixture` in `libs/test-support` (public API only, contract-checked, placeholder prices/VAT/density documented); kilogram prices of loose goods start at `minQty` 0.001 so 0.75 kg is priced (ADR-021 item 10)
 - [ ] Definition of Done
-  - [ ] Every CAT-xx and PRC-xx rule has a named test
-  - [ ] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14)
-  - [ ] OpenAPI conformance validated in all API tests; Spectral clean
-  - [ ] Tenant isolation ITs for catalog and pricing
-  - [ ] Module READMEs, `.http` files, AsyncAPI updated
-  - [ ] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim)
+  - [x] Every CAT-xx and PRC-xx rule has a named test (`cat01…`–`cat14…`, `prc01…`–`prc10…`)
+  - [x] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14) — `CatalogPricingFlowIT.cat14AMeasuredOilYieldResizesTheCanForLaterConversions`
+  - [x] OpenAPI conformance validated in all API tests; Spectral clean (6.15.0, 0 errors)
+  - [x] Tenant isolation ITs for catalog and pricing (`CatalogIsolationIT`, `PricingIsolationIT`)
+  - [x] Module READMEs, `.http` files, AsyncAPI updated (AsyncAPI CLI: valid)
+  - [x] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim) — 85% and 92%
   - [ ] PROGRESS summary written
 
 ## Open questions
@@ -58,6 +58,15 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
 - 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
 - 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).
+- 2026-11-22 — Phase 01 review items deferred (no rule broken today; each needs design, a later module or volume first):
+  - Till caches (phase 03, sync): deactivating or reprioritising a price list publishes no event and keeps the snapshot ETag; price rules have no versions or events, so a bill's `RULE:<code>` cannot show what the rule did then and tills cannot price offline with rules.
+  - Bulk price upserts report the first bad row only, without its index (04 §4 asks for all field errors as `prices[i].…`).
+  - Key order: these constraints do not start with `tenant_id` (06 §3), deferred like the iam ones: pricing `uk_price_list_unit_min_qty_from`, `pk_price_list_version`, `pk_variant_price_ref`; catalog `pk_product_conversion`, `uk_attribute_type_product_code`, `uk_attribute_value_type_code`, `pk_variant_exclusion`, `pk_variant_attribute_value`, `uk_packaging_unit_variant_code`/`_base`, `pk_transformation_definition_version`.
+  - Tests: no query-count assertions on list endpoints (02 §9) and no IT of two parallel upserts on one list (09 §2); the inbox test of the variant listener cannot tell a missing inbox check from the version guard.
+  - Logging: no INFO business-event lines yet for "price list version published" or "product created" (05 §3).
+  - `prices:resolve` trusts `customerGroupId` from the caller; derive it from the customer once the party module exists.
+  - Resolution rounds with the platform default policy, not the tenant's `sales.rounding`, and dates taxes by calendar day in the tenant zone, not by business day (`businessDayCutoffHour`); align when sales (phase 03) fixes the tax point.
+  - PATCH cannot clear optional fields (product category/tax category, rule validity, tax rate end); the catalog accepts inactive tax categories.
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:

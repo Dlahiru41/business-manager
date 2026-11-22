@@ -33,6 +33,7 @@ class TaxAndScheduleTest {
 
     private static final UUID LIST = UUID.randomUUID();
     private static final PriceKey EGG_PIECE = new PriceKey(EGG, PIECE, BigDecimal.ONE);
+    private static final PriceKey EGG_TRAY = new PriceKey(EGG, TRAY, BigDecimal.ONE);
 
     private static Money lkr(String amount) {
         return Money.of(amount, CurrencyCode.LKR);
@@ -136,10 +137,11 @@ class TaxAndScheduleTest {
 
         assertCode(
                 () -> apply(List.of(scheduled), row(EGG_PIECE, "55.00", null, null)), PricingErrorCode.PRICE_OVERLAP);
+        Instant soon = Instant.parse("2026-11-25T00:00:00Z");
         assertCode(
-                () -> apply(List.of(scheduled), row(EGG_PIECE, "55.00", START, Instant.parse("2026-12-02T00:00:00Z"))),
+                () -> apply(List.of(scheduled), row(EGG_PIECE, "55.00", soon, Instant.parse("2026-12-02T00:00:00Z"))),
                 PricingErrorCode.PRICE_OVERLAP);
-        assertThat(apply(List.of(scheduled), row(EGG_PIECE, "55.00", START, next)))
+        assertThat(apply(List.of(scheduled), row(EGG_PIECE, "55.00", soon, next)))
                 .as("ending where the next one starts is no overlap")
                 .singleElement()
                 .satisfies(c -> assertThat(c.kind()).isEqualTo(PriceChangeKind.CREATED));
@@ -159,6 +161,36 @@ class TaxAndScheduleTest {
         assertCode(
                 () -> apply(List.of(), row(EGG_PIECE, "55.00", null, NOW.minusSeconds(1))),
                 PricingErrorCode.INVALID_VALIDITY);
+    }
+
+    @Test
+    void prc02APriceThatAlreadyAppliedIsNeverRewritten() {
+        Instant next = Instant.parse("2026-12-01T00:00:00Z");
+        Price current = existing(EGG_PIECE, "55.00", START, null);
+        Price past = existing(EGG_TRAY, "1600.00", START, Instant.parse("2026-06-01T00:00:00Z"));
+
+        assertCode(
+                () -> apply(List.of(current), row(EGG_PIECE, "50.00", START, null)), PricingErrorCode.PRICE_IN_FORCE);
+        assertCode(
+                () -> apply(List.of(current), row(EGG_PIECE, "55.00", START, NOW.minusSeconds(60))),
+                PricingErrorCode.PRICE_IN_FORCE);
+        assertCode(() -> apply(List.of(past), row(EGG_TRAY, "1600.00", START, null)), PricingErrorCode.PRICE_IN_FORCE);
+        assertThat(apply(List.of(current), row(EGG_PIECE, "55.00", START, next)))
+                .as("ending a price in force later changes only the future")
+                .singleElement()
+                .satisfies(c -> assertThat(c.kind()).isEqualTo(PriceChangeKind.UPDATED));
+        assertThat(current.validTo()).isEqualTo(next);
+        assertThat(current.amount()).isEqualByComparingTo("55.00");
+    }
+
+    @Test
+    void prc02ANewPriceCannotStartInThePast() {
+        assertCode(
+                () -> apply(List.of(), row(EGG_PIECE, "55.00", NOW.minusSeconds(1), null)),
+                PricingErrorCode.PRICE_IN_FORCE);
+        assertThat(apply(List.of(), row(EGG_PIECE, "55.00", NOW, null)))
+                .as("starting exactly now is allowed")
+                .hasSize(1);
     }
 
     @Test

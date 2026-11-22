@@ -184,6 +184,34 @@ class PriceResolverTest {
     }
 
     @Test
+    void prc04ListsInAFormerTenantCurrencyNeverPriceAndNeverFailTheBasket() {
+        PriceList dollars = PriceList.create(
+                UUID.randomUUID(),
+                PricingFixtures.TENANT,
+                "USD",
+                "Dollars",
+                ListChannel.RETAIL,
+                null,
+                null,
+                "USD",
+                true,
+                1);
+        List<Price> prices = List.of(price(dollars, EGG, PIECE, "0.20"), price(retail, EGG, PIECE, "55.00"));
+
+        ResolvedLine mixed = only(PriceResolver.resolve(
+                basket(SalesChannel.RETAIL, NOW, line(EGG, PIECE, "2")),
+                data(false, List.of(dollars, retail), prices, List.of(), List.of())));
+        ResolvedLine onlyDollars = only(PriceResolver.resolve(
+                basket(SalesChannel.RETAIL, NOW, line(EGG, PIECE, "2")),
+                data(false, List.of(dollars), prices.subList(0, 1), List.of(), List.of())));
+
+        assertThat(mixed.unitPrice().amount())
+                .as("the LKR list, although later by priority")
+                .isEqualByComparingTo("55.00");
+        assertThat(onlyDollars.status()).isEqualTo(ResolvedLine.Status.PRICE_NOT_FOUND);
+    }
+
+    @Test
     void prc04InactiveListsAndListsOfOtherCustomersNeverPrice() {
         PriceList stranger = list("STRANGER", ListChannel.ANY, 1, null, UUID.randomUUID(), true);
         PriceList otherGroup = list("OTHER", ListChannel.ANY, 1, UUID.randomUUID(), null, true);

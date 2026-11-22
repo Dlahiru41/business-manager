@@ -21,6 +21,7 @@ public enum PricingErrorCode implements ErrorCode {
     TAX_CATEGORY_CODE_TAKEN(CONFLICT),
     /** PRC-02: validity windows of the same list, unit and minimum quantity never overlap. */
     PRICE_OVERLAP(CONFLICT),
+    PRICE_IN_FORCE(CONFLICT),
     TAX_RATE_OVERLAP(CONFLICT),
 
     /** PRC-01: a list is for a customer group or a customer, not both. */

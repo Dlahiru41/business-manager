@@ -10,14 +10,16 @@ cases open. Each choice below is the most conservative option that keeps prices 
 (CLAUDE.md §1.3).
 
 ## Decisions
-1. **Prices are never edited in place once in force.** An upsert row without `validFrom` ends the open price at
-   "now" and starts a new one; a row whose `validFrom` equals an existing price's start updates that row (a correction
-   before or at the same instant); a row overlapping another dated price is refused (`PRICE_OVERLAP`). So the price a
-   sale used can always be found again by list version and instant.
+1. **A price change only ever affects the future.** An upsert row without `validFrom` ends the open price at "now"
+   and starts a new one. A row whose `validFrom` equals an existing price's start changes that row, but a price whose
+   window began before now keeps its amount and may only get a new end that is not before now; a row may not start
+   before now. Anything else is `PRICE_IN_FORCE` (409); overlaps with another dated price are `PRICE_OVERLAP`. So the
+   price a sale used, offline bills synced later included, is still found for its instant afterwards.
 2. **List versions are an append-only ledger.** `price_list_version` stores, per version, who changed what
    (`change_summary`, a jsonb array of the prices CREATED, UPDATED or ENDED, with amount and validity). The
-   application role may only insert and select. Upserts lock the list row (`SELECT … FOR UPDATE`), so concurrent upserts of one list are serialised and the version grows by exactly
-   one per change.
+   application role may only insert and select. Upserts lock the list row (`SELECT … FOR UPDATE`), so concurrent
+   upserts of one list are serialised and the version grows by exactly one per change. `GET …/prices` reads the
+   version before the prices, so its ETag is never newer than the page and a stale `If-Match` fails with 412.
 3. **Rule conditions are typed columns** (`cond_channel`; uuid arrays `cond_price_list_ids`,
    `cond_customer_group_ids`, `cond_customer_ids`, `cond_product_ids`, `cond_variant_ids`, `cond_packaging_unit_ids`;
    `cond_min_qty_base`), not a free JSON document: the database checks their types and the
@@ -44,6 +46,12 @@ cases open. Each choice below is the most conservative option that keeps prices 
    minimum. Rather than letting a price apply below its stated minimum, a tenant gives the kilogram price of loose
    goods a minimum such as 0.001 (one gram); the pilot fixture does so. `minQty` must be greater than 0
    (`VALIDATION_FAILED`).
+
+11. **Lists keep the currency of their amounts.** Resolution uses only lists in the tenant's currency, so a list left in
+    a former currency leaves lines `PRICE_NOT_FOUND` instead of failing the basket. When `general.currency` changes
+    (TEN-02 allows it before business starts), lists that never held a price follow it; lists with prices keep
+    theirs and a warning is logged. Tenant data on the resolve path is read in the caller's transaction
+    (`TenantQueries.currentTenant`), never in a second connection.
 
 ## Consequences
 - Price history and every till's view of a list can be reproduced from `price` and `price_list_version` alone.

@@ -272,9 +272,11 @@ paths:
         `PriceListChanged`. A row without `validFrom` is the price from now on: the open price of the same unit and
         minimum quantity ends now. A row with `validFrom` matching an existing price changes that price; any other
         overlap with an existing validity window of the same unit and minimum quantity is 409 `PRICE_OVERLAP`.
+        Changes only affect the future: a row may not start before now, and a price that already applied keeps its
+        amount and may only get a new end that is not before now; otherwise 409 `PRICE_IN_FORCE`.
         `If-Match` carries the list's price version (the ETag of `GET .../prices`).
       x-permission: pricing:write
-      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRICE_LIST_NOT_FOUND, PRICE_OVERLAP, DUPLICATE_PRICE_ROWS, INVALID_VALIDITY, UNKNOWN_VARIANT, UNKNOWN_PACKAGING_UNIT, PRICE_CHANGE_RESTRICTED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRICE_LIST_NOT_FOUND, PRICE_OVERLAP, PRICE_IN_FORCE, DUPLICATE_PRICE_ROWS, INVALID_VALIDITY, UNKNOWN_VARIANT, UNKNOWN_PACKAGING_UNIT, PRICE_CHANGE_RESTRICTED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
       parameters:
         - $ref: "#/components/parameters/PriceListIdPath"
         - $ref: "./common.yaml#/components/parameters/IfMatch"
@@ -1277,7 +1279,7 @@ components:
       description: >-
         One price row. `minQty` (in the packaging unit, default 1, greater than 0) is the quantity the price applies
         from; a weighed unit sold in fractions (0.75 kg) needs a smaller minimum such as 0.001. Without `validFrom`
-        the price starts now and ends the open price of the same key.
+        the price starts now and ends the open price of the same key; `validFrom` may not be in the past.
       additionalProperties: false
       required: [variantId, packagingUnitId, amount]
       properties:

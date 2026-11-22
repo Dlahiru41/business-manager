@@ -7,6 +7,7 @@ import com.bmp.pricing.adapter.in.web.generated.model.PricePage;
 import com.bmp.pricing.adapter.in.web.generated.model.UpsertPricesRequest;
 import com.bmp.pricing.application.command.UpsertPricesHandler;
 import com.bmp.pricing.application.query.PriceListVersionView;
+import com.bmp.pricing.application.query.PricePageView;
 import com.bmp.pricing.application.query.PriceSnapshotView;
 import com.bmp.pricing.application.query.PriceView;
 import com.bmp.pricing.application.query.PricingQueryService;
@@ -47,10 +48,11 @@ class PricesController implements PricesApi {
             @Nullable OffsetDateTime at,
             @Nullable Integer limit,
             @Nullable String cursor) {
-        PageResponse<PriceView> page = queries.prices(
+        PricePageView prices = queries.prices(
                 priceListId, variantId, unitId, PricingRequests.instant(at), PageQuery.of(limit, cursor));
+        PageResponse<PriceView> page = prices.page();
         return ResponseEntity.ok()
-                .eTag(Etags.of(queries.priceVersion(priceListId)))
+                .eTag(Etags.of(prices.version()))
                 .body(new PricePage()
                         .items(page.items().stream().map(mapper::toDto).toList())
                         .page(PriceListsController.page(page)));

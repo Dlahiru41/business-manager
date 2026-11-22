@@ -58,6 +58,14 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<TenantSummary> currentTenant() {
+        return tenants.findById(TenantContext.require().value())
+                .map(TenantView::of)
+                .map(TenantApiImpl::summary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isActiveLocation(LocationId location) {
         return locations.findById(location.value()).map(Location::isActive).orElse(false);
     }

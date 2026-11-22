@@ -14,6 +14,7 @@ import com.bmp.pricing.domain.service.ResolutionRequest;
 import com.bmp.pricing.domain.service.ResolvedBasket;
 import com.bmp.shared.money.CurrencyCode;
 import com.bmp.shared.money.RoundingPolicy;
+import com.bmp.tenant.api.dto.TenantSummary;
 import io.micrometer.observation.annotation.Observed;
 import java.time.Clock;
 import java.time.Instant;
@@ -92,9 +93,10 @@ public class ResolvePricesService {
                 }
             }
         }
+        TenantSummary tenant = settings.tenant();
         List<PriceList> all = lists.findAll();
         PricingData data = new PricingData(
-                CurrencyCode.of(settings.tenant().currency()),
+                CurrencyCode.of(tenant.currency()),
                 RoundingPolicy.defaultPolicy(),
                 settings.derivePriceFromBase(),
                 all,
@@ -107,7 +109,7 @@ public class ResolvePricesService {
                 basket.customerId(),
                 basket.customerGroupId(),
                 at,
-                at.atZone(settings.zone()).toLocalDate(),
+                at.atZone(PricingSettings.zone(tenant)).toLocalDate(),
                 basket.lines());
         return PriceResolver.resolve(request, data);
     }

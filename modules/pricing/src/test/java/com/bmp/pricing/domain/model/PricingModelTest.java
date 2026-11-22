@@ -78,6 +78,19 @@ class PricingModelTest {
     }
 
     @Test
+    void aListFollowsTheTenantCurrencyOnlyWhileItHasNeverHeldAPrice() {
+        PriceList empty = list("RETAIL", ListChannel.RETAIL, 100);
+        PriceList priced = list("WHOLESALE", ListChannel.WHOLESALE, 100);
+        priced.nextVersion();
+
+        assertThat(empty.adoptCurrency("USD")).isTrue();
+        assertThat(empty.currency()).isEqualTo("USD");
+        assertThat(empty.adoptCurrency("USD")).as("already in it").isFalse();
+        assertThat(priced.adoptCurrency("USD")).isFalse();
+        assertThat(priced.currency()).as("its amounts are in LKR").isEqualTo("LKR");
+    }
+
+    @Test
     void prc03EveryPriceChangeTakesTheNextListVersion() {
         PriceList retail = list("R", ListChannel.RETAIL, 1);
 

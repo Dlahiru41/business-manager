@@ -180,6 +180,12 @@ class PriceApiIT {
                         + "\", \"validTo\": \"" + future + "\"}"))
                 .hasStatus(422)
                 .hasCode("INVALID_VALIDITY");
+        assertThatProblem(upsert("{\"variantId\": \"" + redL.path("id").asString() + "\", \"packagingUnitId\": \""
+                        + PricingApi.unit(redL, "tray")
+                        + "\", \"amount\": \"1\", \"validFrom\": \"2020-01-01T00:00:00Z\"}"))
+                .as("prices are never backdated")
+                .hasStatus(409)
+                .hasCode("PRICE_IN_FORCE");
         assertThatProblem(api.put(prices, "{\"prices\": [" + row(redL, "tray", "1") + "]}", "W/\"0\""))
                 .hasStatus(412)
                 .hasCode("VERSION_CONFLICT");
