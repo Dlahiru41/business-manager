@@ -6,7 +6,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
-| 00 | Foundation | done (CI run on GitHub pending) | phase/00-foundation | 2026-11-22 |
+| 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | not started | | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: none (phase 00 merged into `main` on 2026-11-22)
-- Next step (exact, so a new session can resume): add a GitHub remote and push `main`; when every job of `.github/workflows/ci.yml` is green, tick the last DoD item below. Then start phase 01 with `/run-phase 01`.
+- Current task: none (phase 00 merged into `main` and pushed on 2026-11-22; CI green)
+- Next step (exact, so a new session can resume): start phase 01 with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
@@ -37,12 +37,12 @@ Phase 00:
 - [x] T00-10 Local environment and developer experience — compose (PostgreSQL 18.7, Keycloak 26.8.2, Mailpit, otel-lgtm with the "BMP overview" dashboard), `local` profile seeds both test tenants and their users (`IamProvisioning`), `http/*.http`, root README; Spring Boot Docker Compose support not used (compose is started explicitly)
 - [x] T00-11 Architecture tests and documentation — `ModularityTests` (docs in `app/build/spring-modulith-docs`), `ArchitectureTest` with `HexagonalRules`/`CodingRules`/`SecurityRules`; READMEs for tenant, iam, audit
 - [x] T00-12 CI pipeline — `.github/workflows/ci.yml` (build + gates, Spectral, oasdiff breaking check on PRs, CycloneDX SBOM + Trivy, signed image push on `main`), `contracts/.spectral.yaml`; not yet run on GitHub (no remote configured)
-- [ ] Definition of Done
+- [x] Definition of Done
   - [x] `docker compose up` + `./gradlew :app:bootRun` start cleanly; `/actuator/health` UP (on a machine with its own PostgreSQL on 5432: `BMP_POSTGRES_PORT=55432`, see README)
   - [x] With tokens from local Keycloak: location created, settings read and updated, user created, device registered (curl run of the `http/*.http` flows)
   - [x] Tenant isolation, RLS coverage, idempotency, problem details, security (401/403/404, per operation from the contracts) tests green
   - [x] Logs are ECS JSON with trace/tenant/request ids outside `local` (`ObservabilityIT`); traces visible in local Grafana
-  - [ ] All quality gates green in CI — run locally (build, Spectral, Trivy); waiting for the first GitHub run. The owner chose to merge into `main` before it (2026-11-22).
+  - [x] All quality gates green in CI — first green run on GitHub: https://github.com/Dlahiru41/business-manager/actions/runs/44994946578 (build, contracts, SBOM + Trivy, signed image). Getting there took four CI fixes: executable `gradlew`, a lower-case image name, the toolchain lookup in `bootBuildImage`, and fewer/longer-retried downloads after Maven Central rate limits (HTTP 429).
   - [x] ADR-011, ADR-012 and the event publication style ADR (ADR-015) written
   - [x] Phase summary written; `code-reviewer` run, every BLOCKER (none) and MAJOR (8) fixed
 
@@ -115,7 +115,7 @@ too (TEN-01 and default-template races, 4xx mapping, purge of completed events, 
 network data, owner-free runtime, local credentials outside the jar); the rest are listed under open questions.
 
 **Limitations / carried forward.**
-- CI has not run on GitHub yet (no remote configured); its jobs were exercised locally (build, Spectral, Trivy).
+- CI runs on GitHub (`Dlahiru41/business-manager`). Maven Central rate-limits fresh runners (HTTP 429); downloads retry six times, and SBOM metadata lookups are off. A dependency proxy or a shared Gradle cache would make this robust as the build grows.
 - Location scope of role grants is stored, not enforced (phase 02 handlers). Permission-sensitive reads are not
   audited automatically. Disabled users keep issued access tokens until expiry (≤ 15 min).
 - Security filter-chain spans appear as separate trace roots next to the HTTP request span; to be tidied with the
