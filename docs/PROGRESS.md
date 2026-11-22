@@ -19,15 +19,15 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: T01-02 Catalog domain model (TDD)
-- Next step (exact, so a new session can resume): continue T01-02 with `/run-phase 01`.
+- Current task: T01-04 Catalog application layer and API
+- Next step (exact, so a new session can resume): continue T01-04 with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
 Phase 01:
 - [x] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI; `common.yaml` gains `Money`, `If-None-Match`, `304`) — additions beyond the endpoint table: product/variant `reactivate`, definition `retire` (CAT-11), event `TransformationDefinitionRetired`
-- [ ] T01-02 Catalog domain model (TDD)
-- [ ] T01-03 Catalog persistence and migrations
+- [x] T01-02 Catalog domain model (TDD) — LOOSE_REPACK keeps own packets in a state `PACKED_<CODE>` per packet unit (counted apart from loose stock); BULK_BREAK/LOOSE_REPACK definition lines are sized by the packaging unit so a conversion change resizes them (CAT-14)
+- [x] T01-03 Catalog persistence and migrations — category path is a text path of ids (no `ltree` extension needed); tracking flags are columns (filtered on); `catalog_revision` per tenant orders sync deltas; published definition versions frozen in `transformation_definition_version` (append-only); standard units seeded before RLS is forced
 - [ ] T01-04 Catalog application layer and API
 - [ ] T01-05 Pricing module: replicas and domain
 - [ ] T01-06 Pricing persistence, API, snapshot

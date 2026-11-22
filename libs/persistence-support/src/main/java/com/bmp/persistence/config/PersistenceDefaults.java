@@ -22,6 +22,8 @@ public class PersistenceDefaults implements EnvironmentPostProcessor {
         Map<String, Object> defaults = new LinkedHashMap<>();
         defaults.put("spring.jpa.open-in-view", "false");
         defaults.put("spring.jpa.hibernate.ddl-auto", "validate");
+        // Lazy collections of a page of aggregates load in batches instead of one query per aggregate (02 par. 9).
+        defaults.put("spring.jpa.properties.hibernate.default_batch_fetch_size", "50");
         defaults.put("spring.modulith.events.jdbc.schema", "platform");
         defaults.put("spring.modulith.events.jdbc.schema-initialization.enabled", "false");
         defaults.put("spring.modulith.events.republish-outstanding-events-on-restart", "true");
