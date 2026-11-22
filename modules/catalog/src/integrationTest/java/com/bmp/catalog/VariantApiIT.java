@@ -79,6 +79,32 @@ class VariantApiIT {
     }
 
     @Test
+    void cat09ARegeneratedVariantGetsTheTransformationsOfItsTemplate() {
+        JsonNode karola = api.create("""
+                {"code": "KAROLA", "name": "Karola", "template": "LOOSE_REPACK", "baseUnit": "g",
+                 "attributes": [{"code": "GRADE", "name": "Grade", "values": [{"code": "A", "value": "Grade A"}]}],
+                 "packagingUnits": [
+                   {"code": "kg", "name": "Kilogram", "definedAs": {"value": "1", "unit": "kg"}, "canBuy": true, "canSell": true},
+                   {"code": "packet-250", "name": "Packet 250 g", "qtyInBase": "250", "canSell": true}]}
+                """);
+        String product = "/api/v1/products/" + karola.path("id").asString();
+        JsonNode grade = json(api.get(product + "/attributes")).path("items").get(0);
+        String gradePath = product + "/attributes/" + grade.path("id").asString();
+        api.patch(gradePath, "{\"values\": [{\"code\": \"B\", \"value\": \"Grade B\"}]}", etag(api.get(gradePath)));
+
+        MvcTestResult generated = api.post(product + "/variants:generate", "{}");
+
+        assertThat(skus(json(generated).path("created"))).containsExactly("KAROLA-B");
+        String created = json(generated).path("created").get(0).path("id").asString();
+        JsonNode definitions = json(api.get("/api/v1/transformation-definitions?kind=REPACK&variantId=" + created))
+                .path("items");
+        assertThat(definitions)
+                .as("the packet-250 REPACK definition, published like the first grade's")
+                .singleElement()
+                .satisfies(d -> assertThat(d.path("status").asString()).isEqualTo("PUBLISHED"));
+    }
+
+    @Test
     void cat05NewlyExcludedCombinationsAreDeactivatedNotDeleted() {
         JsonNode eggs = api.create(EGGS);
         String product = "/api/v1/products/" + eggs.path("id").asString();

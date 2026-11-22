@@ -11,6 +11,7 @@ import com.bmp.catalog.domain.model.Variant;
 import com.bmp.catalog.domain.port.CatalogRevisions;
 import com.bmp.catalog.domain.port.ProductRepository;
 import com.bmp.catalog.domain.port.VariantRepository;
+import com.bmp.catalog.domain.service.ProductTemplateApplier;
 import com.bmp.catalog.domain.service.VariantMatrixGenerator;
 import com.bmp.catalog.domain.service.VariantMatrixGenerator.Existing;
 import com.bmp.catalog.domain.service.VariantMatrixGenerator.Plan;
@@ -42,6 +43,7 @@ public class GenerateVariantsHandler {
     private final VariantShapes shapes;
     private final CatalogViews views;
     private final CatalogEvents events;
+    private final DefinitionPublisher definitions;
 
     public GenerateVariantsHandler(
             CatalogLoader loader,
@@ -51,7 +53,8 @@ public class GenerateVariantsHandler {
             VariantFactory factory,
             VariantShapes shapes,
             CatalogViews views,
-            CatalogEvents events) {
+            CatalogEvents events,
+            DefinitionPublisher definitions) {
         this.loader = loader;
         this.products = products;
         this.variants = variants;
@@ -60,6 +63,7 @@ public class GenerateVariantsHandler {
         this.shapes = shapes;
         this.views = views;
         this.events = events;
+        this.definitions = definitions;
     }
 
     /**
@@ -119,6 +123,8 @@ public class GenerateVariantsHandler {
         List<Variant> created = plan.toCreate().isEmpty()
                 ? List.of()
                 : factory.create(saved, plan.toCreate(), shapes.forNewVariant(saved, existing, directory), revision);
+        // Rule CAT-09: a regenerated variant gets the transformations of its template like a created one.
+        definitions.createImplied(ProductTemplateApplier.strategy(saved.template()), created);
         for (Variant variant : existing) {
             if (plan.toDeactivate().contains(variant.id().value())) {
                 variant.deactivate();
