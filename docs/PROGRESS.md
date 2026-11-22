@@ -7,7 +7,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
-| 01 | Catalog and pricing | not started | | |
+| 01 | Catalog and pricing | in progress | phase/01-catalog-and-pricing | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
 | 04 | Finance and reporting | not started | | |
@@ -18,33 +18,28 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 00 — Foundation
-- Current task: none (phase 00 merged into `main` and pushed on 2026-11-22; CI green)
-- Next step (exact, so a new session can resume): start phase 01 with `/run-phase 01`.
+- Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
+- Current task: phase complete; Definition of Done passed and review findings fixed (see the summary below)
+- Next step (exact, so a new session can resume): merge `phase/01-catalog-and-pricing` into `main` when the owner approves, close the "Phase 01 started" issue, then `/run-phase 02`.
 
 ## Task checklist (current phase)
 
-Phase 00:
-- [x] T00-01 Repository and build scaffold
-- [x] T00-02 Shared kernel (`libs/shared-kernel`)
-- [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
-- [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
-- [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
-- [x] T00-06 Security — ADR-014; Keycloak Testcontainers IT and the cross-tenant 404 test need real endpoints and are added with T00-07/T00-08
-- [x] T00-07 Tenant module — ADR-012, ADR-015; extra platform endpoints `POST /tenants/{id}/suspend|reactivate` (TEN-04 needs a way to suspend)
-- [x] T00-08 IAM module — ADR-016 (tenant roles as the `bmp_roles` user attribute; Keycloak 26.8 needs `kc-admin-api` and a mapper allow-list); `@Idempotent(redact)` keeps device secrets out of replay storage; generator option `containerDefaultToNull` (PATCH can tell "absent" from "empty", fixes receipt-template PATCH clearing omitted JSON fields)
-- [x] T00-09 Audit module (skeleton) — per-tenant SHA-256 hash chain with gapless sequence (advisory lock), API-write interceptor, generic `DomainEvent` listener, `GET /api/v1/audit-records`; tamper detection proven in `AuditIT`
-- [x] T00-10 Local environment and developer experience — compose (PostgreSQL 18.7, Keycloak 26.8.2, Mailpit, otel-lgtm with the "BMP overview" dashboard), `local` profile seeds both test tenants and their users (`IamProvisioning`), `http/*.http`, root README; Spring Boot Docker Compose support not used (compose is started explicitly)
-- [x] T00-11 Architecture tests and documentation — `ModularityTests` (docs in `app/build/spring-modulith-docs`), `ArchitectureTest` with `HexagonalRules`/`CodingRules`/`SecurityRules`; READMEs for tenant, iam, audit
-- [x] T00-12 CI pipeline — `.github/workflows/ci.yml` (build + gates, Spectral, oasdiff breaking check on PRs, CycloneDX SBOM + Trivy, signed image push on `main`), `contracts/.spectral.yaml`; not yet run on GitHub (no remote configured)
+Phase 01:
+- [x] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI; `common.yaml` gains `Money`, `If-None-Match`, `304`) — additions beyond the endpoint table: product/variant `reactivate`, definition `retire` (CAT-11), event `TransformationDefinitionRetired`
+- [x] T01-02 Catalog domain model (TDD) — LOOSE_REPACK keeps own packets in a state `PACKED_<CODE>` per packet unit (counted apart from loose stock); BULK_BREAK/LOOSE_REPACK definition lines are sized by the packaging unit so a conversion change resizes them (CAT-14)
+- [x] T01-03 Catalog persistence and migrations — category path is a text path of ids (no `ltree` extension needed); tracking flags are columns (filtered on); `catalog_revision` per tenant orders sync deltas; published definition versions frozen in `transformation_definition_version` (append-only); standard units seeded before RLS is forced
+- [x] T01-04 Catalog application layer and API — snapshot events built after flush and per-tenant catalog revisions (ADR-019); modelling choices in ADR-020; `include` is a comma-separated string (the contract validator cannot parse form arrays); catalog wired into `app`
+- [x] T01-05 Pricing module: replicas and domain — pure `PriceResolver`/`TaxCalculator`/`PriceSchedule`; `variant_price_ref` replica keeps the highest `aggregateVersion`, early deactivations leave a tombstone; Retail/Wholesale seeded on `TenantCreated`; pricing implements the catalog's `TaxCategoryLookup` SPI (ADR-021)
+- [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
+- [x] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT` — `PilotShopFixture` in `libs/test-support` (public API only, contract-checked, placeholder prices/VAT/density documented); kilogram prices of loose goods start at `minQty` 0.001 so 0.75 kg is priced (ADR-021 item 10)
 - [x] Definition of Done
-  - [x] `docker compose up` + `./gradlew :app:bootRun` start cleanly; `/actuator/health` UP (on a machine with its own PostgreSQL on 5432: `BMP_POSTGRES_PORT=55432`, see README)
-  - [x] With tokens from local Keycloak: location created, settings read and updated, user created, device registered (curl run of the `http/*.http` flows)
-  - [x] Tenant isolation, RLS coverage, idempotency, problem details, security (401/403/404, per operation from the contracts) tests green
-  - [x] Logs are ECS JSON with trace/tenant/request ids outside `local` (`ObservabilityIT`); traces visible in local Grafana
-  - [x] All quality gates green in CI — first green run on GitHub: https://github.com/Dlahiru41/business-manager/actions/runs/44994946578 (build, contracts, SBOM + Trivy, signed image). Getting there took four CI fixes: executable `gradlew`, a lower-case image name, the toolchain lookup in `bootBuildImage`, and fewer/longer-retried downloads after Maven Central rate limits (HTTP 429).
-  - [x] ADR-011, ADR-012 and the event publication style ADR (ADR-015) written
-  - [x] Phase summary written; `code-reviewer` run, every BLOCKER (none) and MAJOR (8) fixed
+  - [x] Every CAT-xx and PRC-xx rule has a named test (`cat01…`–`cat14…`, `prc01…`–`prc10…`)
+  - [x] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14) — `CatalogPricingFlowIT.cat14AMeasuredOilYieldResizesTheCanForLaterConversions`
+  - [x] OpenAPI conformance validated in all API tests; Spectral clean (6.15.0, 0 errors)
+  - [x] Tenant isolation ITs for catalog and pricing (`CatalogIsolationIT`, `PricingIsolationIT`)
+  - [x] Module READMEs, `.http` files, AsyncAPI updated (AsyncAPI CLI: valid)
+  - [x] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim) — 85% and 92%
+  - [x] PROGRESS summary written
 
 ## Open questions
 
@@ -59,6 +54,19 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — Phase review items deferred (no rule broken today; each needs design or volume first): idempotency records stuck `IN_PROGRESS` after a crash need a lease and recovery; API audit records should move to the outbox (today: synchronous, counted by `bmp.audit.lost` when lost); reject tenant-user tokens without an ACTIVE iam profile (closes the 15-minute window of disabled users); an allow-list of user clients (`azp`) besides the platform one; Keycloak fine-grained admin permissions for `bmp-admin`; key order of `iam.role_permission`/`user_role` (tenant_id first) and the globally unique `idp_subject`/`idp_client_id`; GitHub Actions pinned by commit SHA and image signing by digest; error categories of `METHOD_NOT_ALLOWED`/`UNAUTHENTICATED`; tenant defaults (LKR, Asia/Colombo) as configuration.
 - 2026-11-22 — Currencies without two decimals (JPY, KWD, ...) are refused at tenant creation and in settings until money rounds to each currency's minor units.
 - 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
+- 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
+- 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
+- 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
+- 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).
+- 2026-11-22 — Phase 01 review items deferred (no rule broken today; each needs design, a later module or volume first):
+  - Till caches (phase 03, sync): deactivating or reprioritising a price list publishes no event and keeps the snapshot ETag; price rules have no versions or events, so a bill's `RULE:<code>` cannot show what the rule did then and tills cannot price offline with rules.
+  - Bulk price upserts report the first bad row only, without its index (04 §4 asks for all field errors as `prices[i].…`).
+  - Key order: these constraints do not start with `tenant_id` (06 §3), deferred like the iam ones: pricing `uk_price_list_unit_min_qty_from`, `pk_price_list_version`, `pk_variant_price_ref`; catalog `pk_product_conversion`, `uk_attribute_type_product_code`, `uk_attribute_value_type_code`, `pk_variant_exclusion`, `pk_variant_attribute_value`, `uk_packaging_unit_variant_code`/`_base`, `pk_transformation_definition_version`.
+  - Tests: no query-count assertions on list endpoints (02 §9) and no IT of two parallel upserts on one list (09 §2); the inbox test of the variant listener cannot tell a missing inbox check from the version guard.
+  - Logging: no INFO business-event lines yet for "price list version published" or "product created" (05 §3).
+  - `prices:resolve` trusts `customerGroupId` from the caller; derive it from the customer once the party module exists.
+  - Resolution rounds with the platform default policy, not the tenant's `sales.rounding`, and dates taxes by calendar day in the tenant zone, not by business day (`businessDayCutoffHour`); align when sales (phase 03) fixes the tax point.
+  - PATCH cannot clear optional fields (product category/tax category, rule validity, tax rate end); the catalog accepts inactive tax categories.
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:
@@ -122,3 +130,40 @@ network data, owner-free runtime, local credentials outside the jar); the rest a
   observability work of phase 06.
 - Failed-event administration is a job and a store, without an admin endpoint yet.
 - `si`/`ta` messages are English placeholders.
+
+### Phase 01 — Catalog and pricing (2026-11-22)
+
+**Built.**
+- `catalog`: dynamic product model with templates (SIMPLE, VARIANT_MATRIX, BULK_BREAK, BRANDED_PACKET, LOOSE_REPACK,
+  RECIPE, SERVICE), units of measure (standard + tenant), product conversions and a unit converter, variant matrix
+  generation with exclusions and SKU generation, packaging units with stock states and barcodes, transformation
+  definitions with frozen published versions, categories, catalog snapshots for tills (ETag/304) and full snapshot
+  events (CAT-01..CAT-14). Schema `catalog` under RLS; per-tenant `catalog_revision` orders till deltas.
+- `pricing`: price lists (Retail/Wholesale seeded per tenant), dated prices with an append-only version ledger and
+  change summaries, bulk upsert (≤ 1,000 rows, If-Match, Idempotency-Key), list snapshots, price rules (quantity
+  breaks, promotions, markups), tax categories and dated rates, pure basket resolution with line outcomes, list
+  version and source (PRC-01..PRC-10). A replica of sellable variants fed by catalog events; the catalog checks tax
+  categories through a pricing SPI.
+- `tenant`: setting `pricing.priceChangesRequireOwner` (PRC-08) and `TenantQueries.setting/currentTenant`.
+- `libs/test-support`: `PilotShopFixture` (the pilot shop through the public API, placeholder prices);
+  `app`: `CatalogPricingFlowIT` (mixed retail and wholesale baskets, VAT, the 300-egg break, CAT-14 oil yield).
+- Contracts `catalog.yaml`, `pricing.yaml`, AsyncAPI channels; READMEs and `http/catalog.http`, `http/pricing.http`.
+
+**Verified.** `./gradlew build` green with every gate; a named test per CAT/PRC rule; isolation ITs for both modules;
+Spectral 6.15.0 clean; AsyncAPI valid; PIT 85 % (`catalog.domain`) and 92 % (`pricing.domain`).
+
+**ADRs.** 019 catalog snapshot events and versions · 020 catalog modelling choices · 021 pricing modelling choices.
+
+**Review.** The `code-reviewer` agent found no BLOCKER and 5 MAJOR issues, all fixed: prices that already applied
+could be rewritten (now only the future changes, `PRICE_IN_FORCE`); nested `REQUIRES_NEW` tenant reads on the resolve
+path could exhaust the pool; a changed tenant currency made every basket fail; regenerated variants got no template
+definitions; the prices ETag could be newer than the page (lost update). Fixed minors: CAT-07 on unit reactivation,
+definition line quantities at storage scale, own packets added later (state, REPACK definition, UUIDv7 id),
+serialised category moves, 400 for foreign or stale cursors, resolution loads only prices valid at the instant,
+tenant predicates on JDBC reads, seeded lists follow `pricesTaxInclusive`. The rest is listed under open questions.
+
+**Limitations / carried forward.**
+- Pilot prices, the 18 % VAT on oil and the oil density are placeholders; the client's figures are open (§9).
+- Weighed units need a price `minQty` below 1 to sell fractions (ADR-021 item 10); MANAGER lacks `pricing:read`.
+- Till caching of list status/priority and of rules, rule history, and query-count/concurrency tests are deferred
+  (open questions above).

@@ -29,8 +29,8 @@ every change is appended to `tenant.setting_history`, and the **group version** 
 `general` (currency LKR, timeZone Asia/Colombo, businessDayCutoffHour 0, languages [en]) · `inventory` (costingMethod
 MOVING_AVERAGE, negativeStockPolicy ALLOW_AND_FLAG, defaultLocationId = first location) · `sales`
 (maxCashierDiscountPct "5.00", returnWindowDays 7, voidRequiresManager true, allowCreditSales false, offlineMaxHours
-72, rounding LINE_HALF_UP_2) · `pricing` (pricesTaxInclusive true, derivePriceFromBase false, cashierCanOverridePrice
-false) · `tax` (taxRegistrationNumber null) · `finance` (periodLockDays 5) · `payments` (drawerVarianceAlertAmount
+72, rounding LINE_HALF_UP_2) · `pricing` (pricesTaxInclusive true, derivePriceFromBase false, cashierCanOverridePrice false,
+priceChangesRequireOwner false, PRC-08) · `tax` (taxRegistrationNumber null) · `finance` (periodLockDays 5) · `payments` (drawerVarianceAlertAmount
 "500.00") · `numbering` (purchaseOrderPrefix "PO-", goodsReceiptPrefix "GRN-", creditNotePrefix "CN-"; ADR-012).
 
 Decimal values are JSON strings. The upper bounds (365 return days, 720 offline hours, 31 lock days) are sanity limits

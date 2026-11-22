@@ -9,7 +9,9 @@ import com.bmp.tenant.api.dto.NewTenant;
 import com.bmp.tenant.api.dto.TenantSummary;
 import com.bmp.tenant.application.command.CreateTenantHandler;
 import com.bmp.tenant.application.query.TenantView;
+import com.bmp.tenant.application.settings.SettingsReader;
 import com.bmp.tenant.domain.model.Location;
+import com.bmp.tenant.domain.model.SettingGroup;
 import com.bmp.tenant.domain.port.LocationRepository;
 import com.bmp.tenant.domain.port.TenantRepository;
 import java.util.Objects;
@@ -27,16 +29,19 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
     private final TenantRepository tenants;
     private final LocationRepository locations;
     private final CreateTenantHandler createTenant;
+    private final SettingsReader settings;
     private final TransactionTemplate readOnly;
 
     TenantApiImpl(
             TenantRepository tenants,
             LocationRepository locations,
             CreateTenantHandler createTenant,
+            SettingsReader settings,
             PlatformTransactionManager transactionManager) {
         this.tenants = tenants;
         this.locations = locations;
         this.createTenant = createTenant;
+        this.settings = settings;
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
         // Its own transaction: the tenant is fixed per transaction, so a lookup for another tenant must not join one.
@@ -53,8 +58,25 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
 
     @Override
     @Transactional(readOnly = true)
+    public Optional<TenantSummary> currentTenant() {
+        return tenants.findById(TenantContext.require().value())
+                .map(TenantView::of)
+                .map(TenantApiImpl::summary);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public boolean isActiveLocation(LocationId location) {
         return locations.findById(location.value()).map(Location::isActive).orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<String> setting(String group, String key) {
+        return SettingGroup.fromCode(group)
+                .map(settings::read)
+                .flatMap(view -> Optional.ofNullable(view.values().get(key)))
+                .map(Object::toString);
     }
 
     @Override

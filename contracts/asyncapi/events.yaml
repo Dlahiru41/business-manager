@@ -28,6 +28,35 @@ channels:
       DeviceRegistered:
         $ref: "#/components/messages/DeviceRegistered"
 
+  catalogProduct:
+    address: bmp.catalog.product
+    messages:
+      ProductCreated:
+        $ref: "#/components/messages/ProductCreated"
+      ProductUpdated:
+        $ref: "#/components/messages/ProductUpdated"
+  catalogVariant:
+    address: bmp.catalog.variant
+    messages:
+      VariantCreated:
+        $ref: "#/components/messages/VariantCreated"
+      VariantUpdated:
+        $ref: "#/components/messages/VariantUpdated"
+      VariantDeactivated:
+        $ref: "#/components/messages/VariantDeactivated"
+  catalogTransformationDefinition:
+    address: bmp.catalog.transformation-definition
+    messages:
+      TransformationDefinitionPublished:
+        $ref: "#/components/messages/TransformationDefinitionPublished"
+      TransformationDefinitionRetired:
+        $ref: "#/components/messages/TransformationDefinitionRetired"
+  pricingPriceList:
+    address: bmp.pricing.price-list
+    messages:
+      PriceListChanged:
+        $ref: "#/components/messages/PriceListChanged"
+
 operations:
   publishTenantEvents:
     action: send
@@ -41,6 +70,23 @@ operations:
     action: send
     channel:
       $ref: "#/channels/iamDevice"
+
+  publishProductEvents:
+    action: send
+    channel:
+      $ref: "#/channels/catalogProduct"
+  publishVariantEvents:
+    action: send
+    channel:
+      $ref: "#/channels/catalogVariant"
+  publishTransformationDefinitionEvents:
+    action: send
+    channel:
+      $ref: "#/channels/catalogTransformationDefinition"
+  publishPriceListEvents:
+    action: send
+    channel:
+      $ref: "#/channels/pricingPriceList"
 
 components:
   messages:
@@ -114,6 +160,268 @@ components:
             metadata: {}
             deviceId: 01934f5a-6d1c-7000-8000-000000000e01
             locationId: 01934f5a-6d1c-7000-8000-000000000c01
+
+    ProductCreated:
+      name: bmp.catalog.product-created.v1
+      title: Product created
+      summary: A product was created (its variants follow as VariantCreated).
+      payload:
+        $ref: "#/components/schemas/ProductCreated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f80
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000102
+            aggregateVersion: 0
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            productId: 0193b000-0000-7000-8000-000000000102
+            code: OIL
+            name: Cooking oil
+            template: BULK_BREAK
+            baseUnit: ml
+            tracking:
+              batches: false
+              expiry: false
+              serials: false
+              decimalQty: true
+              weighed: false
+            taxCategoryId: 0193c000-0000-7000-8000-000000000801
+            status: ACTIVE
+    ProductUpdated:
+      name: bmp.catalog.product-updated.v1
+      title: Product updated
+      summary: A product changed (name, category, tax category, tracking, status); full product snapshot (CAT-13).
+      payload:
+        $ref: "#/components/schemas/ProductUpdated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f81
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000102
+            aggregateVersion: 1
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            productId: 0193b000-0000-7000-8000-000000000102
+            code: OIL
+            name: Cooking oil
+            template: BULK_BREAK
+            baseUnit: ml
+            tracking:
+              batches: false
+              expiry: false
+              serials: false
+              decimalQty: true
+              weighed: false
+            taxCategoryId: 0193c000-0000-7000-8000-000000000801
+            status: ACTIVE
+    VariantCreated:
+      name: bmp.catalog.variant-created.v1
+      title: Variant created
+      summary: A variant was created; full snapshot with its packaging units so consumers keep replicas (CAT-13).
+      payload:
+        $ref: "#/components/schemas/VariantCreated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f82
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000211
+            aggregateVersion: 0
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            variantId: 0193b000-0000-7000-8000-000000000211
+            productId: 0193b000-0000-7000-8000-000000000102
+            sku: OIL
+            name: Cooking oil
+            attributeValues: []
+            stockStates: [SEALED, OPEN]
+            sellMode: BREAK_ON_SALE
+            status: ACTIVE
+            baseUnit: ml
+            tracking:
+              batches: false
+              expiry: false
+              serials: false
+              decimalQty: true
+              weighed: false
+            packagingUnits:
+              - id: 0193b000-0000-7000-8000-000000000311
+                code: ml
+                name: Millilitre
+                qtyInBase: "1"
+                stockState: OPEN
+                isBase: true
+                canBuy: false
+                canSell: false
+                isDefaultSell: false
+                status: ACTIVE
+                barcodes: []
+              - id: 0193b000-0000-7000-8000-000000000312
+                code: can
+                name: Can 18 kg
+                qtyInBase: "19565.28"
+                stockState: SEALED
+                isBase: false
+                canBuy: true
+                canSell: true
+                isDefaultSell: false
+                status: ACTIVE
+                barcodes: ["4792173000011"]
+    VariantUpdated:
+      name: bmp.catalog.variant-updated.v1
+      title: Variant updated
+      summary: |
+        A variant or one of its packaging units or barcodes changed, its product's tax category or tracking changed,
+        or a product conversion changed a unit's size (CAT-14); full snapshot, the aggregate version orders updates.
+      payload:
+        $ref: "#/components/schemas/VariantUpdated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f83
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000211
+            aggregateVersion: 2
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            variantId: 0193b000-0000-7000-8000-000000000211
+            productId: 0193b000-0000-7000-8000-000000000102
+            sku: OIL
+            name: Cooking oil
+            attributeValues: []
+            stockStates: [SEALED, OPEN]
+            sellMode: BREAK_ON_SALE
+            status: ACTIVE
+            baseUnit: ml
+            tracking:
+              batches: false
+              expiry: false
+              serials: false
+              decimalQty: true
+              weighed: false
+            packagingUnits:
+              - id: 0193b000-0000-7000-8000-000000000311
+                code: ml
+                name: Millilitre
+                qtyInBase: "1"
+                stockState: OPEN
+                isBase: true
+                canBuy: false
+                canSell: false
+                isDefaultSell: false
+                status: ACTIVE
+                barcodes: []
+              - id: 0193b000-0000-7000-8000-000000000312
+                code: can
+                name: Can 18 kg
+                qtyInBase: "19565.28"
+                stockState: SEALED
+                isBase: false
+                canBuy: true
+                canSell: true
+                isDefaultSell: false
+                status: ACTIVE
+                barcodes: ["4792173000011"]
+    VariantDeactivated:
+      name: bmp.catalog.variant-deactivated.v1
+      title: Variant deactivated
+      summary: A variant was deactivated (CAT-11); it is never deleted and may be reactivated (VariantUpdated).
+      payload:
+        $ref: "#/components/schemas/VariantDeactivated"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f84
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000204
+            aggregateVersion: 3
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            variantId: 0193b000-0000-7000-8000-000000000204
+            productId: 0193b000-0000-7000-8000-000000000101
+            sku: EGG-RED-L
+    TransformationDefinitionPublished:
+      name: bmp.catalog.transformation-definition-published.v1
+      title: Transformation definition published
+      summary: A definition version was published and is immutable from now on (CAT-10); inventory keeps every version.
+      payload:
+        $ref: "#/components/schemas/TransformationDefinitionPublished"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f85
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000701
+            aggregateVersion: 1
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            definitionId: 0193b000-0000-7000-8000-000000000701
+            version: 1
+            code: OIL-OPEN-CAN
+            name: Open Can 18 kg
+            kind: OPEN
+            expectedYieldPct: "100"
+            lines:
+              - direction: IN
+                variantId: 0193b000-0000-7000-8000-000000000211
+                stockState: SEALED
+                qtyBase: "19565.28"
+                packagingUnitId: 0193b000-0000-7000-8000-000000000312
+              - direction: OUT
+                variantId: 0193b000-0000-7000-8000-000000000211
+                stockState: OPEN
+                qtyBase: "19565.28"
+                packagingUnitId: 0193b000-0000-7000-8000-000000000312
+                costSharePct: "100"
+    TransformationDefinitionRetired:
+      name: bmp.catalog.transformation-definition-retired.v1
+      title: Transformation definition retired
+      summary: A definition was retired (CAT-11); no new runs may use it.
+      payload:
+        $ref: "#/components/schemas/TransformationDefinitionRetired"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f86
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193b000-0000-7000-8000-000000000701
+            aggregateVersion: 4
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            definitionId: 0193b000-0000-7000-8000-000000000701
+            version: 1
+    PriceListChanged:
+      name: bmp.pricing.price-list-changed.v1
+      title: Price list changed
+      summary: Prices of a list changed in one new version (PRC-03); carries every changed price.
+      payload:
+        $ref: "#/components/schemas/PriceListChanged"
+      examples:
+        - payload:
+            eventId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f87
+            tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+            occurredAt: "2026-11-21T09:42:13Z"
+            aggregateId: 0193c000-0000-7000-8000-000000000902
+            aggregateVersion: 1
+            metadata:
+              actorId: 0193a6f1-0000-7000-8000-00000000f001
+            priceListId: 0193c000-0000-7000-8000-000000000902
+            newVersion: 1
+            code: WHOLESALE
+            channel: WHOLESALE
+            currency: LKR
+            taxInclusive: true
+            prices:
+              - change: CREATED
+                priceId: 0193c000-0000-7000-8000-000000000b01
+                variantId: 0193b000-0000-7000-8000-000000000204
+                packagingUnitId: 0193b000-0000-7000-8000-000000000301
+                minQty: "1"
+                amount: "48.00"
+                validFrom: "2026-11-21T09:42:13Z"
 
   schemas:
     Uuid:
@@ -251,3 +559,422 @@ components:
           $ref: "#/components/schemas/Uuid"
         locationId:
           $ref: "#/components/schemas/Uuid"
+    Decimal:
+      type: string
+      description: A decimal as a string, never a JSON number.
+      pattern: '^-?(0|[1-9][0-9]*)(\.[0-9]+)?$'
+    ProductTracking:
+      type: object
+      additionalProperties: false
+      required: [batches, expiry, serials, decimalQty, weighed]
+      properties:
+        batches:
+          type: boolean
+        expiry:
+          type: boolean
+        serials:
+          type: boolean
+        decimalQty:
+          type: boolean
+        weighed:
+          type: boolean
+    VariantAttributeValue:
+      type: object
+      additionalProperties: false
+      required: [attributeCode, valueCode, value]
+      properties:
+        attributeCode:
+          type: string
+        valueCode:
+          type: string
+        value:
+          type: string
+    PackagingUnitSnapshot:
+      type: object
+      additionalProperties: false
+      required: [id, code, name, qtyInBase, stockState, isBase, canBuy, canSell, isDefaultSell, status, barcodes]
+      properties:
+        id:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        qtyInBase:
+          $ref: "#/components/schemas/Decimal"
+        stockState:
+          type: string
+        isBase:
+          type: boolean
+        canBuy:
+          type: boolean
+        canSell:
+          type: boolean
+        isDefaultSell:
+          type: boolean
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        barcodes:
+          type: array
+          items:
+            type: string
+    ProductCreated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, productId, code, name, template, baseUnit,
+                 tracking, status]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        template:
+          type: string
+          enum: [SIMPLE, VARIANT_MATRIX, BULK_BREAK, BRANDED_PACKET, LOOSE_REPACK, RECIPE, SERVICE]
+        baseUnit:
+          type: string
+        tracking:
+          $ref: "#/components/schemas/ProductTracking"
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        taxCategoryId:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    ProductUpdated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, productId, code, name, template, baseUnit,
+                 tracking, status]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        code:
+          type: string
+        name:
+          type: string
+        template:
+          type: string
+          enum: [SIMPLE, VARIANT_MATRIX, BULK_BREAK, BRANDED_PACKET, LOOSE_REPACK, RECIPE, SERVICE]
+        baseUnit:
+          type: string
+        tracking:
+          $ref: "#/components/schemas/ProductTracking"
+        categoryId:
+          $ref: "#/components/schemas/Uuid"
+        taxCategoryId:
+          $ref: "#/components/schemas/Uuid"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    VariantCreated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, variantId, productId, sku, name,
+                 attributeValues, stockStates, sellMode, status, baseUnit, tracking, packagingUnits]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        variantId:
+          $ref: "#/components/schemas/Uuid"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        sku:
+          type: string
+        name:
+          type: string
+        attributeValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantAttributeValue"
+        stockStates:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        sellMode:
+          type: string
+          enum: [PREPACKED, BREAK_ON_SALE]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        baseUnit:
+          type: string
+        taxCategoryId:
+          $ref: "#/components/schemas/Uuid"
+        tracking:
+          $ref: "#/components/schemas/ProductTracking"
+        packagingUnits:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PackagingUnitSnapshot"
+    VariantUpdated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, variantId, productId, sku, name,
+                 attributeValues, stockStates, sellMode, status, baseUnit, tracking, packagingUnits]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        variantId:
+          $ref: "#/components/schemas/Uuid"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        sku:
+          type: string
+        name:
+          type: string
+        attributeValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantAttributeValue"
+        stockStates:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        sellMode:
+          type: string
+          enum: [PREPACKED, BREAK_ON_SALE]
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        baseUnit:
+          type: string
+        taxCategoryId:
+          $ref: "#/components/schemas/Uuid"
+        tracking:
+          $ref: "#/components/schemas/ProductTracking"
+        packagingUnits:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PackagingUnitSnapshot"
+    VariantDeactivated:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, variantId, productId, sku]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        variantId:
+          $ref: "#/components/schemas/Uuid"
+        productId:
+          $ref: "#/components/schemas/Uuid"
+        sku:
+          type: string
+    TransformationLineSnapshot:
+      type: object
+      additionalProperties: false
+      required: [direction, variantId, stockState, qtyBase]
+      properties:
+        direction:
+          type: string
+          enum: [IN, OUT]
+        variantId:
+          $ref: "#/components/schemas/Uuid"
+        stockState:
+          type: string
+        qtyBase:
+          $ref: "#/components/schemas/Decimal"
+        packagingUnitId:
+          $ref: "#/components/schemas/Uuid"
+        costSharePct:
+          $ref: "#/components/schemas/Decimal"
+    TransformationDefinitionPublished:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, definitionId, version, code, name,
+                 kind, lines]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        definitionId:
+          $ref: "#/components/schemas/Uuid"
+        version:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          type: string
+          enum: [OPEN, REPACK, BREAK, RECIPE]
+        expectedYieldPct:
+          $ref: "#/components/schemas/Decimal"
+        lines:
+          type: array
+          minItems: 2
+          items:
+            $ref: "#/components/schemas/TransformationLineSnapshot"
+    TransformationDefinitionRetired:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, definitionId, version]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        definitionId:
+          $ref: "#/components/schemas/Uuid"
+        version:
+          type: integer
+          minimum: 0
+          description: The last published version (0 when it was never published).
+    PriceChangeSnapshot:
+      type: object
+      additionalProperties: false
+      required: [change, priceId, variantId, packagingUnitId, minQty, amount, validFrom]
+      properties:
+        change:
+          type: string
+          enum: [CREATED, UPDATED, ENDED]
+        priceId:
+          $ref: "#/components/schemas/Uuid"
+        variantId:
+          $ref: "#/components/schemas/Uuid"
+        packagingUnitId:
+          $ref: "#/components/schemas/Uuid"
+        minQty:
+          $ref: "#/components/schemas/Decimal"
+        amount:
+          $ref: "#/components/schemas/Decimal"
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+    PriceListChanged:
+      type: object
+      additionalProperties: false
+      required: [eventId, tenantId, occurredAt, aggregateId, aggregateVersion, metadata, priceListId, newVersion, code, channel,
+                 currency, taxInclusive, prices]
+      properties:
+        eventId:
+          $ref: "#/components/schemas/Uuid"
+        tenantId:
+          $ref: "#/components/schemas/Uuid"
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: "#/components/schemas/Uuid"
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: "#/components/schemas/EventMetadata"
+        priceListId:
+          $ref: "#/components/schemas/Uuid"
+        newVersion:
+          type: integer
+          minimum: 1
+        code:
+          type: string
+        channel:
+          type: string
+          enum: [RETAIL, WHOLESALE, ANY]
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        taxInclusive:
+          type: boolean
+        prices:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/PriceChangeSnapshot"

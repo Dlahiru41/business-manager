@@ -10,6 +10,7 @@ import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
+import com.bmp.shared.id.VariantId;
 import com.bmp.shared.money.CurrencyCode;
 import com.bmp.shared.money.Money;
 import com.bmp.shared.quantity.Quantity;
@@ -24,6 +25,7 @@ import com.bmp.web.problem.ConstraintErrorMapping;
 import com.bmp.web.problem.ConstraintErrorRegistry;
 import com.bmp.web.request.MdcTaskDecorator;
 import com.bmp.web.testapp.TestErrorCode;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.List;
@@ -118,6 +120,24 @@ class WebHelpersTest {
         assertThat(JSON.readValue("\"0193a6f1-0000-7000-8000-000000000001\"", UserId.class)
                         .value())
                 .isEqualTo(tenant.value());
+    }
+
+    @Test
+    void jacksonModuleShouldWritePlainDecimalsAsStringsAndReadBothForms() {
+        record Line(BigDecimal qtyInBase, VariantId variantId) {}
+        Line line = new Line(
+                new BigDecimal("1.9565E+4"), VariantId.of(UUID.fromString("0193b000-0000-7000-8000-000000000211")));
+
+        String json = JSON.writeValueAsString(line);
+
+        assertThat(json).isEqualTo("{\"qtyInBase\":\"19565\",\"variantId\":\"0193b000-0000-7000-8000-000000000211\"}");
+        assertThat(JSON.readValue(json, Line.class)).isEqualTo(line);
+        assertThat(JSON.readValue(
+                                "{\"qtyInBase\":187.5,\"variantId\":\"0193b000-0000-7000-8000-000000000211\"}",
+                                Line.class)
+                        .qtyInBase())
+                .isEqualByComparingTo("187.5");
+        assertThatThrownBy(() -> JSON.readValue("\"12,5\"", BigDecimal.class)).isInstanceOf(JacksonException.class);
     }
 
     @Test

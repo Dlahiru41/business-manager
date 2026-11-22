@@ -1,0 +1,1918 @@
+openapi: 3.1.0
+info:
+  title: BMP Pricing API
+  version: 1.0.0
+  description: |
+    Price lists, prices, price rules, taxes and price resolution (phase 01, rules PRC-01..PRC-10).
+
+    Every change of a list's prices takes the list's next version (PRC-03); bills record the version they were priced
+    with. Resolution (PRC-04..PRC-07) looks for a price in the customer's lists, then the customer group's, then the
+    channel's, then `ANY` lists, each by ascending `priority`; it derives unit prices from the base unit when the
+    tenant allows it, applies price rules, and splits tax per line.
+
+    Examples use the pilot shop's placeholder prices (LKR): an egg 55.00 retail / 48.00 wholesale, a 750 ml bottle of
+    oil 620.00, an 18 kg can 14,500.00 wholesale; VAT 18 %.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: PriceLists
+    description: Named, versioned sets of prices (PRC-01, PRC-03).
+  - name: Prices
+    description: Prices per variant, packaging unit, minimum quantity and validity (PRC-02), snapshots for tills (PRC-09).
+  - name: PriceRules
+    description: Quantity breaks, customer-group rules, promotions and markups (PRC-06).
+  - name: PriceResolution
+    description: The price of a basket for a channel, customer, quantity and moment (PRC-04..PRC-07, PRC-10).
+  - name: Taxes
+    description: Tax categories and their rates over time (PRC-07).
+
+paths:
+  /api/v1/price-lists:
+    get:
+      tags: [PriceLists]
+      operationId: listPriceLists
+      summary: Price lists, by priority then code
+      x-permission: pricing:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: channel
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ListChannel"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Status"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of price lists.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceListPage"
+              example:
+                items:
+                  - id: 0193c000-0000-7000-8000-000000000901
+                    code: RETAIL
+                    name: Retail
+                    channel: RETAIL
+                    currency: LKR
+                    taxInclusive: true
+                    priority: 100
+                    currentVersion: 3
+                    status: ACTIVE
+                    version: 3
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [PriceLists]
+      operationId: createPriceList
+      summary: Add a price list (PRC-01); Retail and Wholesale exist from the start
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRICE_LIST_CODE_TAKEN, INVALID_PRICE_LIST_SCOPE, PRICE_CHANGE_RESTRICTED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePriceListRequest"
+            example:
+              code: HOTELS
+              name: Hotels and restaurants
+              channel: WHOLESALE
+              customerGroupId: 0193d000-0000-7000-8000-000000000a01
+              priority: 50
+      responses:
+        "201":
+          description: Created, at version 0 without prices.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceList"
+              examples:
+                default:
+                  $ref: "#/components/examples/WholesaleList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/price-lists/{priceListId}:
+    get:
+      tags: [PriceLists]
+      operationId: getPriceList
+      summary: Get a price list
+      x-permission: pricing:read
+      x-error-codes: [PRICE_LIST_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+      responses:
+        "200":
+          description: The price list.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceList"
+              examples:
+                default:
+                  $ref: "#/components/examples/WholesaleList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [PriceLists]
+      operationId: updatePriceList
+      summary: Rename, re-prioritise or deactivate a price list
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRICE_LIST_NOT_FOUND, PRICE_CHANGE_RESTRICTED]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePriceListRequest"
+            example:
+              priority: 90
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceList"
+              examples:
+                default:
+                  $ref: "#/components/examples/WholesaleList"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/price-lists/{priceListId}/prices:
+    get:
+      tags: [Prices]
+      operationId: listPrices
+      summary: The list's prices; the ETag is the list's price version
+      x-permission: pricing:read
+      x-error-codes: [PRICE_LIST_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - name: variantId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: unitId
+          in: query
+          required: false
+          description: Packaging unit id.
+          schema:
+            type: string
+            format: uuid
+        - name: at
+          in: query
+          required: false
+          description: Only prices valid at this moment (from inclusive, to exclusive).
+          schema:
+            type: string
+            format: date-time
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of prices.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PricePage"
+              example:
+                items:
+                  - id: 0193c000-0000-7000-8000-000000000b01
+                    priceListId: 0193c000-0000-7000-8000-000000000902
+                    variantId: 0193b000-0000-7000-8000-000000000204
+                    packagingUnitId: 0193b000-0000-7000-8000-000000000301
+                    minQty: "1"
+                    amount:
+                      amount: "48.00"
+                      currency: LKR
+                    validFrom: "2026-11-21T09:42:13Z"
+                    listVersion: 1
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    put:
+      tags: [Prices]
+      operationId: upsertPrices
+      summary: Create or change up to 1,000 prices in one new list version (PRC-02, PRC-03, PRC-08)
+      description: |
+        All rows are validated first; then they are applied in one transaction as one new version, which publishes
+        `PriceListChanged`. A row without `validFrom` is the price from now on: the open price of the same unit and
+        minimum quantity ends now. A row with `validFrom` matching an existing price changes that price; any other
+        overlap with an existing validity window of the same unit and minimum quantity is 409 `PRICE_OVERLAP`.
+        Changes only affect the future: a row may not start before now, and a price that already applied keeps its
+        amount and may only get a new end that is not before now; otherwise 409 `PRICE_IN_FORCE`.
+        `If-Match` carries the list's price version (the ETag of `GET .../prices`).
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRICE_LIST_NOT_FOUND, PRICE_OVERLAP, PRICE_IN_FORCE, DUPLICATE_PRICE_ROWS, INVALID_VALIDITY, UNKNOWN_VARIANT, UNKNOWN_PACKAGING_UNIT, PRICE_CHANGE_RESTRICTED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertPricesRequest"
+            example:
+              note: Wholesale egg prices (placeholders)
+              prices:
+                - variantId: 0193b000-0000-7000-8000-000000000204
+                  packagingUnitId: 0193b000-0000-7000-8000-000000000301
+                  amount: "48.00"
+                - variantId: 0193b000-0000-7000-8000-000000000211
+                  packagingUnitId: 0193b000-0000-7000-8000-000000000312
+                  amount: "14500.00"
+      responses:
+        "200":
+          description: The new version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceListVersion"
+              examples:
+                default:
+                  $ref: "#/components/examples/PriceListVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/price-lists/{priceListId}/versions:
+    get:
+      tags: [PriceLists]
+      operationId: listPriceListVersions
+      summary: The list's versions, newest first
+      x-permission: pricing:read
+      x-error-codes: [PRICE_LIST_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of versions (without their changes).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceListVersionPage"
+              example:
+                items:
+                  - priceListId: 0193c000-0000-7000-8000-000000000902
+                    version: 1
+                    publishedAt: "2026-11-21T09:42:13Z"
+                    publishedBy: 0193a6f1-0000-7000-8000-00000000f001
+                    note: Wholesale egg prices (placeholders)
+                    changeCount: 2
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/v1/price-lists/{priceListId}/versions/{version}:
+    get:
+      tags: [PriceLists]
+      operationId: getPriceListVersion
+      summary: One version with its change summary
+      x-permission: pricing:read
+      x-error-codes: [PRICE_LIST_NOT_FOUND, PRICE_LIST_VERSION_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            example: 1
+      responses:
+        "200":
+          description: The version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceListVersion"
+              examples:
+                default:
+                  $ref: "#/components/examples/PriceListVersion"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/v1/price-lists/{priceListId}/snapshot:
+    get:
+      tags: [Prices]
+      operationId: getPriceListSnapshot
+      summary: All prices of the list at its current version, or those changed since a version (PRC-09)
+      description: The ETag is the list's price version; an unchanged list answers 304 to If-None-Match.
+      x-permission: pricing:read
+      x-error-codes: [PRICE_LIST_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - $ref: "#/components/parameters/PriceListIdPath"
+        - name: sinceVersion
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int32
+            minimum: 0
+        - $ref: "./common.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: The snapshot or delta.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceListSnapshot"
+              example:
+                priceListId: 0193c000-0000-7000-8000-000000000901
+                code: RETAIL
+                channel: RETAIL
+                currency: LKR
+                taxInclusive: true
+                version: 3
+                sinceVersion: 2
+                full: false
+                prices:
+                  - id: 0193c000-0000-7000-8000-000000000b11
+                    priceListId: 0193c000-0000-7000-8000-000000000901
+                    variantId: 0193b000-0000-7000-8000-000000000211
+                    packagingUnitId: 0193b000-0000-7000-8000-000000000314
+                    minQty: "1"
+                    amount:
+                      amount: "620.00"
+                      currency: LKR
+                    validFrom: "2026-11-21T09:42:13Z"
+                    listVersion: 3
+        "304":
+          $ref: "./common.yaml#/components/responses/NotModified"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/v1/price-rules:
+    get:
+      tags: [PriceRules]
+      operationId: listPriceRules
+      summary: Price rules, by priority then code
+      x-permission: pricing:write
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/RuleKind"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Status"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of rules.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceRulePage"
+              example:
+                items:
+                  - id: 0193c000-0000-7000-8000-000000000c01
+                    code: EGG-300
+                    name: Eggs, 300 pieces and more
+                    kind: QTY_BREAK
+                    conditions:
+                      channel: WHOLESALE
+                      productIds: [0193b000-0000-7000-8000-000000000101]
+                      minQtyBase: "300"
+                    effect:
+                      type: PERCENT_OFF
+                      value: "5"
+                    priority: 10
+                    stackable: false
+                    status: ACTIVE
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [PriceRules]
+      operationId: createPriceRule
+      summary: Add a price rule (PRC-06)
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRICE_RULE_CODE_TAKEN, INVALID_RULE_EFFECT, INVALID_VALIDITY, PRICE_CHANGE_RESTRICTED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePriceRuleRequest"
+            example:
+              code: EGG-300
+              name: Eggs, 300 pieces and more
+              kind: QTY_BREAK
+              conditions:
+                channel: WHOLESALE
+                productIds: [0193b000-0000-7000-8000-000000000101]
+                minQtyBase: "300"
+              effect:
+                type: PERCENT_OFF
+                value: "5"
+              priority: 10
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceRule"
+              examples:
+                default:
+                  $ref: "#/components/examples/EggQtyBreak"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/price-rules/{ruleId}:
+    get:
+      tags: [PriceRules]
+      operationId: getPriceRule
+      summary: Get a price rule
+      x-permission: pricing:write
+      x-error-codes: [PRICE_RULE_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/RuleIdPath"
+      responses:
+        "200":
+          description: The rule.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceRule"
+              examples:
+                default:
+                  $ref: "#/components/examples/EggQtyBreak"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [PriceRules]
+      operationId: updatePriceRule
+      summary: Change or deactivate a price rule
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRICE_RULE_NOT_FOUND, INVALID_RULE_EFFECT, INVALID_VALIDITY, PRICE_CHANGE_RESTRICTED]
+      parameters:
+        - $ref: "#/components/parameters/RuleIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePriceRuleRequest"
+            example:
+              status: INACTIVE
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceRule"
+              examples:
+                default:
+                  $ref: "#/components/examples/EggQtyBreak"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/prices:resolve:
+    post:
+      tags: [PriceResolution]
+      operationId: resolvePrices
+      summary: Price a basket (PRC-04..PRC-07, PRC-10)
+      description: |
+        Has no side effects; the Idempotency-Key is accepted like on every POST. A line without a price is
+        `PRICE_NOT_FOUND` (PRC-05) — the basket is still answered. Amounts are rounded per line; totals are sums of
+        rounded lines.
+      x-permission: pricing:read
+      x-error-codes: [VALIDATION_FAILED, IDEMPOTENCY_KEY_REQUIRED]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResolvePricesRequest"
+            example:
+              channel: RETAIL
+              at: "2026-11-21T10:00:00Z"
+              lines:
+                - lineId: "1"
+                  variantId: 0193b000-0000-7000-8000-000000000204
+                  packagingUnitId: 0193b000-0000-7000-8000-000000000301
+                  qty: "10"
+                - lineId: "2"
+                  variantId: 0193b000-0000-7000-8000-000000000211
+                  packagingUnitId: 0193b000-0000-7000-8000-000000000314
+                  qty: "1"
+      responses:
+        "200":
+          description: The priced basket.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResolvedPrices"
+              example:
+                channel: RETAIL
+                currency: LKR
+                at: "2026-11-21T10:00:00Z"
+                lines:
+                  - lineId: "1"
+                    variantId: 0193b000-0000-7000-8000-000000000204
+                    packagingUnitId: 0193b000-0000-7000-8000-000000000301
+                    qty: "10"
+                    status: PRICED
+                    unitPrice:
+                      amount: "55.00"
+                      currency: LKR
+                    amount:
+                      amount: "550.00"
+                      currency: LKR
+                    discount:
+                      amount: "0.00"
+                      currency: LKR
+                    netAmount:
+                      amount: "466.10"
+                      currency: LKR
+                    taxAmount:
+                      amount: "83.90"
+                      currency: LKR
+                    lineTotal:
+                      amount: "550.00"
+                      currency: LKR
+                    taxInclusive: true
+                    priceListId: 0193c000-0000-7000-8000-000000000901
+                    priceListVersion: 3
+                    source: LIST
+                    appliedRules: []
+                    taxes:
+                      - taxRateId: 0193c000-0000-7000-8000-000000000811
+                        code: VAT
+                        ratePct: "18"
+                        amount:
+                          amount: "83.90"
+                          currency: LKR
+                  - lineId: "2"
+                    variantId: 0193b000-0000-7000-8000-000000000211
+                    packagingUnitId: 0193b000-0000-7000-8000-000000000314
+                    qty: "1"
+                    status: PRICE_NOT_FOUND
+                    appliedRules: []
+                    taxes: []
+                totals:
+                  netAmount:
+                    amount: "466.10"
+                    currency: LKR
+                  taxAmount:
+                    amount: "83.90"
+                    currency: LKR
+                  discount:
+                    amount: "0.00"
+                    currency: LKR
+                  lineTotal:
+                    amount: "550.00"
+                    currency: LKR
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/tax-categories:
+    get:
+      tags: [Taxes]
+      operationId: listTaxCategories
+      summary: Tax categories, by code
+      x-permission: pricing:write
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of tax categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCategoryPage"
+              example:
+                items:
+                  - id: 0193c000-0000-7000-8000-000000000801
+                    code: VAT_STANDARD
+                    name: VAT standard rate
+                    status: ACTIVE
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Taxes]
+      operationId: createTaxCategory
+      summary: Add a tax category
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, TAX_CATEGORY_CODE_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaxCategoryRequest"
+            example:
+              code: VAT_STANDARD
+              name: VAT standard rate
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCategory"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxCategory"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/tax-categories/{taxCategoryId}:
+    get:
+      tags: [Taxes]
+      operationId: getTaxCategory
+      summary: Get a tax category
+      x-permission: pricing:write
+      x-error-codes: [TAX_CATEGORY_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/TaxCategoryIdPath"
+      responses:
+        "200":
+          description: The tax category.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCategory"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxCategory"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Taxes]
+      operationId: updateTaxCategory
+      summary: Rename or deactivate a tax category
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, TAX_CATEGORY_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/TaxCategoryIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaxCategoryRequest"
+            example:
+              name: VAT (standard)
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxCategory"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxCategory"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/tax-rates:
+    get:
+      tags: [Taxes]
+      operationId: listTaxRates
+      summary: Tax rates, by category then valid-from
+      x-permission: pricing:write
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: taxCategoryId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of tax rates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRatePage"
+              example:
+                items:
+                  - id: 0193c000-0000-7000-8000-000000000811
+                    taxCategoryId: 0193c000-0000-7000-8000-000000000801
+                    code: VAT
+                    name: Value added tax
+                    ratePct: "18"
+                    compound: false
+                    validFrom: "2026-01-01"
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Taxes]
+      operationId: createTaxRate
+      summary: Add a rate to a tax category; a new rate for a code ends where the next one starts
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, UNKNOWN_TAX_CATEGORY, TAX_RATE_OVERLAP, INVALID_VALIDITY, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaxRateRequest"
+            example:
+              taxCategoryId: 0193c000-0000-7000-8000-000000000801
+              code: VAT
+              name: Value added tax
+              ratePct: "18"
+              validFrom: "2026-01-01"
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRate"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxRate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/tax-rates/{taxRateId}:
+    get:
+      tags: [Taxes]
+      operationId: getTaxRate
+      summary: Get a tax rate
+      x-permission: pricing:write
+      x-error-codes: [TAX_RATE_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/TaxRateIdPath"
+      responses:
+        "200":
+          description: The tax rate.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRate"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxRate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Taxes]
+      operationId: updateTaxRate
+      summary: Rename a rate or end its validity; the percentage never changes (add a new rate instead)
+      x-permission: pricing:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, TAX_RATE_NOT_FOUND, TAX_RATE_OVERLAP, INVALID_VALIDITY]
+      parameters:
+        - $ref: "#/components/parameters/TaxRateIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaxRateRequest"
+            example:
+              validTo: "2027-01-01"
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxRate"
+              examples:
+                default:
+                  $ref: "#/components/examples/TaxRate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./common.yaml#/components/securitySchemes/bearerAuth"
+
+  parameters:
+    PriceListIdPath:
+      name: priceListId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    RuleIdPath:
+      name: ruleId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TaxCategoryIdPath:
+      name: taxCategoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TaxRateIdPath:
+      name: taxRateId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  schemas:
+    Status:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    ListChannel:
+      type: string
+      enum: [RETAIL, WHOLESALE, ANY]
+    SalesChannel:
+      type: string
+      enum: [RETAIL, WHOLESALE]
+    RuleKind:
+      type: string
+      enum: [QTY_BREAK, CUSTOMER_GROUP, PROMOTION, MARKUP]
+    EffectType:
+      type: string
+      enum: [PERCENT_OFF, AMOUNT_OFF, FIXED_PRICE, MARKUP_PERCENT]
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: '^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$'
+      example: "620.00"
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: '^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$'
+      example: "10"
+    Rate:
+      type: string
+      description: A percentage with up to 4 decimals.
+      pattern: '^(0|[1-9][0-9]{0,2})(\.[0-9]{1,4})?$'
+      example: "18"
+    Code:
+      type: string
+      pattern: '^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$'
+
+    PriceList:
+      type: object
+      required: [id, code, name, channel, currency, taxInclusive, priority, currentVersion, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        channel:
+          $ref: "#/components/schemas/ListChannel"
+        customerGroupId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        taxInclusive:
+          type: boolean
+          description: Prices include tax (tax is back-calculated); fixed at creation.
+        priority:
+          type: integer
+          format: int32
+          description: Lower values are tried first within the same scope (PRC-04).
+        currentVersion:
+          type: integer
+          format: int32
+          description: The price version; bills record it (PRC-03, PRC-10).
+        status:
+          $ref: "#/components/schemas/Status"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    PriceListPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceList"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreatePriceListRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, channel]
+      description: At most one of `customerGroupId` and `customerId`.
+      properties:
+        code:
+          $ref: "#/components/schemas/Code"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        channel:
+          $ref: "#/components/schemas/ListChannel"
+        customerGroupId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        taxInclusive:
+          type: boolean
+          description: Defaults to the tenant setting `pricing.pricesTaxInclusive`.
+        priority:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+          default: 100
+    UpdatePriceListRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        priority:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+        status:
+          $ref: "#/components/schemas/Status"
+
+    Price:
+      type: object
+      required: [id, priceListId, variantId, packagingUnitId, minQty, amount, validFrom, listVersion]
+      properties:
+        id:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        minQty:
+          type: string
+          description: In the packaging unit; the highest one not above the quantity applies (PRC-04).
+        amount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+          description: Exclusive; absent while open-ended.
+        listVersion:
+          type: integer
+          format: int32
+          description: The list version that last changed this price.
+    PricePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Price"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    PriceInput:
+      type: object
+      description: >-
+        One price row. `minQty` (in the packaging unit, default 1, greater than 0) is the quantity the price applies
+        from; a weighed unit sold in fractions (0.75 kg) needs a smaller minimum such as 0.001. Without `validFrom`
+        the price starts now and ends the open price of the same key; `validFrom` may not be in the past.
+      additionalProperties: false
+      required: [variantId, packagingUnitId, amount]
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        minQty:
+          $ref: "#/components/schemas/Quantity"
+        amount:
+          $ref: "#/components/schemas/Amount"
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+    UpsertPricesRequest:
+      type: object
+      additionalProperties: false
+      required: [prices]
+      properties:
+        note:
+          type: string
+          maxLength: 200
+        prices:
+          type: array
+          minItems: 1
+          maxItems: 1000
+          items:
+            $ref: "#/components/schemas/PriceInput"
+    PriceChange:
+      type: object
+      required: [change, priceId, variantId, packagingUnitId, minQty, validFrom, amount]
+      properties:
+        change:
+          type: string
+          enum: [CREATED, UPDATED, ENDED]
+        priceId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        minQty:
+          type: string
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        amount:
+          type: string
+        previousAmount:
+          type: string
+        previousValidTo:
+          type: string
+          format: date-time
+    PriceListVersion:
+      type: object
+      required: [priceListId, version, publishedAt, changeCount]
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int32
+        publishedAt:
+          type: string
+          format: date-time
+        publishedBy:
+          type: string
+          format: uuid
+        note:
+          type: string
+        changeCount:
+          type: integer
+          format: int32
+        changes:
+          type: array
+          description: Only when reading one version or after an upsert.
+          items:
+            $ref: "#/components/schemas/PriceChange"
+    PriceListVersionPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceListVersion"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    PriceListSnapshot:
+      type: object
+      required: [priceListId, code, channel, currency, taxInclusive, version, full, prices]
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        channel:
+          $ref: "#/components/schemas/ListChannel"
+        customerGroupId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+        taxInclusive:
+          type: boolean
+        version:
+          type: integer
+          format: int32
+        sinceVersion:
+          type: integer
+          format: int32
+        full:
+          type: boolean
+        prices:
+          type: array
+          description: Full snapshots hold every price not yet ended; deltas every price changed after `sinceVersion`.
+          items:
+            $ref: "#/components/schemas/Price"
+
+    RuleConditions:
+      type: object
+      additionalProperties: false
+      description: All given conditions must hold; an absent condition matches everything.
+      properties:
+        channel:
+          $ref: "#/components/schemas/SalesChannel"
+        priceListIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+        customerGroupIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+        customerIds:
+          type: array
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+        productIds:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            format: uuid
+        variantIds:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            format: uuid
+        packagingUnitIds:
+          type: array
+          maxItems: 200
+          items:
+            type: string
+            format: uuid
+        minQtyBase:
+          description: Minimum line quantity in the variant's base unit (e.g. 300 pieces = 10 trays).
+          $ref: "#/components/schemas/Quantity"
+    RuleEffect:
+      type: object
+      additionalProperties: false
+      required: [type, value]
+      description: "`value` is a percentage for PERCENT_OFF / MARKUP_PERCENT, an amount per sold unit otherwise."
+      properties:
+        type:
+          $ref: "#/components/schemas/EffectType"
+        value:
+          $ref: "#/components/schemas/Amount"
+    PriceRule:
+      type: object
+      required: [id, code, name, kind, conditions, effect, priority, stackable, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/RuleKind"
+        conditions:
+          $ref: "#/components/schemas/RuleConditions"
+        effect:
+          $ref: "#/components/schemas/RuleEffect"
+        priority:
+          type: integer
+          format: int32
+        stackable:
+          type: boolean
+          description: A promotion that may apply on top of another promotion (PRC-06).
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/Status"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    PriceRulePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PriceRule"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreatePriceRuleRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, kind, effect]
+      properties:
+        code:
+          $ref: "#/components/schemas/Code"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        kind:
+          $ref: "#/components/schemas/RuleKind"
+        conditions:
+          $ref: "#/components/schemas/RuleConditions"
+        effect:
+          $ref: "#/components/schemas/RuleEffect"
+        priority:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+          default: 100
+        stackable:
+          type: boolean
+          default: false
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+    UpdatePriceRuleRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        conditions:
+          $ref: "#/components/schemas/RuleConditions"
+        effect:
+          $ref: "#/components/schemas/RuleEffect"
+        priority:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+        stackable:
+          type: boolean
+        validFrom:
+          type: string
+          format: date-time
+        validTo:
+          type: string
+          format: date-time
+        status:
+          $ref: "#/components/schemas/Status"
+
+    ResolveLine:
+      type: object
+      additionalProperties: false
+      required: [variantId, packagingUnitId, qty]
+      properties:
+        lineId:
+          type: string
+          description: The caller's line reference, echoed back.
+          maxLength: 40
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: "#/components/schemas/Quantity"
+    ResolvePricesRequest:
+      type: object
+      additionalProperties: false
+      required: [channel, lines]
+      properties:
+        channel:
+          $ref: "#/components/schemas/SalesChannel"
+        customerId:
+          type: string
+          format: uuid
+        customerGroupId:
+          type: string
+          format: uuid
+        at:
+          type: string
+          format: date-time
+          description: Defaults to now.
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/ResolveLine"
+    LineTax:
+      type: object
+      required: [taxRateId, code, ratePct, amount]
+      properties:
+        taxRateId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        ratePct:
+          type: string
+        amount:
+          $ref: "./common.yaml#/components/schemas/Money"
+    ResolvedLine:
+      type: object
+      description: |
+        `unitPrice` is the list (or derived) price of one unit before rules; `amount` is quantity × price after rules,
+        rounded, tax included when `taxInclusive`; `discount` is quantity × list price, rounded, minus `amount`
+        (negative for markups); `lineTotal` is what the customer pays (net + tax).
+      required: [variantId, packagingUnitId, qty, status, appliedRules, taxes]
+      properties:
+        lineId:
+          type: string
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          type: string
+        status:
+          type: string
+          enum: [PRICED, PRICE_NOT_FOUND, NOT_SELLABLE]
+          description: "`NOT_SELLABLE`: unknown or inactive variant, or a unit that is not sold."
+        unitPrice:
+          $ref: "./common.yaml#/components/schemas/Money"
+        amount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        discount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        netAmount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        taxAmount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        lineTotal:
+          $ref: "./common.yaml#/components/schemas/Money"
+        taxInclusive:
+          type: boolean
+        priceListId:
+          type: string
+          format: uuid
+        priceListVersion:
+          type: integer
+          format: int32
+        source:
+          type: string
+          description: "`LIST`, `DERIVED` or `RULE:<code>` of the last rule that changed the price (PRC-10)."
+          example: LIST
+        appliedRules:
+          type: array
+          items:
+            type: string
+        taxes:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineTax"
+    Totals:
+      type: object
+      description: Sums of the priced lines.
+      required: [netAmount, taxAmount, discount, lineTotal]
+      properties:
+        netAmount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        taxAmount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        discount:
+          $ref: "./common.yaml#/components/schemas/Money"
+        lineTotal:
+          $ref: "./common.yaml#/components/schemas/Money"
+    ResolvedPrices:
+      type: object
+      required: [channel, currency, at, lines, totals]
+      properties:
+        channel:
+          $ref: "#/components/schemas/SalesChannel"
+        currency:
+          type: string
+        at:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResolvedLine"
+        totals:
+          $ref: "#/components/schemas/Totals"
+
+    TaxCategory:
+      type: object
+      required: [id, code, name, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/Status"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    TaxCategoryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxCategory"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreateTaxCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      properties:
+        code:
+          $ref: "#/components/schemas/Code"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+    UpdateTaxCategoryRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        status:
+          $ref: "#/components/schemas/Status"
+    TaxRate:
+      type: object
+      required: [id, taxCategoryId, code, name, ratePct, compound, validFrom, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        taxCategoryId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        ratePct:
+          type: string
+        compound:
+          type: boolean
+          description: Charged on the amount including the non-compound taxes.
+        validFrom:
+          type: string
+          format: date
+          description: First business date the rate applies (inclusive).
+        validTo:
+          type: string
+          format: date
+          description: First business date it no longer applies (exclusive).
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    TaxRatePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaxRate"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreateTaxRateRequest:
+      type: object
+      additionalProperties: false
+      required: [taxCategoryId, code, name, ratePct, validFrom]
+      properties:
+        taxCategoryId:
+          type: string
+          format: uuid
+        code:
+          $ref: "#/components/schemas/Code"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        ratePct:
+          $ref: "#/components/schemas/Rate"
+        compound:
+          type: boolean
+          default: false
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type: string
+          format: date
+    UpdateTaxRateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        validTo:
+          type: string
+          format: date
+
+  examples:
+    WholesaleList:
+      value:
+        id: 0193c000-0000-7000-8000-000000000902
+        code: WHOLESALE
+        name: Wholesale
+        channel: WHOLESALE
+        currency: LKR
+        taxInclusive: true
+        priority: 100
+        currentVersion: 1
+        status: ACTIVE
+        version: 1
+        createdAt: "2026-11-21T09:42:13Z"
+    PriceListVersion:
+      value:
+        priceListId: 0193c000-0000-7000-8000-000000000902
+        version: 1
+        publishedAt: "2026-11-21T09:42:13Z"
+        publishedBy: 0193a6f1-0000-7000-8000-00000000f001
+        note: Wholesale egg prices (placeholders)
+        changeCount: 1
+        changes:
+          - change: CREATED
+            priceId: 0193c000-0000-7000-8000-000000000b01
+            variantId: 0193b000-0000-7000-8000-000000000204
+            packagingUnitId: 0193b000-0000-7000-8000-000000000301
+            minQty: "1"
+            validFrom: "2026-11-21T09:42:13Z"
+            amount: "48.00"
+    EggQtyBreak:
+      value:
+        id: 0193c000-0000-7000-8000-000000000c01
+        code: EGG-300
+        name: Eggs, 300 pieces and more
+        kind: QTY_BREAK
+        conditions:
+          channel: WHOLESALE
+          productIds: [0193b000-0000-7000-8000-000000000101]
+          minQtyBase: "300"
+        effect:
+          type: PERCENT_OFF
+          value: "5"
+        priority: 10
+        stackable: false
+        status: ACTIVE
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    TaxCategory:
+      value:
+        id: 0193c000-0000-7000-8000-000000000801
+        code: VAT_STANDARD
+        name: VAT standard rate
+        status: ACTIVE
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    TaxRate:
+      value:
+        id: 0193c000-0000-7000-8000-000000000811
+        taxCategoryId: 0193c000-0000-7000-8000-000000000801
+        code: VAT
+        name: Value added tax
+        ratePct: "18"
+        compound: false
+        validFrom: "2026-01-01"
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"

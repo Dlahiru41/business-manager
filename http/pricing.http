@@ -1,0 +1,95 @@
+# Pricing module (contracts/openapi/pricing.yaml). Get tokens with auth.http first and run catalog.http so the
+# pilot products exist; set eggVariantId / eggPieceUnitId / eggTrayUnitId from a catalog response.
+
+### Price lists: Retail and Wholesale are seeded when the tenant is created
+GET {{baseUrl}}/api/v1/price-lists?status=ACTIVE
+Authorization: Bearer {{ownerToken}}
+
+> {%
+  client.global.set("retailListId", response.body.items.find(l => l.code === "RETAIL").id);
+  client.global.set("wholesaleListId", response.body.items.find(l => l.code === "WHOLESALE").id);
+%}
+
+### A wholesale list that wins over the seeded one (lower priority first)
+POST {{baseUrl}}/api/v1/price-lists
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "BULK{{$randomInt}}", "name": "Bulk buyers", "channel": "WHOLESALE", "priority": 50}
+
+### Read Retail (note the ETag for the next request)
+GET {{baseUrl}}/api/v1/price-lists/{{retailListId}}/prices
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("retailPricesEtag", response.headers.valueOf("ETag")); %}
+
+### Bulk upsert: a piece price and a tray price (placeholder amounts)
+PUT {{baseUrl}}/api/v1/price-lists/{{retailListId}}/prices
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{retailPricesEtag}}
+Idempotency-Key: {{$uuid}}
+
+{"prices": [
+  {"variantId": "{{eggVariantId}}", "packagingUnitId": "{{eggPieceUnitId}}", "amount": "55.00"},
+  {"variantId": "{{eggVariantId}}", "packagingUnitId": "{{eggTrayUnitId}}", "amount": "1600.00"}]}
+
+### Versions of the list and what each changed
+GET {{baseUrl}}/api/v1/price-lists/{{retailListId}}/versions
+Authorization: Bearer {{ownerToken}}
+
+### Snapshot for tills: send the last ETag to get 304 when nothing changed
+GET {{baseUrl}}/api/v1/price-lists/{{retailListId}}/snapshot?sinceVersion=0
+Authorization: Bearer {{ownerToken}}
+
+### Wholesale quantity break: 5 % off eggs from 300 pieces
+POST {{baseUrl}}/api/v1/price-rules
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "EGG-300-{{$randomInt}}", "name": "Eggs, 300 pieces and more", "kind": "QTY_BREAK",
+ "conditions": {"channel": "WHOLESALE", "minQtyBase": "300"},
+ "effect": {"type": "PERCENT_OFF", "value": "5"}, "priority": 10}
+
+### Tax category and a dated rate
+POST {{baseUrl}}/api/v1/tax-categories
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "VAT_{{$randomInt}}", "name": "VAT standard"}
+
+> {% client.global.set("taxCategoryId", response.body.id); %}
+
+###
+POST {{baseUrl}}/api/v1/tax-rates
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"taxCategoryId": "{{taxCategoryId}}", "code": "VAT", "name": "VAT 18 %", "ratePct": "18", "validFrom": "2026-01-01"}
+
+### Resolve a basket: each line names its list, version, source and taxes
+POST {{baseUrl}}/api/v1/prices:resolve
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{"channel": "RETAIL", "lines": [
+  {"lineId": "1", "variantId": "{{eggVariantId}}", "packagingUnitId": "{{eggPieceUnitId}}", "qty": "10"},
+  {"lineId": "2", "variantId": "{{eggVariantId}}", "packagingUnitId": "{{eggTrayUnitId}}", "qty": "1"}]}
+
+### Restrict price changes to owners (PRC-08); read the settings ETag first
+GET {{baseUrl}}/api/v1/settings/pricing
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("pricingSettingsEtag", response.headers.valueOf("ETag")); %}
+
+###
+PATCH {{baseUrl}}/api/v1/settings/pricing
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{pricingSettingsEtag}}
+
+{"values": {"priceChangesRequireOwner": true}}

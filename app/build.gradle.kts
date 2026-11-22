@@ -7,6 +7,8 @@ dependencies {
     implementation(project(":libs:persistence-support"))
     implementation(project(":modules:tenant"))
     implementation(project(":modules:iam"))
+    implementation(project(":modules:catalog"))
+    implementation(project(":modules:pricing"))
     implementation(project(":modules:audit"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
