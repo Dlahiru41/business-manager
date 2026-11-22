@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT`
-- Next step (exact, so a new session can resume): write `PilotShopFixture` in `libs/test-support` and `CatalogPricingFlowIT` in `app/src/integrationTest` with `/run-phase 01`.
+- Current task: Definition of Done
+- Next step (exact, so a new session can resume): run the Definition of Done checks, then the `code-reviewer` subagent on `git diff main...HEAD`, with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
@@ -31,7 +31,7 @@ Phase 01:
 - [x] T01-04 Catalog application layer and API — snapshot events built after flush and per-tenant catalog revisions (ADR-019); modelling choices in ADR-020; `include` is a comma-separated string (the contract validator cannot parse form arrays); catalog wired into `app`
 - [x] T01-05 Pricing module: replicas and domain — pure `PriceResolver`/`TaxCalculator`/`PriceSchedule`; `variant_price_ref` replica keeps the highest `aggregateVersion`, early deactivations leave a tombstone; Retail/Wholesale seeded on `TenantCreated`; pricing implements the catalog's `TaxCategoryLookup` SPI (ADR-021)
 - [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
-- [ ] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT`
+- [x] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT` — `PilotShopFixture` in `libs/test-support` (public API only, contract-checked, placeholder prices/VAT/density documented); kilogram prices of loose goods start at `minQty` 0.001 so 0.75 kg is priced (ADR-021 item 10)
 - [ ] Definition of Done
   - [ ] Every CAT-xx and PRC-xx rule has a named test
   - [ ] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14)
@@ -55,6 +55,8 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — Currencies without two decimals (JPY, KWD, ...) are refused at tenant creation and in settings until money rounds to each currency's minor units.
 - 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
 - 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
+- 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
+- 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
 - 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
