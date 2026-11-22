@@ -6,7 +6,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
-| 00 | Foundation | in progress | phase/00-foundation | |
+| 00 | Foundation | in progress (all tasks and local DoD done; awaiting first CI run) | phase/00-foundation | |
 | 01 | Catalog and pricing | not started | | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 00 — Foundation
-- Current task: Definition of Done and phase review
-- Next step (exact, so a new session can resume): run the `code-reviewer` agent over `git diff main...HEAD`, fix BLOCKER/MAJOR findings, write the phase summary, mark the phase done and merge `phase/00-foundation` into `main` once CI has run on GitHub.
+- Current task: phase close-out
+- Next step (exact, so a new session can resume): add a GitHub remote and push `phase/00-foundation`; when every job of `.github/workflows/ci.yml` is green, tick the last DoD item, set the phase to `done` and merge into `main` (then start `/run-phase 01`).
 
 ## Task checklist (current phase)
 
@@ -38,6 +38,13 @@ Phase 00:
 - [x] T00-11 Architecture tests and documentation — `ModularityTests` (docs in `app/build/spring-modulith-docs`), `ArchitectureTest` with `HexagonalRules`/`CodingRules`/`SecurityRules`; READMEs for tenant, iam, audit
 - [x] T00-12 CI pipeline — `.github/workflows/ci.yml` (build + gates, Spectral, oasdiff breaking check on PRs, CycloneDX SBOM + Trivy, signed image push on `main`), `contracts/.spectral.yaml`; not yet run on GitHub (no remote configured)
 - [ ] Definition of Done
+  - [x] `docker compose up` + `./gradlew :app:bootRun` start cleanly; `/actuator/health` UP (on a machine with its own PostgreSQL on 5432: `BMP_POSTGRES_PORT=55432`, see README)
+  - [x] With tokens from local Keycloak: location created, settings read and updated, user created, device registered (curl run of the `http/*.http` flows)
+  - [x] Tenant isolation, RLS coverage, idempotency, problem details, security (401/403/404, per operation from the contracts) tests green
+  - [x] Logs are ECS JSON with trace/tenant/request ids outside `local` (`ObservabilityIT`); traces visible in local Grafana
+  - [ ] All quality gates green in CI — run locally (build, Spectral, Trivy); waiting for the first GitHub run
+  - [x] ADR-011, ADR-012 and the event publication style ADR (ADR-015) written
+  - [x] Phase summary written; `code-reviewer` run, every BLOCKER (none) and MAJOR (8) fixed
 
 ## Open questions
 
@@ -98,6 +105,14 @@ compiles.
 **ADRs.** 011 pinned versions · 012 number sequences per module · 013 fail-closed RLS · 014 identity, tenant claim
 and permissions · 015 event publication style · 016 tenant roles in the identity provider · 017 personal data
 protection (legal review pending).
+
+**Review.** The `code-reviewer` agent found no BLOCKER and 8 MAJOR issues, all fixed in `6161cd8`: roles taken only
+from where Keycloak puts them (platform role via allowed clients only, device tokens exactly `DEVICE`); idempotency
+bound to the caller and refusals not stored; platform-administrator reads audited; Keycloak accounts created disabled
+until their profile is stored; TEN-02 evidence so confirmed documents lock everyone; contract-driven 401/403 checks for
+every operation; backlog out of readiness; a grant ceiling against privilege escalation. Most MINOR items were fixed
+too (TEN-01 and default-template races, 4xx mapping, purge of completed events, stricter RLS check, erasable audit
+network data, owner-free runtime, local credentials outside the jar); the rest are listed under open questions.
 
 **Limitations / carried forward.**
 - CI has not run on GitHub yet (no remote configured); its jobs were exercised locally (build, Spectral, Trivy).
