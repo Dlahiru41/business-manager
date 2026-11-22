@@ -2,10 +2,14 @@ package com.bmp.web.json;
 
 import com.bmp.shared.id.DeviceId;
 import com.bmp.shared.id.LocationId;
+import com.bmp.shared.id.PackagingUnitId;
+import com.bmp.shared.id.PriceListId;
+import com.bmp.shared.id.ProductId;
 import com.bmp.shared.id.RegisterId;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.TypedId;
 import com.bmp.shared.id.UserId;
+import com.bmp.shared.id.VariantId;
 import com.bmp.shared.money.CurrencyCode;
 import com.bmp.shared.money.Money;
 import com.bmp.shared.quantity.Quantity;
@@ -26,7 +30,8 @@ import tools.jackson.databind.module.SimpleModule;
 /**
  * JSON shapes of kernel value objects (03-api-standards.md §8): money as {@code {"amount": "1250.00", "currency":
  * "LKR"}} and quantities as {@code {"value": "0.750", "unit": "l"}} with decimal <em>strings</em>, typed ids as plain
- * UUID strings. Used for HTTP and for events in the publication registry.
+ * UUID strings, and plain {@link BigDecimal}s (quantities, factors, amounts in events) as decimal strings, never JSON
+ * numbers (02-coding-standards.md §5). Used for HTTP and for events in the publication registry.
  */
 public final class BmpJacksonModule extends SimpleModule {
 
@@ -44,6 +49,12 @@ public final class BmpJacksonModule extends SimpleModule {
         typedId(DeviceId.class, DeviceId::new);
         typedId(LocationId.class, LocationId::new);
         typedId(RegisterId.class, RegisterId::new);
+        typedId(ProductId.class, ProductId::new);
+        typedId(VariantId.class, VariantId::new);
+        typedId(PackagingUnitId.class, PackagingUnitId::new);
+        typedId(PriceListId.class, PriceListId::new);
+        addSerializer(BigDecimal.class, new DecimalSerializer());
+        addDeserializer(BigDecimal.class, new DecimalDeserializer());
     }
 
     /** Registers a module-specific typed id so it (de)serializes as a plain UUID string. */
@@ -96,6 +107,32 @@ public final class BmpJacksonModule extends SimpleModule {
                 return new Quantity(value, UnitCode.of(unit));
             } catch (IllegalArgumentException e) {
                 return ctxt.reportInputMismatch(Quantity.class, "Malformed unit");
+            }
+        }
+    }
+
+    private static final class DecimalSerializer extends ValueSerializer<BigDecimal> {
+        @Override
+        public void serialize(BigDecimal value, JsonGenerator gen, SerializationContext ctxt) throws JacksonException {
+            gen.writeString(value.toPlainString());
+        }
+    }
+
+    /** Reads decimal strings, and JSON numbers for leniency towards older payloads. */
+    private static final class DecimalDeserializer extends ValueDeserializer<BigDecimal> {
+        @Override
+        public BigDecimal deserialize(JsonParser p, DeserializationContext ctxt) throws JacksonException {
+            if (p.currentToken().isNumeric()) {
+                return p.getDecimalValue();
+            }
+            String raw = p.getValueAsString();
+            if (raw == null) {
+                return ctxt.reportInputMismatch(BigDecimal.class, "Expected a decimal string");
+            }
+            try {
+                return new BigDecimal(raw.trim());
+            } catch (NumberFormatException e) {
+                return ctxt.reportInputMismatch(BigDecimal.class, "Expected a decimal string");
             }
         }
     }
