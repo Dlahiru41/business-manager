@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Inventory",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "costingMethod": {
+      "enum": [
+        "MOVING_AVERAGE",
+        "FIFO"
+      ],
+      "default": "MOVING_AVERAGE"
+    },
+    "negativeStockPolicy": {
+      "enum": [
+        "ALLOW_AND_FLAG",
+        "BLOCK"
+      ],
+      "default": "ALLOW_AND_FLAG"
+    },
+    "defaultLocationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "default": null,
+      "description": "Defaults to the first location."
+    }
+  }
+}

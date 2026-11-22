@@ -1,0 +1,153 @@
+openapi: 3.1.0
+info:
+  title: BMP Audit API
+  version: 1.0.0
+  description: |
+    The tenant's audit trail (phase 00, T00-09): every write through the API and every domain event, as append-only
+    records linked by a per-tenant hash chain.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: Audit
+
+paths:
+  /api/v1/audit-records:
+    get:
+      tags: [Audit]
+      operationId: listAuditRecords
+      summary: Audit records of the tenant, newest first
+      x-permission: audit:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: resourceType
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 80
+        - name: resourceId
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 200
+        - name: from
+          in: query
+          required: false
+          description: Inclusive lower bound of `occurredAt`.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: Exclusive upper bound of `occurredAt`.
+          schema:
+            type: string
+            format: date-time
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of audit records.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditRecordPage"
+              examples:
+                default:
+                  $ref: "#/components/examples/AuditRecordPage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./common.yaml#/components/securitySchemes/bearerAuth"
+
+  schemas:
+    AuditRecord:
+      type: object
+      required: [id, sequence, occurredAt, source, action, platformAdmin, hash, previousHash]
+      properties:
+        id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          format: int64
+          description: Position in the tenant's hash chain, starting at 1.
+        occurredAt:
+          type: string
+          format: date-time
+        source:
+          type: string
+          enum: [API, EVENT, SYSTEM]
+        action:
+          type: string
+          description: "`METHOD /path/template` for API writes, the event type for events."
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+        outcome:
+          type: integer
+          description: HTTP status of an API write.
+        actorId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        platformAdmin:
+          type: boolean
+          description: A platform administrator acted for the tenant.
+        requestId:
+          type: string
+        eventId:
+          type: string
+          format: uuid
+        afterHash:
+          type: string
+          description: SHA-256 of the event payload, for event records.
+        hash:
+          type: string
+        previousHash:
+          type: string
+    AuditRecordPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AuditRecord"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+
+  examples:
+    AuditRecordPage:
+      value:
+        items:
+          - id: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f90
+            sequence: 2
+            occurredAt: "2026-11-21T10:00:00Z"
+            source: API
+            action: POST /api/v1/devices
+            resourceType: devices
+            resourceId: 01934f5a-6d1c-7000-8000-000000000e01
+            outcome: 201
+            actorId: 01934f5a-6d1c-7000-8000-000000000b01
+            platformAdmin: false
+            requestId: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f91
+            hash: 9f2c4e0a7b1d3f5e6c8a0b2d4f6e8a1c3e5b7d9f0a2c4e6b8d0f1a3c5e7b9d0f
+            previousHash: 1b3d5f7a9c0e2a4c6e8b0d2f4a6c8e0b2d4f6a8c0e2b4d6f8a0c2e4b6d8f0a1c
+        page:
+          limit: 50
+          hasMore: false

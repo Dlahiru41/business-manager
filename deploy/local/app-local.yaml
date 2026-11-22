@@ -1,0 +1,14 @@
+# Local-only credentials for `./gradlew :app:bootRun` (profile local), matching deploy/local/compose.yaml and the
+# realm file. Kept here, not in the application jar, so no image ever contains them (CLAUDE.md §1.4).
+spring:
+  datasource:
+    password: ${BMP_APP_PASSWORD:bmp_app}
+bmp:
+  iam:
+    keycloak:
+      client-secret: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-admin-secret}
+  persistence:
+    migrator:
+      password: ${BMP_MIGRATOR_PASSWORD:bmp_migrator}
+    platform-admin:
+      password: ${BMP_PLATFORM_ADMIN_PASSWORD:bmp_platform_admin}

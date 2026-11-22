@@ -1,0 +1,4 @@
+# Vulnerabilities accepted after review. One CVE per line, each preceded by a comment with the reason, the ticket and
+# an expiry date (08-security.md §9), for example:
+#   # Not reachable: we never parse untrusted YAML with this library. BMP-123, review by 2027-01-31.
+#   CVE-0000-00000

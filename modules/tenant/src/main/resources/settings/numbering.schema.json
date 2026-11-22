@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document numbering (ADR-012)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "purchaseOrderPrefix": {
+      "type": "string",
+      "pattern": "^[A-Z0-9-]{0,10}$",
+      "default": "PO-"
+    },
+    "goodsReceiptPrefix": {
+      "type": "string",
+      "pattern": "^[A-Z0-9-]{0,10}$",
+      "default": "GRN-"
+    },
+    "creditNotePrefix": {
+      "type": "string",
+      "pattern": "^[A-Z0-9-]{0,10}$",
+      "default": "CN-"
+    }
+  }
+}

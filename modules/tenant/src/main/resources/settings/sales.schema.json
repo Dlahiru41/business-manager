@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Sales",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "maxCashierDiscountPct": {
+      "type": "string",
+      "pattern": "^(100(\\.0{1,2})?|[0-9]{1,2}(\\.[0-9]{1,2})?)$",
+      "default": "5.00"
+    },
+    "returnWindowDays": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 365,
+      "default": 7
+    },
+    "voidRequiresManager": {
+      "type": "boolean",
+      "default": true
+    },
+    "allowCreditSales": {
+      "type": "boolean",
+      "default": false
+    },
+    "offlineMaxHours": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 720,
+      "default": 72
+    },
+    "rounding": {
+      "enum": [
+        "LINE_HALF_UP_2"
+      ],
+      "default": "LINE_HALF_UP_2"
+    }
+  }
+}

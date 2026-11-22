@@ -1,0 +1,147 @@
+# CI pipeline (docs/standards/09-testing-and-quality.md §6). Every gate fails the run; images are pushed from main only.
+name: ci
+
+on:
+  push:
+    branches: [main, "phase/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: "25"
+  SPECTRAL_VERSION: "6.15.0"
+
+jobs:
+  build:
+    name: Build, test and quality gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      # Compile (-Werror, Error Prone, NullAway), Spotless, unit and Testcontainers integration tests (Docker on the
+      # runner), ArchUnit and Spring Modulith verification, JaCoCo thresholds.
+      - name: Build
+        run: ./gradlew spotlessCheck build --continue
+      # PIT is a gate from phase 02 (09 §5); until then its report is published without failing the run.
+      - name: Mutation tests (report only before phase 02)
+        if: always()
+        continue-on-error: true
+        run: ./gradlew pitest
+      - name: Publish reports
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: reports
+          path: |
+            **/build/reports/tests/
+            **/build/reports/jacoco/
+            **/build/reports/pitest/
+            app/build/spring-modulith-docs/
+          if-no-files-found: warn
+
+  contracts:
+    name: Contract lint and breaking changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "20"
+      - name: Spectral
+        run: >-
+          npx --yes @stoplight/spectral-cli@${{ env.SPECTRAL_VERSION }}
+          lint "contracts/openapi/*.yaml" --ruleset contracts/.spectral.yaml --fail-severity error
+      - name: Breaking changes against main
+        if: github.event_name == 'pull_request'
+        run: |
+          git worktree add /tmp/base "origin/${{ github.base_ref }}"
+          status=0
+          for spec in contracts/openapi/*.yaml; do
+            name=$(basename "$spec")
+            [ "$name" = "common.yaml" ] && continue
+            [ -f "/tmp/base/contracts/openapi/$name" ] || continue
+            docker run --rm -v /tmp/base/contracts:/base:ro -v "$PWD/contracts":/head:ro tufin/oasdiff:v1.35.0 \
+              breaking "/base/openapi/$name" "/head/openapi/$name" --fail-on ERR || status=1
+          done
+          exit $status
+
+  security:
+    name: Dependency scan and SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      - name: SBOM (CycloneDX)
+        run: ./gradlew :app:cyclonedxBom
+      # No unsuppressed CVSS >= 7 (09 §5). Suppressions live in .trivyignore, each with a reason and an expiry date.
+      - name: Trivy scan of the SBOM
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: app/build/reports/cyclonedx/application.cdx.json
+          severity: HIGH,CRITICAL
+          ignore-unfixed: false
+          exit-code: "1"
+          trivyignores: .trivyignore
+      - name: Publish SBOM
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: sbom
+          path: app/build/reports/cyclonedx/
+          if-no-files-found: warn
+
+  image:
+    name: Image (main only)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [build, contracts, security]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless signing
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/bmp-platform
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build and push the image
+        run: ./gradlew :app:bootBuildImage --imageName="$IMAGE:${{ github.sha }}" --publishImage
+        env:
+          # Placeholders for the registry the Paketo build publishes to (repository secrets in a real setup).
+          REGISTRY_USERNAME: ${{ github.actor }}
+          REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+      - uses: sigstore/cosign-installer@v3
+      - name: Sign the image
+        run: cosign sign --yes "$IMAGE:${{ github.sha }}"
+      # Deployment to staging (Argo CD) arrives with phase 06.

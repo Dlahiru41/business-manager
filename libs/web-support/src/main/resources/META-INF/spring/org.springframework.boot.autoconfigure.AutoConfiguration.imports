@@ -1,0 +1,3 @@
+com.bmp.web.config.WebSupportAutoConfiguration
+com.bmp.web.config.WebPersistenceAutoConfiguration
+com.bmp.web.config.WebSecurityAutoConfiguration

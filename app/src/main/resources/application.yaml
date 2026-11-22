@@ -1,0 +1,110 @@
+# Business Management Platform — defaults for every environment. Override with environment variables
+# (e.g. SPRING_DATASOURCE_URL, BMP_APP_PASSWORD). Profiles: local, test, prod (01-architecture §7).
+spring:
+  application:
+    name: bmp-platform
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${BMP_DB_URL:jdbc:postgresql://localhost:5432/bmp}
+    username: bmp_app
+    password: ${BMP_APP_PASSWORD:}
+    hikari:
+      maximum-pool-size: 20
+  jpa:
+    open-in-view: false
+  mvc:
+    problemdetails:
+      enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  # Only packages annotated @ApplicationModule are modules (libraries are not). Also read by ModularityTests, which
+  # loads this file but not the platform's environment defaults.
+  modulith:
+    detection-strategy: explicitly-annotated
+
+bmp:
+  security:
+    issuer-uri: ${BMP_ISSUER_URI:http://localhost:8180/realms/bmp}
+    # Clients (azp) through which platform administrators sign in, comma-separated; none unless configured.
+    platform-admin-clients: ${BMP_PLATFORM_ADMIN_CLIENTS:}
+  web:
+    cors-allowed-origins: ${BMP_CORS_ALLOWED_ORIGINS:}
+  iam:
+    keycloak:
+      base-url: ${BMP_KEYCLOAK_URL:http://localhost:8180}
+      realm: bmp
+      client-id: bmp-admin
+      client-secret: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:}
+  persistence:
+    # The running app never connects as schema owner outside local and test (06 §1): migrations run as a separate
+    # job with the migrator role (bmp.persistence.migrate-on-startup=true and the migrator password set only there).
+    migrate-on-startup: ${BMP_MIGRATE_ON_STARTUP:false}
+    migrator:
+      username: bmp_migrator
+      password: ${BMP_MIGRATOR_PASSWORD:}
+    platform-admin:
+      username: bmp_platform_admin
+      password: ${BMP_PLATFORM_ADMIN_PASSWORD:}
+
+server:
+  port: 8080
+  shutdown: graceful
+  max-http-request-header-size: 16KB
+  tomcat:
+    max-swallow-size: 6MB
+
+management:
+  server:
+    port: 8081
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          # The outbox backlog is shared by all instances: it is a health indicator and alert, not a readiness gate.
+          include: readinessState, db
+  info:
+    java:
+      enabled: true
+    os:
+      enabled: false
+  observations:
+    annotations:
+      enabled: true
+  tracing:
+    sampling:
+      probability: ${BMP_TRACE_SAMPLING:0.1}
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: ${BMP_OTLP_TRACES_ENDPOINT:http://localhost:4318/v1/traces}
+  otlp:
+    metrics:
+      export:
+        enabled: false
+
+logging:
+  structured:
+    format:
+      console: ecs
+    ecs:
+      service:
+        name: bmp-platform
+        environment: ${BMP_ENV:local}
+    json:
+      customizer: com.bmp.web.logging.MaskingJsonCustomizer
+  level:
+    root: INFO
+    com.bmp: INFO
+    org.hibernate.SQL: WARN

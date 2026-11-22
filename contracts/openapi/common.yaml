@@ -1,0 +1,305 @@
+openapi: 3.1.0
+info:
+  title: BMP common components
+  version: 1.0.0
+  description: |
+    Shared components referenced by every module contract (03-api-standards.md, 04-error-handling.md).
+    Problem `type` URIs are `https://errors.bmp.example/<module>/<kebab-code>`.
+paths: {}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token from the `bmp` Keycloak realm with audience `bmp-api`.
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: |
+        UUID identifying this attempt. Replays with the same key and body return the stored response with
+        `Idempotent-Replayed: true`; a different body is 422 `IDEMPOTENCY_KEY_REUSED`; a key still in progress is
+        409 `REQUEST_IN_PROGRESS`.
+      schema:
+        type: string
+        format: uuid
+      example: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f70
+    IfMatch:
+      name: If-Match
+      in: header
+      required: false
+      description: |
+        Required for updates: the resource's current ETag (`W/"<version>"`). Missing is 428
+        `PRECONDITION_REQUIRED`; stale is 412 `VERSION_CONFLICT`.
+      schema:
+        type: string
+      example: W/"3"
+    Limit:
+      name: limit
+      in: query
+      required: false
+      description: Page size, 1–200 (default 50).
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque cursor from the previous page's `page.nextCursor`.
+      schema:
+        type: string
+        maxLength: 512
+
+  headers:
+    ETag:
+      description: Weak ETag carrying the resource version.
+      schema:
+        type: string
+      example: W/"0"
+    Location:
+      description: URL of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+    RequestId:
+      description: Correlation id of the request (echoed or generated).
+      schema:
+        type: string
+        format: uuid
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+
+  schemas:
+    Problem:
+      type: object
+      description: RFC 9457 Problem Details with platform extensions.
+      required: [type, title, status, code, timestamp]
+      properties:
+        type:
+          type: string
+          format: uri
+          example: https://errors.bmp.example/tenant/location-not-found
+        title:
+          type: string
+          example: Location not found
+        status:
+          type: integer
+          format: int32
+          example: 404
+        detail:
+          type: string
+          example: Location 0193a6f1-0000-7000-8000-000000000001 does not exist.
+        instance:
+          type: string
+          format: uri-reference
+          example: /api/v1/locations/0193a6f1-0000-7000-8000-000000000001
+        code:
+          type: string
+          pattern: "^[A-Z][A-Z0-9_]*$"
+          example: LOCATION_NOT_FOUND
+        requestId:
+          type: string
+          example: 0193a6f1-7c2e-7a10-9a1b-2f3c4d5e6f70
+        traceId:
+          type: string
+          example: 4bf92f3577b34da6a3ce929d0e0e4736
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-11-21T09:42:13Z"
+        details:
+          type: object
+          additionalProperties: true
+          description: Safe context (ids, limits); never personal data.
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/FieldError"
+    FieldError:
+      type: object
+      required: [field, code, message]
+      properties:
+        field:
+          type: string
+          example: name
+        code:
+          type: string
+          example: NOT_BLANK
+        message:
+          type: string
+          example: must not be blank
+    PageInfo:
+      type: object
+      required: [limit, hasMore]
+      properties:
+        limit:
+          type: integer
+          format: int32
+          example: 50
+        nextCursor:
+          type: string
+          description: Absent on the last page.
+          example: eyJpZCI6IjAxOTNhNmYxIn0
+        hasMore:
+          type: boolean
+          example: false
+
+  responses:
+    BadRequest:
+      description: Malformed request (syntax, bad UUID, invalid parameter, missing Idempotency-Key).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/malformed-request
+            title: Malformed request
+            status: 400
+            code: MALFORMED_REQUEST
+            timestamp: "2026-11-21T09:42:13Z"
+    Unauthorized:
+      description: Missing or invalid access token.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/unauthenticated
+            title: Authentication required
+            status: 401
+            code: UNAUTHENTICATED
+            timestamp: "2026-11-21T09:42:13Z"
+    Forbidden:
+      description: Authenticated but not permitted (ACCESS_DENIED, TENANT_NOT_ACTIVE, TENANT_SUSPENDED, DEVICE_REVOKED).
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/access-denied
+            title: Access denied
+            status: 403
+            code: ACCESS_DENIED
+            timestamp: "2026-11-21T09:42:13Z"
+    NotFound:
+      description: Not found, or belongs to another tenant.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/resource-not-found
+            title: Resource not found
+            status: 404
+            code: RESOURCE_NOT_FOUND
+            timestamp: "2026-11-21T09:42:13Z"
+    Conflict:
+      description: Business state conflict, or a request with this Idempotency-Key is still in progress.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/request-in-progress
+            title: Request in progress
+            status: 409
+            code: REQUEST_IN_PROGRESS
+            timestamp: "2026-11-21T09:42:13Z"
+    PreconditionFailed:
+      description: The If-Match version is stale.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/version-conflict
+            title: Version conflict
+            status: 412
+            code: VERSION_CONFLICT
+            timestamp: "2026-11-21T09:42:13Z"
+            details:
+              currentVersion: 4
+    PreconditionRequired:
+      description: If-Match is required for this update.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/precondition-required
+            title: Precondition required
+            status: 428
+            code: PRECONDITION_REQUIRED
+            timestamp: "2026-11-21T09:42:13Z"
+    UnprocessableContent:
+      description: Semantic validation failed, or an Idempotency-Key was reused for a different request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/validation-failed
+            title: Validation failed
+            status: 422
+            code: VALIDATION_FAILED
+            timestamp: "2026-11-21T09:42:13Z"
+            errors:
+              - field: name
+                code: NOT_BLANK
+                message: must not be blank
+    TooManyRequests:
+      description: Rate limited.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/rate-limit-exceeded
+            title: Too many requests
+            status: 429
+            code: RATE_LIMIT_EXCEEDED
+            timestamp: "2026-11-21T09:42:13Z"
+    InternalError:
+      description: Unexpected error; details only in the logs.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/internal-error
+            title: Internal error
+            status: 500
+            code: INTERNAL_ERROR
+            detail: An unexpected error occurred. Quote requestId when contacting support.
+            timestamp: "2026-11-21T09:42:13Z"
+    ServiceUnavailable:
+      description: A dependency is unavailable.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+          example:
+            type: https://errors.bmp.example/platform/dependency-unavailable
+            title: Service temporarily unavailable
+            status: 503
+            code: DEPENDENCY_UNAVAILABLE
+            timestamp: "2026-11-21T09:42:13Z"

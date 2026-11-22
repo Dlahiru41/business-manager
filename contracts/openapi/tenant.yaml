@@ -1,0 +1,1051 @@
+openapi: 3.1.0
+info:
+  title: BMP Tenant API
+  version: 1.0.0
+  description: |
+    Tenants, locations, business settings and receipt templates (phase 00, T00-07).
+    The tenant of every call comes from the access token, never from the URL or body; platform administrators may
+    act for a tenant with `X-Tenant-Id`.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: Tenants
+    description: Platform administration of tenants.
+  - name: TenantProfile
+    description: The caller's own tenant.
+  - name: Locations
+    description: Shops, store rooms and warehouses.
+  - name: Settings
+    description: Business settings, validated per group (TEN-03).
+  - name: ReceiptTemplates
+    description: Receipt layouts for the print agent.
+
+paths:
+  /api/v1/tenants:
+    post:
+      tags: [Tenants]
+      operationId: createTenant
+      summary: Create a tenant with its default location (TEN-01)
+      x-permission: platform:tenants
+      x-error-codes: [VALIDATION_FAILED, MALFORMED_REQUEST, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTenantRequest"
+            example:
+              name: Perera Stores
+              legalName: Perera Stores (Pvt) Ltd
+              businessType: RETAIL_GROCERY
+              currency: LKR
+              timeZone: Asia/Colombo
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+              examples:
+                default:
+                  $ref: "#/components/examples/Tenant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
+
+  /api/v1/tenants/{tenantId}/suspend:
+    post:
+      tags: [Tenants]
+      operationId: suspendTenant
+      summary: Suspend a tenant (TEN-04 — its users keep read-only access)
+      x-permission: platform:tenants
+      x-error-codes: [TENANT_NOT_FOUND, INVALID_TENANT_STATUS_TRANSITION, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantStatusChangeRequest"
+            example:
+              reason: Subscription unpaid
+      responses:
+        "200":
+          description: Suspended.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+              examples:
+                default:
+                  $ref: "#/components/examples/Tenant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/tenants/{tenantId}/reactivate:
+    post:
+      tags: [Tenants]
+      operationId: reactivateTenant
+      summary: Reactivate a suspended tenant
+      x-permission: platform:tenants
+      x-error-codes: [TENANT_NOT_FOUND, INVALID_TENANT_STATUS_TRANSITION, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      parameters:
+        - $ref: "#/components/parameters/TenantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TenantStatusChangeRequest"
+            example:
+              reason: Payment received
+      responses:
+        "200":
+          description: Reactivated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+              examples:
+                default:
+                  $ref: "#/components/examples/Tenant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/tenant:
+    get:
+      tags: [TenantProfile]
+      operationId: getCurrentTenant
+      summary: The caller's tenant profile
+      x-permission: tenant:read
+      x-error-codes: [TENANT_NOT_FOUND]
+      responses:
+        "200":
+          description: The tenant.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+              examples:
+                default:
+                  $ref: "#/components/examples/Tenant"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [TenantProfile]
+      operationId: updateCurrentTenant
+      summary: Update the tenant profile (currency, time zone and cut-off are settings of group `general`)
+      x-permission: tenant:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, TENANT_NOT_FOUND]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTenantRequest"
+            example:
+              legalName: Perera Stores (Private) Limited
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Tenant"
+              examples:
+                default:
+                  $ref: "#/components/examples/Tenant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/locations:
+    get:
+      tags: [Locations]
+      operationId: listLocations
+      summary: List the tenant's locations, oldest first
+      x-permission: tenant:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of locations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LocationPage"
+              example:
+                items:
+                  - id: 01934f5a-6d1c-7000-8000-000000000c01
+                    name: Main shop
+                    type: SHOP
+                    status: ACTIVE
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Locations]
+      operationId: createLocation
+      summary: Add a location
+      x-permission: tenant:write
+      x-error-codes: [VALIDATION_FAILED, LOCATION_NAME_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLocationRequest"
+            example:
+              name: Store room
+              type: STORE
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+              examples:
+                default:
+                  $ref: "#/components/examples/Location"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/locations/{locationId}:
+    get:
+      tags: [Locations]
+      operationId: getLocation
+      summary: Get a location
+      x-permission: tenant:read
+      x-error-codes: [LOCATION_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/LocationIdPath"
+      responses:
+        "200":
+          description: The location.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+              examples:
+                default:
+                  $ref: "#/components/examples/Location"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Locations]
+      operationId: updateLocation
+      summary: Update a location; the last active location cannot be deactivated (TEN-01)
+      x-permission: tenant:write
+      x-error-codes: [LOCATION_NOT_FOUND, LOCATION_NAME_TAKEN, LAST_ACTIVE_LOCATION, PRECONDITION_REQUIRED, VERSION_CONFLICT]
+      parameters:
+        - $ref: "#/components/parameters/LocationIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateLocationRequest"
+            example:
+              status: INACTIVE
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Location"
+              examples:
+                default:
+                  $ref: "#/components/examples/Location"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/settings:
+    get:
+      tags: [Settings]
+      operationId: listSettings
+      summary: All setting groups with defaults applied
+      x-permission: tenant:read
+      x-error-codes: []
+      responses:
+        "200":
+          description: Every group.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingGroups"
+              example:
+                groups:
+                  - group: sales
+                    version: 3
+                    values:
+                      maxCashierDiscountPct: "5.00"
+                      returnWindowDays: 7
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/v1/settings/{group}:
+    get:
+      tags: [Settings]
+      operationId: getSettings
+      summary: One setting group with defaults applied
+      x-permission: tenant:read
+      x-error-codes: [SETTING_GROUP_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/SettingGroupPath"
+      responses:
+        "200":
+          description: The group; ETag is the group version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingGroup"
+              examples:
+                default:
+                  $ref: "#/components/examples/SalesSettings"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Settings]
+      operationId: updateSettings
+      summary: Change settings of one group (versioned and audited; unknown keys rejected — TEN-03)
+      description: |
+        Values are validated against the group's JSON schema. Changing `general.currency` or `general.timeZone` once
+        business documents may exist is 409 `SETTING_LOCKED` unless the caller holds `platform:tenants` (TEN-02).
+      x-permission: tenant:settings
+      x-error-codes: [SETTING_GROUP_NOT_FOUND, UNKNOWN_SETTING, INVALID_SETTING_VALUE, SETTING_LOCKED, PRECONDITION_REQUIRED, VERSION_CONFLICT]
+      parameters:
+        - $ref: "#/components/parameters/SettingGroupPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSettingsRequest"
+            example:
+              values:
+                maxCashierDiscountPct: "7.50"
+                returnWindowDays: 14
+      responses:
+        "200":
+          description: The updated group.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SettingGroup"
+              examples:
+                default:
+                  $ref: "#/components/examples/SalesSettings"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/receipt-templates:
+    get:
+      tags: [ReceiptTemplates]
+      operationId: listReceiptTemplates
+      summary: List receipt templates
+      x-permission: tenant:write
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of templates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptTemplatePage"
+              example:
+                items:
+                  - id: 01934f5a-6d1c-7000-8000-000000000d01
+                    name: Default 80 mm
+                    paperWidthMm: 80
+                    header: {}
+                    footer: {}
+                    fields: {}
+                    language: en
+                    isDefault: true
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [ReceiptTemplates]
+      operationId: createReceiptTemplate
+      summary: Create a receipt template (making it default unsets the previous default)
+      x-permission: tenant:write
+      x-error-codes: [VALIDATION_FAILED, RECEIPT_TEMPLATE_NAME_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateReceiptTemplateRequest"
+            example:
+              name: Default 80 mm
+              paperWidthMm: 80
+              header:
+                lines: [Perera Stores, Main Street, Kandy]
+              footer:
+                lines: [Thank you!]
+              fields:
+                showCashier: true
+              language: en
+              isDefault: true
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptTemplate"
+              examples:
+                default:
+                  $ref: "#/components/examples/ReceiptTemplate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/receipt-templates/{templateId}:
+    get:
+      tags: [ReceiptTemplates]
+      operationId: getReceiptTemplate
+      summary: Get a receipt template
+      x-permission: tenant:write
+      x-error-codes: [RECEIPT_TEMPLATE_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/TemplateIdPath"
+      responses:
+        "200":
+          description: The template.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptTemplate"
+              examples:
+                default:
+                  $ref: "#/components/examples/ReceiptTemplate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [ReceiptTemplates]
+      operationId: updateReceiptTemplate
+      summary: Update a receipt template
+      x-permission: tenant:write
+      x-error-codes: [RECEIPT_TEMPLATE_NOT_FOUND, RECEIPT_TEMPLATE_NAME_TAKEN, PRECONDITION_REQUIRED, VERSION_CONFLICT]
+      parameters:
+        - $ref: "#/components/parameters/TemplateIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateReceiptTemplateRequest"
+            example:
+              isDefault: true
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReceiptTemplate"
+              examples:
+                default:
+                  $ref: "#/components/examples/ReceiptTemplate"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./common.yaml#/components/securitySchemes/bearerAuth"
+
+  parameters:
+    TenantIdPath:
+      name: tenantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    LocationIdPath:
+      name: locationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    TemplateIdPath:
+      name: templateId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SettingGroupPath:
+      name: group
+      in: path
+      required: true
+      description: general, inventory, sales, pricing, tax, finance, payments or numbering.
+      schema:
+        type: string
+        pattern: "^[a-z]{2,20}$"
+
+  schemas:
+    Tenant:
+      type: object
+      required: [id, name, businessType, currency, timeZone, businessDayCutoffHour, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        legalName:
+          type: string
+        businessType:
+          type: string
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        timeZone:
+          type: string
+        businessDayCutoffHour:
+          type: integer
+          format: int32
+        status:
+          type: string
+          enum: [ACTIVE, SUSPENDED, CLOSED]
+        plan:
+          type: string
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CreateTenantRequest:
+      type: object
+      additionalProperties: false
+      required: [name, businessType]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        legalName:
+          type: string
+          maxLength: 200
+        businessType:
+          type: string
+          minLength: 1
+          maxLength: 60
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          description: ISO 4217; default LKR.
+        timeZone:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: IANA time zone; default Asia/Colombo.
+        businessDayCutoffHour:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 23
+        plan:
+          type: string
+          minLength: 1
+          maxLength: 40
+    UpdateTenantRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        legalName:
+          type: string
+          maxLength: 200
+        businessType:
+          type: string
+          minLength: 1
+          maxLength: 60
+    TenantStatusChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [reason]
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 500
+    Address:
+      type: object
+      additionalProperties: false
+      properties:
+        line1:
+          type: string
+          maxLength: 120
+        line2:
+          type: string
+          maxLength: 120
+        city:
+          type: string
+          maxLength: 80
+        district:
+          type: string
+          maxLength: 80
+        postalCode:
+          type: string
+          maxLength: 20
+        country:
+          type: string
+          pattern: "^[A-Z]{2}$"
+    Location:
+      type: object
+      required: [id, name, type, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+          enum: [SHOP, STORE, WAREHOUSE]
+        address:
+          $ref: "#/components/schemas/Address"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CreateLocationRequest:
+      type: object
+      additionalProperties: false
+      required: [name, type]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type:
+          type: string
+          enum: [SHOP, STORE, WAREHOUSE]
+        address:
+          $ref: "#/components/schemas/Address"
+    UpdateLocationRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        type:
+          type: string
+          enum: [SHOP, STORE, WAREHOUSE]
+        address:
+          $ref: "#/components/schemas/Address"
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE]
+    LocationPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Location"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    SettingGroup:
+      type: object
+      required: [group, version, values]
+      properties:
+        group:
+          type: string
+        version:
+          type: integer
+          format: int64
+        values:
+          type: object
+          additionalProperties: true
+    SettingGroups:
+      type: object
+      required: [groups]
+      properties:
+        groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/SettingGroup"
+    UpdateSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [values]
+      properties:
+        values:
+          type: object
+          minProperties: 1
+          additionalProperties: true
+    ReceiptTemplate:
+      type: object
+      required: [id, name, paperWidthMm, header, footer, fields, language, isDefault, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        paperWidthMm:
+          type: integer
+          format: int32
+          enum: [58, 80]
+        header:
+          type: object
+          additionalProperties: true
+        footer:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+        language:
+          type: string
+          enum: [en, si, ta]
+        isDefault:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CreateReceiptTemplateRequest:
+      type: object
+      additionalProperties: false
+      required: [name, paperWidthMm, language]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        paperWidthMm:
+          type: integer
+          format: int32
+          enum: [58, 80]
+        header:
+          type: object
+          additionalProperties: true
+        footer:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+        language:
+          type: string
+          enum: [en, si, ta]
+        isDefault:
+          type: boolean
+    UpdateReceiptTemplateRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        paperWidthMm:
+          type: integer
+          format: int32
+          enum: [58, 80]
+        header:
+          type: object
+          additionalProperties: true
+        footer:
+          type: object
+          additionalProperties: true
+        fields:
+          type: object
+          additionalProperties: true
+        language:
+          type: string
+          enum: [en, si, ta]
+        isDefault:
+          type: boolean
+    ReceiptTemplatePage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReceiptTemplate"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+
+  examples:
+    Tenant:
+      value:
+        id: 01934f5a-6d1c-7000-8000-000000000a01
+        name: Perera Stores
+        legalName: Perera Stores (Pvt) Ltd
+        businessType: RETAIL_GROCERY
+        currency: LKR
+        timeZone: Asia/Colombo
+        businessDayCutoffHour: 0
+        status: ACTIVE
+        plan: STANDARD
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    Location:
+      value:
+        id: 01934f5a-6d1c-7000-8000-000000000c01
+        name: Main shop
+        type: SHOP
+        address:
+          line1: 12 Main Street
+          city: Kandy
+          country: LK
+        status: ACTIVE
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    SalesSettings:
+      value:
+        group: sales
+        version: 3
+        values:
+          maxCashierDiscountPct: "5.00"
+          returnWindowDays: 7
+          voidRequiresManager: true
+          allowCreditSales: false
+          offlineMaxHours: 72
+          rounding: LINE_HALF_UP_2
+    ReceiptTemplate:
+      value:
+        id: 01934f5a-6d1c-7000-8000-000000000d01
+        name: Default 80 mm
+        paperWidthMm: 80
+        header:
+          lines: [Perera Stores, Main Street, Kandy]
+        footer:
+          lines: [Thank you!]
+        fields:
+          showCashier: true
+        language: en
+        isDefault: true
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"

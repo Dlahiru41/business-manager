@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logging (05-logging-and-observability.md): ECS JSON everywhere except the local profile, which prints readable plain
+  text. Both are masked: JSON by MaskingJsonCustomizer (logging.structured.json.customizer), plain text by overriding
+  %m/%msg/%message with MaskingMessageConverter.
+-->
+<configuration>
+    <conversionRule conversionWord="m" class="com.bmp.web.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="msg" class="com.bmp.web.logging.MaskingMessageConverter"/>
+    <conversionRule conversionWord="message" class="com.bmp.web.logging.MaskingMessageConverter"/>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="local">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+    </springProfile>
+    <springProfile name="!local">
+        <include resource="org/springframework/boot/logging/logback/structured-console-appender.xml"/>
+    </springProfile>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

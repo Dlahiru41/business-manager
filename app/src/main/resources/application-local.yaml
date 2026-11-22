@@ -1,0 +1,30 @@
+# Local development: compose stack from deploy/local, readable plain-text logs, every trace sampled.
+# Credentials come from deploy/local/app-local.yaml (the working directory is the repository or the app folder).
+spring:
+  config:
+    import:
+      - optional:file:./deploy/local/app-local.yaml
+      - optional:file:../deploy/local/app-local.yaml
+bmp:
+  security:
+    platform-admin-clients: bmp-dev-cli
+  persistence:
+    migrate-on-startup: true
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  # Metrics go to the local otel-lgtm stack too, for deploy/local/grafana/dashboards/bmp-overview.json.
+  otlp:
+    metrics:
+      export:
+        enabled: true
+        url: ${BMP_OTLP_METRICS_ENDPOINT:http://localhost:4318/v1/metrics}
+        step: 15s
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+  endpoint:
+    health:
+      show-details: always

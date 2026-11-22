@@ -1,0 +1,78 @@
+# Pinned versions. Chosen on 2026-11-21 as the latest stable release of each line.
+# Rationale and review cadence: docs/decisions/ADR-011-pinned-versions.md
+# Add libraries only here (02-coding-standards.md §8). Prefer versions managed by the Spring Boot BOM.
+
+[versions]
+java = "25"
+spring-boot = "4.2.0"
+spring-modulith = "2.2.0"
+spring-cloud = "2026.0.0"
+springdoc = "3.2.1"
+openapi-generator = "7.27.0"
+mapstruct = "1.6.3"
+java-uuid-generator = "5.2.0"
+shedlock = "7.11.0"
+testcontainers = "2.0.5"
+testcontainers-keycloak = "4.4.0"
+keycloak = "26.8.2"
+archunit = "1.5.1"
+swagger-request-validator = "3.0.0"
+errorprone = "2.53.0"
+errorprone-plugin = "5.2.0"
+nullaway = "0.14.4"
+jspecify = "1.0.1"
+spotless = "8.12.0"
+palantir-java-format = "2.103.0"
+jacoco = "0.8.16"
+pitest-plugin = "1.19.0"
+pitest = "1.30.2"
+pitest-junit5 = "1.2.3"
+cyclonedx = "3.6.1"
+dependency-check = "13.0.0"
+datasource-micrometer = "2.3.1"
+resilience4j = "2.4.0"
+json-schema-validator = "2.0.8"
+# Jackson 2 (used by the JSON schema and contract validators) above the Boot BOM: CVE-2026-89407, -89425, -68497, -91776, -91777.
+jackson2 = "2.22.3"
+
+[libraries]
+# BOMs
+spring-boot-bom = { module = "org.springframework.boot:spring-boot-dependencies", version.ref = "spring-boot" }
+spring-modulith-bom = { module = "org.springframework.modulith:spring-modulith-bom", version.ref = "spring-modulith" }
+spring-cloud-bom = { module = "org.springframework.cloud:spring-cloud-dependencies", version.ref = "spring-cloud" }
+resilience4j-bom = { module = "io.github.resilience4j:resilience4j-bom", version.ref = "resilience4j" }
+jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version.ref = "jackson2" }
+
+# Libraries not managed by the Spring Boot BOM
+jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
+java-uuid-generator = { module = "com.fasterxml.uuid:java-uuid-generator", version.ref = "java-uuid-generator" }
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+shedlock-spring = { module = "net.javacrumbs.shedlock:shedlock-spring", version.ref = "shedlock" }
+shedlock-jdbc = { module = "net.javacrumbs.shedlock:shedlock-provider-jdbc-template", version.ref = "shedlock" }
+springdoc-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+datasource-micrometer = { module = "net.ttddyy.observation:datasource-micrometer-spring-boot", version.ref = "datasource-micrometer" }
+resilience4j-circuitbreaker = { module = "io.github.resilience4j:resilience4j-circuitbreaker" }
+resilience4j-micrometer = { module = "io.github.resilience4j:resilience4j-micrometer" }
+json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+
+# Test
+archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
+swagger-request-validator-core = { module = "com.atlassian.oai:swagger-request-validator-core", version.ref = "swagger-request-validator" }
+testcontainers-keycloak = { module = "com.github.dasniko:testcontainers-keycloak", version.ref = "testcontainers-keycloak" }
+
+# Compiler plugins
+errorprone-core = { module = "com.google.errorprone:error_prone_core", version.ref = "errorprone" }
+nullaway = { module = "com.uber.nullaway:nullaway", version.ref = "nullaway" }
+
+# Gradle plugins (used by build-logic)
+plugin-spotless = { module = "com.diffplug.spotless:spotless-plugin-gradle", version.ref = "spotless" }
+plugin-errorprone = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorprone-plugin" }
+plugin-spring-boot = { module = "org.springframework.boot:spring-boot-gradle-plugin", version.ref = "spring-boot" }
+plugin-openapi-generator = { module = "org.openapitools:openapi-generator-gradle-plugin", version.ref = "openapi-generator" }
+plugin-pitest = { module = "info.solidsoft.gradle.pitest:gradle-pitest-plugin", version.ref = "pitest-plugin" }
+plugin-cyclonedx = { module = "org.cyclonedx:cyclonedx-gradle-plugin", version.ref = "cyclonedx" }
+plugin-dependency-check = { module = "org.owasp:dependency-check-gradle", version.ref = "dependency-check" }
+
+[plugins]
+dependency-check = { id = "org.owasp.dependencycheck", version.ref = "dependency-check" }
