@@ -13,6 +13,9 @@ public interface PriceRepository {
     /** Every price of these lists for these packaging units, any validity. */
     List<Price> findByListsAndUnits(Collection<UUID> listIds, Collection<UUID> unitIds);
 
+    /** The prices of these lists and packaging units valid at {@code at}, for resolution. */
+    List<Price> findValidAt(Collection<UUID> listIds, Collection<UUID> unitIds, Instant at);
+
     /** A keyset page of a list's prices ordered by id (creation order). */
     List<Price> findPage(
             UUID listId,

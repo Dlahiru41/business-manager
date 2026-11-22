@@ -100,7 +100,13 @@ public class ResolvePricesService {
                 RoundingPolicy.defaultPolicy(),
                 settings.derivePriceFromBase(),
                 all,
-                prices.findByListsAndUnits(all.stream().map(PriceList::id).toList(), unitIds),
+                prices.findValidAt(
+                        all.stream()
+                                .filter(PriceList::isActive)
+                                .map(PriceList::id)
+                                .toList(),
+                        unitIds,
+                        at),
                 refs,
                 rules.findAll(),
                 rates.findByCategories(categories));

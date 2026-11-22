@@ -97,6 +97,19 @@ class PricingUpdatesAndPagesIT {
     }
 
     @Test
+    void aCursorWhoseListLeftTheFilterIsRefusedInsteadOfRestarting() {
+        JsonNode first = json(api.get("/api/v1/price-lists?status=ACTIVE&limit=1"));
+        String cursor = first.path("page").path("nextCursor").asString();
+        String path =
+                "/api/v1/price-lists/" + first.path("items").get(0).path("id").asString();
+        api.patch(path, "{\"status\": \"INACTIVE\"}", etag(api.get(path)));
+
+        assertThatProblem(api.get("/api/v1/price-lists?status=ACTIVE&limit=1&cursor=" + cursor))
+                .hasStatus(400)
+                .hasCode("INVALID_PARAMETER");
+    }
+
+    @Test
     void rulesChangeFieldByFieldAndPageByPriority() {
         String path = "/api/v1/price-rules/"
                 + json(api.post("/api/v1/price-rules", """

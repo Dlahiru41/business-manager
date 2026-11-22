@@ -59,10 +59,12 @@ class JdbcPriceListVersionLog implements PriceListVersionLog {
                         SELECT price_list_id, version, published_at, published_by, note, change_count,
                                change_summary::text AS changes
                           FROM pricing.price_list_version
-                         WHERE price_list_id = :listId AND (CAST(:before AS integer) IS NULL OR version < :before)
+                         WHERE tenant_id = :tenantId AND price_list_id = :listId
+                           AND (CAST(:before AS integer) IS NULL OR version < :before)
                          ORDER BY version DESC
                          LIMIT :limit
                         """)
+                .param("tenantId", TenantContext.require().value())
                 .param("listId", priceListId)
                 .param("before", beforeVersion)
                 .param("limit", limit)
@@ -77,8 +79,9 @@ class JdbcPriceListVersionLog implements PriceListVersionLog {
                         SELECT price_list_id, version, published_at, published_by, note, change_count,
                                change_summary::text AS changes
                           FROM pricing.price_list_version
-                         WHERE price_list_id = :listId AND version = :version
+                         WHERE tenant_id = :tenantId AND price_list_id = :listId AND version = :version
                         """)
+                .param("tenantId", TenantContext.require().value())
                 .param("listId", priceListId)
                 .param("version", version)
                 .query(JdbcPriceListVersionLog::entry)

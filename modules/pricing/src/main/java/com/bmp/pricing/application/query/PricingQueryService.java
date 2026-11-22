@@ -205,11 +205,16 @@ public class PricingQueryService {
         int start = 0;
         UUID after = afterId(query);
         if (after != null) {
+            start = -1;
             for (int i = 0; i < ordered.size(); i++) {
                 if (id.apply(ordered.get(i)).equals(after)) {
                     start = i + 1;
                     break;
                 }
+            }
+            if (start < 0) {
+                // The item the cursor points at left the filtered set; restarting would loop a client forever.
+                throw invalidCursor();
             }
         }
         List<T> fetched = new ArrayList<>(ordered.subList(start, Math.min(ordered.size(), start + query.fetchSize())));

@@ -2,6 +2,7 @@ package com.bmp.pricing.adapter.out.persistence;
 
 import com.bmp.pricing.domain.model.Price;
 import com.bmp.pricing.domain.port.PriceRepository;
+import com.bmp.shared.context.TenantContext;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
@@ -37,6 +38,23 @@ class JpaPriceStore implements PriceRepository {
                         Price.class)
                 .setParameter("lists", listIds)
                 .setParameter("units", unitIds)
+                .getResultList();
+    }
+
+    @Override
+    public List<Price> findValidAt(Collection<UUID> listIds, Collection<UUID> unitIds, Instant at) {
+        if (listIds.isEmpty() || unitIds.isEmpty()) {
+            return List.of();
+        }
+        return em.createQuery("""
+                        select p from Price p
+                         where p.tenantId = :tenant and p.priceListId in :lists and p.packagingUnitId in :units
+                           and p.validFrom <= :at and (p.validTo is null or p.validTo > :at)
+                        """, Price.class)
+                .setParameter("tenant", TenantContext.require().value())
+                .setParameter("lists", listIds)
+                .setParameter("units", unitIds)
+                .setParameter("at", at)
                 .getResultList();
     }
 

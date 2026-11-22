@@ -1,5 +1,6 @@
 package com.bmp.pricing.application.command;
 
+import com.bmp.pricing.application.PricingSettings;
 import com.bmp.pricing.domain.model.ListChannel;
 import com.bmp.pricing.domain.model.PriceList;
 import com.bmp.pricing.domain.port.PriceListRepository;
@@ -12,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Rule PRC-01: every new tenant gets a Retail and a Wholesale price list, tax-inclusive by default. */
+/** Rule PRC-01: every new tenant gets a Retail and a Wholesale price list, tax-inclusive as its settings say. */
 @Service
 public class SeedPriceListsHandler {
 
@@ -20,10 +21,12 @@ public class SeedPriceListsHandler {
 
     private final PriceListRepository lists;
     private final IdGenerator ids;
+    private final PricingSettings settings;
 
-    public SeedPriceListsHandler(PriceListRepository lists, IdGenerator ids) {
+    public SeedPriceListsHandler(PriceListRepository lists, IdGenerator ids, PricingSettings settings) {
         this.lists = lists;
         this.ids = ids;
+        this.settings = settings;
     }
 
     /** Creates the lists that do not exist yet; returns how many were created. */
@@ -42,7 +45,7 @@ public class SeedPriceListsHandler {
                         null,
                         null,
                         currency,
-                        true,
+                        settings.pricesTaxInclusive(),
                         PriceListHandlers.DEFAULT_PRIORITY));
                 created++;
             }
