@@ -19,13 +19,13 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: T01-01 Contracts
-- Next step (exact, so a new session can resume): continue T01-01 with `/run-phase 01`.
+- Current task: T01-02 Catalog domain model (TDD)
+- Next step (exact, so a new session can resume): continue T01-02 with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
 Phase 01:
-- [ ] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI)
+- [x] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI; `common.yaml` gains `Money`, `If-None-Match`, `304`) — additions beyond the endpoint table: product/variant `reactivate`, definition `retire` (CAT-11), event `TransformationDefinitionRetired`
 - [ ] T01-02 Catalog domain model (TDD)
 - [ ] T01-03 Catalog persistence and migrations
 - [ ] T01-04 Catalog application layer and API

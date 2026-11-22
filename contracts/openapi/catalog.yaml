@@ -1,0 +1,3125 @@
+openapi: 3.1.0
+info:
+  title: BMP Catalog API
+  version: 1.0.0
+  description: |
+    The dynamic product model (phase 01, rules CAT-01..CAT-14): units of measure, categories, products created from
+    templates, attributes and the variant matrix, packaging units with barcodes, product conversions and
+    transformation definitions. Nothing here is specific to one business: every product rule is data.
+
+    Examples use the pilot shop: eggs (variant matrix colour × size), cooking oil (bulk break: an 18 kg can opened
+    into bottles), branded soya meat (packets) and Karola dried fish (loose, repacked into own packets).
+
+    Quantities, factors and percentages are decimal strings, never JSON numbers. Packaging units and attributes are
+    parts of their variant / product: their ETag is the version of that variant / product.
+servers:
+  - url: http://localhost:8080
+security:
+  - bearerAuth: []
+tags:
+  - name: Templates
+    description: Product templates and the defaults they apply (CAT-09).
+  - name: Units
+    description: Units of measure — platform standard units and the tenant's own (CAT-01).
+  - name: Categories
+    description: Product categories, a tree.
+  - name: Products
+    description: Products, their conversions and variant generation.
+  - name: Attributes
+    description: Attribute types of a product (Colour, Size, Brand) with their values.
+  - name: Variants
+    description: Variants (SKUs), the things stock, cost and price attach to.
+  - name: PackagingUnits
+    description: Buy and sell units of a variant, as multiples of its base unit, and their barcodes.
+  - name: TransformationDefinitions
+    description: Recipes that turn input stock into output stock (open can, repack, break tray).
+  - name: CatalogSync
+    description: Versioned catalog snapshots for till caching.
+
+paths:
+  /api/v1/product-templates:
+    get:
+      tags: [Templates]
+      operationId: listProductTemplates
+      summary: The product templates and their defaults
+      x-permission: catalog:read
+      x-error-codes: []
+      responses:
+        "200":
+          description: All templates.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductTemplateList"
+              example:
+                items:
+                  - code: BULK_BREAK
+                    name: Bulk break
+                    description: One variant with states SEALED/OPEN; the bulk unit is bought sealed and sold opened.
+                    attributesRequired: false
+                    defaultBaseUnit: ml
+                    defaultStockStates: [SEALED, OPEN]
+                    defaultSellMode: BREAK_ON_SALE
+                    tracksStock: true
+                    autoTransformations: [OPEN]
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/v1/units:
+    get:
+      tags: [Units]
+      operationId: listUnits
+      summary: Standard and tenant units of measure, standard first, then by code
+      x-permission: catalog:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: dimension
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Dimension"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of units.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UnitPage"
+              example:
+                items:
+                  - id: 0193a000-0000-7000-8000-000000000002
+                    code: g
+                    name: Gram
+                    dimension: MASS
+                    toSiFactor: "0.001"
+                    standard: true
+                  - id: 0193a000-0000-7000-8000-000000000003
+                    code: kg
+                    name: Kilogram
+                    dimension: MASS
+                    toSiFactor: "1"
+                    standard: true
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Units]
+      operationId: createUnit
+      summary: Add a tenant unit of measure (CAT-01)
+      description: |
+        Codes are unique across the standard units and the tenant's own. Without `toSiFactor` the unit converts only
+        through packaging units and product conversions (CAT-03). Units are immutable once created.
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, UNIT_CODE_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUnitRequest"
+            example:
+              code: bushel
+              name: Bushel
+              dimension: VOLUME
+              toSiFactor: "35.2391"
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Unit"
+              example:
+                id: 0193b000-0000-7000-8000-000000000601
+                code: bushel
+                name: Bushel
+                dimension: VOLUME
+                toSiFactor: "35.2391"
+                standard: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/categories:
+    get:
+      tags: [Categories]
+      operationId: listCategories
+      summary: The tenant's categories, by name
+      x-permission: catalog:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: parentId
+          in: query
+          required: false
+          description: Only the direct children of this category.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of categories.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryPage"
+              example:
+                items:
+                  - id: 0193b000-0000-7000-8000-000000000501
+                    name: Dry goods
+                    ancestorIds: []
+                    status: ACTIVE
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Categories]
+      operationId: createCategory
+      summary: Add a category
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, UNKNOWN_CATEGORY, CATEGORY_NAME_TAKEN, CATEGORY_TOO_DEEP, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+            example:
+              name: Dried fish
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+              examples:
+                default:
+                  $ref: "#/components/examples/Category"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/categories/{categoryId}:
+    get:
+      tags: [Categories]
+      operationId: getCategory
+      summary: Get a category
+      x-permission: catalog:read
+      x-error-codes: [CATEGORY_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/CategoryIdPath"
+      responses:
+        "200":
+          description: The category.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+              examples:
+                default:
+                  $ref: "#/components/examples/Category"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Categories]
+      operationId: updateCategory
+      summary: Rename, move or deactivate a category
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, CATEGORY_NOT_FOUND, UNKNOWN_CATEGORY, CATEGORY_NAME_TAKEN, CATEGORY_CYCLE, CATEGORY_TOO_DEEP]
+      parameters:
+        - $ref: "#/components/parameters/CategoryIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCategoryRequest"
+            example:
+              name: Dried fish and sprats
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Category"
+              examples:
+                default:
+                  $ref: "#/components/examples/Category"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/products:
+    get:
+      tags: [Products]
+      operationId: listProducts
+      summary: Products, by code
+      x-permission: catalog:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive match on code or name.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+        - name: categoryId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Status"
+        - name: template
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/ProductTemplateCode"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of products (without variants).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPage"
+              example:
+                items:
+                  - id: 0193b000-0000-7000-8000-000000000102
+                    code: OIL
+                    name: Cooking oil
+                    template: BULK_BREAK
+                    baseUnit: ml
+                    tracking:
+                      batches: false
+                      expiry: false
+                      serials: false
+                      decimalQty: true
+                      weighed: false
+                    properties: {}
+                    status: ACTIVE
+                    attributes: []
+                    exclusions: []
+                    conversions:
+                      - fromUnit: kg
+                        toUnit: ml
+                        factor: "1086.96"
+                        source: DENSITY
+                    variantCount: 1
+                    version: 0
+                    createdAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [Products]
+      operationId: createProduct
+      summary: Create a product from a template with its attributes, variants and packaging units (CAT-02, CAT-05, CAT-09)
+      description: |
+        One call creates the product, generates its variants (the attribute matrix minus exclusions for
+        `VARIANT_MATRIX` and `BRANDED_PACKET`, else one variant), gives every variant its base packaging unit plus
+        the listed packaging units, and creates the transformation definitions the template implies (`BULK_BREAK`: an
+        `OPEN` definition per bulk unit; `LOOSE_REPACK`: a `REPACK` definition per own packet), published.
+
+        A listed packaging unit whose code is the base unit's code configures the base unit (its `qtyInBase` must be
+        1). Without `stockState`, buyable units take the bulk state (`SEALED` for bulk break, `DEFAULT` otherwise)
+        and, for loose repack, sell-only units get their own state `PACKED_<CODE>`.
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRODUCT_CODE_TAKEN, SKU_ALREADY_EXISTS, UNKNOWN_UNIT, UNKNOWN_CATEGORY, UNKNOWN_TAX_CATEGORY, ATTRIBUTES_REQUIRED, TOO_MANY_VARIANTS, INVALID_QTY_IN_BASE, INVALID_STOCK_STATE, UNIT_NOT_CONVERTIBLE, PACKAGING_UNIT_CODE_TAKEN, INVALID_CONVERSION, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
+            examples:
+              eggs:
+                summary: Eggs, colour × size minus Golden Yellow XS/S/M = 12 variants
+                value:
+                  code: EGG
+                  name: Eggs
+                  template: VARIANT_MATRIX
+                  baseUnit: piece
+                  attributes:
+                    - code: COLOUR
+                      name: Colour
+                      values:
+                        - code: RED
+                          value: Red
+                        - code: WHITE
+                          value: White
+                        - code: GOLDEN_YELLOW
+                          value: Golden Yellow
+                    - code: SIZE
+                      name: Size
+                      values:
+                        - code: XS
+                          value: XS
+                        - code: S
+                          value: S
+                        - code: M
+                          value: M
+                        - code: L
+                          value: L
+                        - code: XL
+                          value: XL
+                  exclusions:
+                    - COLOUR: GOLDEN_YELLOW
+                      SIZE: XS
+                    - COLOUR: GOLDEN_YELLOW
+                      SIZE: S
+                    - COLOUR: GOLDEN_YELLOW
+                      SIZE: M
+                  packagingUnits:
+                    - code: tray
+                      name: Tray of 30
+                      qtyInBase: "30"
+                      canBuy: true
+                      canSell: true
+              oil:
+                summary: Cooking oil, an 18 kg can opened into bottles
+                value:
+                  code: OIL
+                  name: Cooking oil
+                  template: BULK_BREAK
+                  baseUnit: ml
+                  conversions:
+                    - fromUnit: kg
+                      toUnit: ml
+                      factor: "1086.96"
+                      source: DENSITY
+                  packagingUnits:
+                    - code: can
+                      name: Can 18 kg
+                      definedAs:
+                        value: "18"
+                        unit: kg
+                      canBuy: true
+                      canSell: true
+                    - code: bottle-1000
+                      name: Bottle 1000 ml
+                      qtyInBase: "1000"
+                      canSell: true
+                      isDefaultSell: true
+                    - code: bottle-750
+                      name: Bottle 750 ml
+                      qtyInBase: "750"
+                      canSell: true
+                    - code: bottle-375
+                      name: Bottle 375 ml
+                      qtyInBase: "375"
+                      canSell: true
+                    - code: bottle-187
+                      name: Bottle 187.5 ml
+                      qtyInBase: "187.5"
+                      canSell: true
+              soyaBranded:
+                summary: Branded soya meat, 2 brands × 2 packet sizes
+                value:
+                  code: SOYA
+                  name: Soya meat
+                  template: BRANDED_PACKET
+                  attributes:
+                    - code: BRAND
+                      name: Brand
+                      values:
+                        - code: MSL
+                          value: MySoy
+                        - code: VTM
+                          value: Vitamin Soy
+                    - code: SIZE
+                      name: Packet size
+                      values:
+                        - code: G90
+                          value: 90 g
+                        - code: G180
+                          value: 180 g
+              karola:
+                summary: Karola dried fish, loose by weight with own 250 g and 500 g packets
+                value:
+                  code: KAROLA
+                  name: Karola (dried fish)
+                  template: LOOSE_REPACK
+                  baseUnit: g
+                  packagingUnits:
+                    - code: kg
+                      name: Kilogram
+                      definedAs:
+                        value: "1"
+                        unit: kg
+                      canBuy: true
+                      canSell: true
+                    - code: packet-250
+                      name: Packet 250 g
+                      qtyInBase: "250"
+                      canSell: true
+                    - code: packet-500
+                      name: Packet 500 g
+                      qtyInBase: "500"
+                      canSell: true
+      responses:
+        "201":
+          description: Created, with its variants and packaging units.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}:
+    get:
+      tags: [Products]
+      operationId: getProduct
+      summary: Get a product, optionally with its variants and their packaging units
+      x-permission: catalog:read
+      x-error-codes: [PRODUCT_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - name: include
+          in: query
+          required: false
+          description: "`variants` adds the variants; `units` adds them with their packaging units."
+          style: form
+          explode: false
+          schema:
+            type: array
+            maxItems: 2
+            items:
+              type: string
+              enum: [variants, units]
+      responses:
+        "200":
+          description: The product.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Products]
+      operationId: updateProduct
+      summary: Change a product's name, category, tax category, tracking or properties (CAT-13)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRODUCT_NOT_FOUND, UNKNOWN_CATEGORY, UNKNOWN_TAX_CATEGORY]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProductRequest"
+            example:
+              name: Coconut cooking oil
+              taxCategoryId: 0193c000-0000-7000-8000-000000000801
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/products/{productId}/deactivate:
+    post:
+      tags: [Products]
+      operationId: deactivateProduct
+      summary: Deactivate a product and all its variants (CAT-11 — never deleted)
+      x-permission: catalog:write
+      x-error-codes: [PRODUCT_NOT_FOUND, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Deactivated (idempotent when already inactive).
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}/reactivate:
+    post:
+      tags: [Products]
+      operationId: reactivateProduct
+      summary: Reactivate a product; its variants stay as they are
+      x-permission: catalog:write
+      x-error-codes: [PRODUCT_NOT_FOUND, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Active.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}/attributes:
+    get:
+      tags: [Attributes]
+      operationId: listAttributes
+      summary: The product's attribute types with their values, by sort order
+      x-permission: catalog:read
+      x-error-codes: [PRODUCT_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+      responses:
+        "200":
+          description: The attribute types.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttributeTypeList"
+              example:
+                items:
+                  - id: 0193b000-0000-7000-8000-000000000401
+                    code: COLOUR
+                    name: Colour
+                    sort: 1
+                    values:
+                      - id: 0193b000-0000-7000-8000-000000000411
+                        code: RED
+                        value: Red
+                        sort: 1
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      tags: [Attributes]
+      operationId: createAttribute
+      summary: Add an attribute type to a product that has no variants yet
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRODUCT_NOT_FOUND, ATTRIBUTE_CODE_TAKEN, ATTRIBUTE_TYPES_LOCKED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewAttribute"
+            example:
+              code: GRADE
+              name: Grade
+              values:
+                - code: A
+                  value: Grade A
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttributeType"
+              examples:
+                default:
+                  $ref: "#/components/examples/SizeAttribute"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}/attributes/{attributeId}:
+    get:
+      tags: [Attributes]
+      operationId: getAttribute
+      summary: Get an attribute type with its values
+      x-permission: catalog:read
+      x-error-codes: [PRODUCT_NOT_FOUND, ATTRIBUTE_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "#/components/parameters/AttributeIdPath"
+      responses:
+        "200":
+          description: The attribute type; the ETag is the product's version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttributeType"
+              examples:
+                default:
+                  $ref: "#/components/examples/SizeAttribute"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Attributes]
+      operationId: updateAttribute
+      summary: Rename or re-sort an attribute type, rename its values or add values
+      description: |
+        Entries of `values` with an `id` change that value; entries without one add a value. Values are never
+        removed: exclude their combinations instead. Then call `variants:generate` to create the new combinations.
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRODUCT_NOT_FOUND, ATTRIBUTE_NOT_FOUND, UNKNOWN_ATTRIBUTE_VALUE, ATTRIBUTE_VALUE_CODE_TAKEN]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "#/components/parameters/AttributeIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateAttributeRequest"
+            example:
+              values:
+                - code: XXL
+                  value: XXL
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AttributeType"
+              examples:
+                default:
+                  $ref: "#/components/examples/SizeAttribute"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/products/{productId}/conversions:
+    put:
+      tags: [Products]
+      operationId: replaceProductConversions
+      summary: Replace the product's conversions across dimensions (CAT-03, CAT-14)
+      description: |
+        E.g. oil: 1 kg = 1,086.96 ml (density 0.92), later a measured yield. Packaging units defined in another unit
+        (`definedAs`, the 18 kg can) get their `qtyInBase` recomputed; this changes future conversions only.
+        Changed variants publish `VariantUpdated`, and published definitions using a changed unit get a new
+        published version.
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, PRODUCT_NOT_FOUND, UNKNOWN_UNIT, INVALID_CONVERSION, UNIT_NOT_CONVERTIBLE, INVALID_QTY_IN_BASE]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReplaceConversionsRequest"
+            example:
+              conversions:
+                - fromUnit: kg
+                  toUnit: ml
+                  factor: "1087.5"
+                  source: MEASURED_YIELD
+      responses:
+        "200":
+          description: The product with its new conversions.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Product"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilProduct"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/products/{productId}/variants:generate:
+    post:
+      tags: [Products]
+      operationId: generateVariants
+      summary: Regenerate the variant matrix (CAT-05)
+      description: |
+        `exclusions`, when given, replace the product's exclusions. Missing combinations are created (packaging
+        units copied from the oldest active variant); existing variants are never deleted; active variants whose
+        combination is now excluded are deactivated. `dryRun` reports the plan without changing anything.
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRODUCT_NOT_FOUND, PRODUCT_INACTIVE, UNKNOWN_ATTRIBUTE_VALUE, ATTRIBUTES_REQUIRED, TOO_MANY_VARIANTS, SKU_ALREADY_EXISTS, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateVariantsRequest"
+            example:
+              exclusions:
+                - COLOUR: GOLDEN_YELLOW
+                  SIZE: XS
+                - COLOUR: GOLDEN_YELLOW
+                  SIZE: S
+                - COLOUR: GOLDEN_YELLOW
+                  SIZE: M
+              dryRun: true
+      responses:
+        "200":
+          description: What was (or, for a dry run, would be) created and deactivated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GenerateVariantsResult"
+              example:
+                dryRun: true
+                created:
+                  - sku: EGG-RED-XXL
+                    name: Eggs Red XXL
+                    attributeValues:
+                      COLOUR: RED
+                      SIZE: XXL
+                deactivated: []
+                unchanged: 12
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}/variants:
+    get:
+      tags: [Variants]
+      operationId: listProductVariants
+      summary: The product's variants with their packaging units, by SKU
+      x-permission: catalog:read
+      x-error-codes: [PRODUCT_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of variants.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantPage"
+              examples:
+                default:
+                  $ref: "#/components/examples/VariantPage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      tags: [Variants]
+      operationId: createVariant
+      summary: Add one variant by hand (e.g. a grade of loose fish)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRODUCT_NOT_FOUND, PRODUCT_INACTIVE, UNKNOWN_ATTRIBUTE_VALUE, VARIANT_COMBINATION_EXISTS, VARIANT_COMBINATION_EXCLUDED, SKU_ALREADY_EXISTS, INVALID_QTY_IN_BASE, INVALID_STOCK_STATE, UNIT_NOT_CONVERTIBLE, UNKNOWN_UNIT, PACKAGING_UNIT_CODE_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVariantRequest"
+            example:
+              name: Karola grade A
+              sku: KAROLA-A
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilVariant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/products/{productId}/variants/{variantId}:
+    get:
+      tags: [Variants]
+      operationId: getVariant
+      summary: Get a variant with its packaging units
+      x-permission: catalog:read
+      x-error-codes: [VARIANT_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "#/components/parameters/VariantIdPath"
+      responses:
+        "200":
+          description: The variant.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilVariant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [Variants]
+      operationId: updateVariant
+      summary: Rename a variant, override its SKU (CAT-06), change its stock states or sell mode
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, VARIANT_NOT_FOUND, SKU_ALREADY_EXISTS, INVALID_STOCK_STATE]
+      parameters:
+        - $ref: "#/components/parameters/ProductIdPath"
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateVariantRequest"
+            example:
+              sku: OIL-COCONUT
+      responses:
+        "200":
+          description: Updated.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilVariant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/variants/{variantId}/deactivate:
+    post:
+      tags: [Variants]
+      operationId: deactivateVariant
+      summary: Deactivate a variant (CAT-11 — never deleted)
+      x-permission: catalog:write
+      x-error-codes: [VARIANT_NOT_FOUND, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Deactivated (idempotent when already inactive).
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilVariant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/variants/{variantId}/reactivate:
+    post:
+      tags: [Variants]
+      operationId: reactivateVariant
+      summary: Reactivate a variant of an active product
+      x-permission: catalog:write
+      x-error-codes: [VARIANT_NOT_FOUND, PRODUCT_INACTIVE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Active.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Variant"
+              examples:
+                default:
+                  $ref: "#/components/examples/OilVariant"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/variants/{variantId}/packaging-units:
+    get:
+      tags: [PackagingUnits]
+      operationId: listPackagingUnits
+      summary: The variant's packaging units, base unit first, then by quantity
+      x-permission: catalog:read
+      x-error-codes: [VARIANT_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+      responses:
+        "200":
+          description: The packaging units.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingUnitList"
+              example:
+                items:
+                  - id: 0193b000-0000-7000-8000-000000000311
+                    variantId: 0193b000-0000-7000-8000-000000000211
+                    code: ml
+                    name: Millilitre
+                    qtyInBase: "1"
+                    stockState: OPEN
+                    isBase: true
+                    canBuy: false
+                    canSell: false
+                    isDefaultSell: false
+                    status: ACTIVE
+                    barcodes: []
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    post:
+      tags: [PackagingUnits]
+      operationId: createPackagingUnit
+      summary: Add a packaging unit to a variant (CAT-04, CAT-07)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, VARIANT_NOT_FOUND, PACKAGING_UNIT_CODE_TAKEN, INVALID_QTY_IN_BASE, INVALID_STOCK_STATE, UNKNOWN_UNIT, UNIT_NOT_CONVERTIBLE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPackagingUnit"
+            example:
+              code: bottle-500
+              name: Bottle 500 ml
+              qtyInBase: "500"
+              stockState: OPEN
+              canSell: true
+      responses:
+        "201":
+          description: Created; the ETag is the variant's new version.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingUnit"
+              examples:
+                default:
+                  $ref: "#/components/examples/CanUnit"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/variants/{variantId}/packaging-units/{unitId}:
+    get:
+      tags: [PackagingUnits]
+      operationId: getPackagingUnit
+      summary: Get a packaging unit
+      x-permission: catalog:read
+      x-error-codes: [VARIANT_NOT_FOUND, PACKAGING_UNIT_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "#/components/parameters/UnitIdPath"
+      responses:
+        "200":
+          description: The packaging unit; the ETag is the variant's version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingUnit"
+              examples:
+                default:
+                  $ref: "#/components/examples/CanUnit"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [PackagingUnits]
+      operationId: updatePackagingUnit
+      summary: Change a packaging unit; quantity changes affect future conversions only
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, VARIANT_NOT_FOUND, PACKAGING_UNIT_NOT_FOUND, INVALID_QTY_IN_BASE, INVALID_STOCK_STATE, UNKNOWN_UNIT, UNIT_NOT_CONVERTIBLE, BASE_UNIT_IMMUTABLE]
+      parameters:
+        - $ref: "#/components/parameters/VariantIdPath"
+        - $ref: "#/components/parameters/UnitIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePackagingUnitRequest"
+            example:
+              canSell: false
+      responses:
+        "200":
+          description: Updated; the ETag is the variant's new version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingUnit"
+              examples:
+                default:
+                  $ref: "#/components/examples/CanUnit"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/packaging-units/{unitId}/barcodes:
+    post:
+      tags: [PackagingUnits]
+      operationId: addBarcode
+      summary: Attach a barcode to a packaging unit (CAT-12 — unique per tenant)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PACKAGING_UNIT_NOT_FOUND, BARCODE_ALREADY_EXISTS, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/UnitIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddBarcodeRequest"
+            example:
+              code: "4792173000011"
+      responses:
+        "201":
+          description: Attached; the packaging unit with its barcodes.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackagingUnit"
+              examples:
+                default:
+                  $ref: "#/components/examples/CanUnit"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/packaging-units/{unitId}/barcodes/{code}:
+    delete:
+      tags: [PackagingUnits]
+      operationId: removeBarcode
+      summary: Detach a barcode from its packaging unit
+      description: Barcodes are lookup keys, not records other data refers to, so they are removed rather than deactivated.
+      x-permission: catalog:write
+      x-error-codes: [PACKAGING_UNIT_NOT_FOUND, BARCODE_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/UnitIdPath"
+        - $ref: "#/components/parameters/BarcodePath"
+      responses:
+        "204":
+          description: Removed.
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/v1/variants:lookup:
+    get:
+      tags: [Variants]
+      operationId: lookupVariant
+      summary: Find a variant by barcode (with the packaging unit it maps to) or by SKU
+      x-permission: catalog:read
+      x-error-codes: [VARIANT_NOT_FOUND, INVALID_PARAMETER]
+      parameters:
+        - name: barcode
+          in: query
+          required: false
+          description: Exactly one of `barcode` and `sku`.
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9.\-]{1,64}$'
+        - name: sku
+          in: query
+          required: false
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$'
+      responses:
+        "200":
+          description: The variant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantLookup"
+              example:
+                packagingUnitId: 0193b000-0000-7000-8000-000000000312
+                variant:
+                  id: 0193b000-0000-7000-8000-000000000211
+                  productId: 0193b000-0000-7000-8000-000000000102
+                  sku: OIL
+                  name: Cooking oil
+                  attributeValues: []
+                  stockStates: [SEALED, OPEN]
+                  sellMode: BREAK_ON_SALE
+                  status: ACTIVE
+                  sellable: true
+                  purchasable: true
+                  version: 1
+                  createdAt: "2026-11-21T09:42:13Z"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+
+  /api/v1/variants:
+    get:
+      tags: [Variants]
+      operationId: listVariants
+      summary: Variants across products with their packaging units, by SKU (CAT-08 filters)
+      x-permission: catalog:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: sellable
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: purchasable
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: q
+          in: query
+          required: false
+          description: Case-insensitive match on SKU or name.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 80
+        - name: productId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/Status"
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of variants.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VariantPage"
+              examples:
+                default:
+                  $ref: "#/components/examples/VariantPage"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+  /api/v1/transformation-definitions:
+    get:
+      tags: [TransformationDefinitions]
+      operationId: listTransformationDefinitions
+      summary: Transformation definitions, by code
+      x-permission: catalog:write
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/TransformationKind"
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/DefinitionStatus"
+        - name: variantId
+          in: query
+          required: false
+          description: Only definitions with a line for this variant.
+          schema:
+            type: string
+            format: uuid
+        - $ref: "./common.yaml#/components/parameters/Limit"
+        - $ref: "./common.yaml#/components/parameters/Cursor"
+      responses:
+        "200":
+          description: A page of definitions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinitionPage"
+              example:
+                items:
+                  - id: 0193b000-0000-7000-8000-000000000701
+                    code: OIL-OPEN-CAN
+                    name: Open Can 18 kg
+                    kind: OPEN
+                    expectedYieldPct: "100"
+                    defVersion: 1
+                    status: PUBLISHED
+                    lines:
+                      - id: 0193b000-0000-7000-8000-000000000711
+                        direction: IN
+                        variantId: 0193b000-0000-7000-8000-000000000211
+                        stockState: SEALED
+                        qtyBase: "19565.28"
+                        packagingUnitId: 0193b000-0000-7000-8000-000000000312
+                        qty: "1"
+                      - id: 0193b000-0000-7000-8000-000000000712
+                        direction: OUT
+                        variantId: 0193b000-0000-7000-8000-000000000211
+                        stockState: OPEN
+                        qtyBase: "19565.28"
+                        costSharePct: "100"
+                    version: 1
+                    createdAt: "2026-11-21T09:42:13Z"
+                    publishedAt: "2026-11-21T09:42:13Z"
+                page:
+                  limit: 50
+                  hasMore: false
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+    post:
+      tags: [TransformationDefinitions]
+      operationId: createTransformationDefinition
+      summary: Create a draft transformation definition (CAT-10)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, DEFINITION_CODE_TAKEN, DEFINITION_LINES_INVALID, COST_SHARE_INVALID, UNKNOWN_VARIANT, INVALID_STOCK_STATE, INVALID_QTY_IN_BASE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTransformationDefinitionRequest"
+            example:
+              code: EGG-BREAK-TRAY
+              name: Break tray
+              kind: BREAK
+              lines:
+                - direction: IN
+                  variantId: 0193b000-0000-7000-8000-000000000201
+                  stockState: DEFAULT
+                  qtyBase: "30"
+                - direction: OUT
+                  variantId: 0193b000-0000-7000-8000-000000000201
+                  stockState: DEFAULT
+                  qtyBase: "30"
+      responses:
+        "201":
+          description: Created as a draft.
+          headers:
+            Location:
+              $ref: "./common.yaml#/components/headers/Location"
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinition"
+              examples:
+                default:
+                  $ref: "#/components/examples/RepackDefinition"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/transformation-definitions/{definitionId}:
+    get:
+      tags: [TransformationDefinitions]
+      operationId: getTransformationDefinition
+      summary: Get a transformation definition
+      x-permission: catalog:write
+      x-error-codes: [TRANSFORMATION_DEFINITION_NOT_FOUND]
+      parameters:
+        - $ref: "#/components/parameters/DefinitionIdPath"
+      responses:
+        "200":
+          description: The definition.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinition"
+              examples:
+                default:
+                  $ref: "#/components/examples/RepackDefinition"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+    patch:
+      tags: [TransformationDefinitions]
+      operationId: updateTransformationDefinition
+      summary: Edit a definition; editing a published one starts a new draft version (CAT-10)
+      x-permission: catalog:write
+      x-error-codes: [VALIDATION_FAILED, PRECONDITION_REQUIRED, VERSION_CONFLICT, TRANSFORMATION_DEFINITION_NOT_FOUND, DEFINITION_RETIRED, DEFINITION_LINES_INVALID, COST_SHARE_INVALID, UNKNOWN_VARIANT, INVALID_STOCK_STATE, INVALID_QTY_IN_BASE]
+      parameters:
+        - $ref: "#/components/parameters/DefinitionIdPath"
+        - $ref: "./common.yaml#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTransformationDefinitionRequest"
+            example:
+              expectedYieldPct: "98.5"
+      responses:
+        "200":
+          description: Updated (status DRAFT).
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinition"
+              examples:
+                default:
+                  $ref: "#/components/examples/RepackDefinition"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "412":
+          $ref: "./common.yaml#/components/responses/PreconditionFailed"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "./common.yaml#/components/responses/PreconditionRequired"
+
+  /api/v1/transformation-definitions/{definitionId}/publish:
+    post:
+      tags: [TransformationDefinitions]
+      operationId: publishTransformationDefinition
+      summary: Publish the draft as the next immutable version (CAT-10)
+      x-permission: catalog:write
+      x-error-codes: [TRANSFORMATION_DEFINITION_NOT_FOUND, DEFINITION_ALREADY_PUBLISHED, DEFINITION_RETIRED, DEFINITION_LINES_INVALID, COST_SHARE_INVALID, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/DefinitionIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Published; `defVersion` is the new version.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinition"
+              examples:
+                default:
+                  $ref: "#/components/examples/RepackDefinition"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/transformation-definitions/{definitionId}/retire:
+    post:
+      tags: [TransformationDefinitions]
+      operationId: retireTransformationDefinition
+      summary: Retire a definition (CAT-11 — never deleted); inventory stops offering it
+      x-permission: catalog:write
+      x-error-codes: [TRANSFORMATION_DEFINITION_NOT_FOUND, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
+      parameters:
+        - $ref: "#/components/parameters/DefinitionIdPath"
+        - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
+      responses:
+        "200":
+          description: Retired (idempotent when already retired).
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransformationDefinition"
+              examples:
+                default:
+                  $ref: "#/components/examples/RepackDefinition"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+        "404":
+          $ref: "./common.yaml#/components/responses/NotFound"
+        "409":
+          $ref: "./common.yaml#/components/responses/Conflict"
+        "422":
+          $ref: "./common.yaml#/components/responses/UnprocessableContent"
+
+  /api/v1/catalog/snapshot:
+    get:
+      tags: [CatalogSync]
+      operationId: getCatalogSnapshot
+      summary: The whole catalog at its current version, or the changes since a version (for till caching)
+      description: |
+        Every catalog change takes the tenant's next catalog version. Without `sinceVersion` the response holds every
+        unit, product and variant (inactive ones included, so a till can retire them); with it, only products and
+        variants changed after that version. The ETag is the catalog version; an unchanged catalog answers 304.
+      x-permission: catalog:read
+      x-error-codes: [INVALID_PARAMETER]
+      parameters:
+        - name: sinceVersion
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+        - $ref: "./common.yaml#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: The snapshot or delta.
+          headers:
+            ETag:
+              $ref: "./common.yaml#/components/headers/ETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogSnapshot"
+              example:
+                version: 42
+                sinceVersion: 40
+                full: false
+                units:
+                  - id: 0193a000-0000-7000-8000-000000000004
+                    code: ml
+                    name: Millilitre
+                    dimension: VOLUME
+                    toSiFactor: "0.001"
+                    standard: true
+                products: []
+                variants: []
+        "304":
+          $ref: "./common.yaml#/components/responses/NotModified"
+        "400":
+          $ref: "./common.yaml#/components/responses/BadRequest"
+        "401":
+          $ref: "./common.yaml#/components/responses/Unauthorized"
+        "403":
+          $ref: "./common.yaml#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: "./common.yaml#/components/securitySchemes/bearerAuth"
+
+  parameters:
+    ProductIdPath:
+      name: productId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    VariantIdPath:
+      name: variantId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AttributeIdPath:
+      name: attributeId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    UnitIdPath:
+      name: unitId
+      in: path
+      required: true
+      description: Packaging unit id.
+      schema:
+        type: string
+        format: uuid
+    CategoryIdPath:
+      name: categoryId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    DefinitionIdPath:
+      name: definitionId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    BarcodePath:
+      name: code
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9.\-]{1,64}$'
+        example: "4792173000011"
+
+  schemas:
+    Status:
+      type: string
+      enum: [ACTIVE, INACTIVE]
+    Dimension:
+      type: string
+      enum: [COUNT, MASS, VOLUME, LENGTH, AREA, TIME]
+    ProductTemplateCode:
+      type: string
+      enum: [SIMPLE, VARIANT_MATRIX, BULK_BREAK, BRANDED_PACKET, LOOSE_REPACK, RECIPE, SERVICE]
+    SellMode:
+      type: string
+      enum: [PREPACKED, BREAK_ON_SALE]
+    TransformationKind:
+      type: string
+      enum: [OPEN, REPACK, BREAK, RECIPE]
+    DefinitionStatus:
+      type: string
+      enum: [DRAFT, PUBLISHED, RETIRED]
+    ConversionSource:
+      type: string
+      enum: [DENSITY, MEASURED_YIELD, STANDARD]
+    Direction:
+      type: string
+      enum: [IN, OUT]
+    Quantity:
+      type: string
+      description: A non-negative decimal with up to 6 decimals (numeric(20,6)).
+      pattern: '^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$'
+      example: "187.5"
+    Factor:
+      type: string
+      description: A non-negative decimal with up to 10 decimals (numeric(20,10)).
+      pattern: '^(0|[1-9][0-9]{0,9})(\.[0-9]{1,10})?$'
+      example: "1086.96"
+    Percent:
+      type: string
+      description: A percentage 0–100 with up to 3 decimals.
+      pattern: '^(0|[1-9][0-9]{0,2})(\.[0-9]{1,3})?$'
+      example: "100"
+    UnitCode:
+      type: string
+      pattern: '^[A-Za-z][A-Za-z0-9_.\-]{0,31}$'
+      example: kg
+    StockState:
+      type: string
+      pattern: '^[A-Z][A-Z0-9_]{0,31}$'
+      example: OPEN
+    Sku:
+      type: string
+      pattern: '^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$'
+      example: EGG-RED-L
+    AttributeValueCodes:
+      type: object
+      description: 'Attribute code → value code, e.g. `{"COLOUR": "RED", "SIZE": "L"}`.'
+      maxProperties: 10
+      additionalProperties:
+        type: string
+        pattern: '^[A-Za-z0-9][A-Za-z0-9_]{0,29}$'
+
+    ProductTemplate:
+      type: object
+      required: [code, name, description, attributesRequired, defaultBaseUnit, defaultStockStates, defaultSellMode, tracksStock, autoTransformations]
+      properties:
+        code:
+          $ref: "#/components/schemas/ProductTemplateCode"
+        name:
+          type: string
+        description:
+          type: string
+        attributesRequired:
+          type: boolean
+        defaultBaseUnit:
+          type: string
+        defaultStockStates:
+          type: array
+          items:
+            type: string
+        defaultSellMode:
+          $ref: "#/components/schemas/SellMode"
+        tracksStock:
+          type: boolean
+        autoTransformations:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransformationKind"
+    ProductTemplateList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductTemplate"
+
+    Unit:
+      type: object
+      required: [id, code, name, dimension, standard]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        dimension:
+          $ref: "#/components/schemas/Dimension"
+        toSiFactor:
+          type: string
+          description: Factor to the dimension's reference unit (kg, l, m, piece); absent when the unit has none.
+        standard:
+          type: boolean
+          description: A platform standard unit, shared by every tenant.
+    UnitPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Unit"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreateUnitRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, dimension]
+      properties:
+        code:
+          $ref: "#/components/schemas/UnitCode"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        dimension:
+          $ref: "#/components/schemas/Dimension"
+        toSiFactor:
+          $ref: "#/components/schemas/Factor"
+
+    Category:
+      type: object
+      required: [id, name, ancestorIds, status, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        ancestorIds:
+          type: array
+          description: From the root down to the parent.
+          items:
+            type: string
+            format: uuid
+        status:
+          $ref: "#/components/schemas/Status"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CategoryPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Category"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    CreateCategoryRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        parentId:
+          type: string
+          format: uuid
+    UpdateCategoryRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        parentId:
+          type: string
+          format: uuid
+          description: Moves the category under another one.
+        moveToRoot:
+          type: boolean
+          description: Moves the category to the top level (instead of `parentId`).
+        status:
+          $ref: "#/components/schemas/Status"
+
+    Tracking:
+      type: object
+      additionalProperties: false
+      properties:
+        batches:
+          type: boolean
+        expiry:
+          type: boolean
+        serials:
+          type: boolean
+        decimalQty:
+          type: boolean
+          description: Quantities may be fractional (weighed or measured goods).
+        weighed:
+          type: boolean
+          description: Sold by weight on a scale.
+    Conversion:
+      type: object
+      additionalProperties: false
+      required: [fromUnit, toUnit, factor, source]
+      description: "1 `fromUnit` = `factor` `toUnit` for this product (the inverse is implied)."
+      properties:
+        fromUnit:
+          $ref: "#/components/schemas/UnitCode"
+        toUnit:
+          $ref: "#/components/schemas/UnitCode"
+        factor:
+          $ref: "#/components/schemas/Factor"
+        source:
+          $ref: "#/components/schemas/ConversionSource"
+    AttributeValue:
+      type: object
+      required: [id, code, value, sort]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        value:
+          type: string
+        sort:
+          type: integer
+          format: int32
+    AttributeType:
+      type: object
+      required: [id, code, name, sort, values]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        sort:
+          type: integer
+          format: int32
+        values:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttributeValue"
+    AttributeTypeList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttributeType"
+    NewAttributeValue:
+      type: object
+      additionalProperties: false
+      required: [value]
+      properties:
+        code:
+          type: string
+          description: Defaults to the value, upper-cased, with other characters as `_`.
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_]{0,29}$'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 60
+        sort:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+    NewAttribute:
+      type: object
+      additionalProperties: false
+      required: [code, name, values]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Za-z][A-Za-z0-9_]{0,29}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        sort:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+        values:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/NewAttributeValue"
+    AttributeValueChange:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The value to change; without it the entry adds a value.
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_]{0,29}$'
+        value:
+          type: string
+          minLength: 1
+          maxLength: 60
+        sort:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+    UpdateAttributeRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 60
+        sort:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 9999
+        values:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/AttributeValueChange"
+
+    Product:
+      type: object
+      required: [id, code, name, template, baseUnit, tracking, properties, status, attributes, exclusions, conversions, variantCount, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        categoryId:
+          type: string
+          format: uuid
+        template:
+          $ref: "#/components/schemas/ProductTemplateCode"
+        baseUnit:
+          type: string
+        tracking:
+          $ref: "#/components/schemas/Tracking"
+        taxCategoryId:
+          type: string
+          format: uuid
+        properties:
+          type: object
+          description: Free product facts (origin, notes); not used by any rule.
+          additionalProperties:
+            type: string
+        status:
+          $ref: "#/components/schemas/Status"
+        attributes:
+          type: array
+          items:
+            $ref: "#/components/schemas/AttributeType"
+        exclusions:
+          type: array
+          description: Combinations never generated; a combination is excluded when it contains all codes of an entry.
+          items:
+            $ref: "#/components/schemas/AttributeValueCodes"
+        conversions:
+          type: array
+          items:
+            $ref: "#/components/schemas/Conversion"
+        variantCount:
+          type: integer
+          format: int32
+        variants:
+          type: array
+          description: With `include=variants` or `include=units`.
+          items:
+            $ref: "#/components/schemas/Variant"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ProductPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    DefinedAs:
+      type: object
+      additionalProperties: false
+      required: [value, unit]
+      description: The packaging unit's size in another unit; `qtyInBase` follows from it through the unit converter.
+      properties:
+        value:
+          $ref: "#/components/schemas/Quantity"
+        unit:
+          $ref: "#/components/schemas/UnitCode"
+    NewPackagingUnit:
+      type: object
+      additionalProperties: false
+      required: [code, name]
+      description: Exactly one of `qtyInBase` and `definedAs`.
+      properties:
+        code:
+          $ref: "#/components/schemas/UnitCode"
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        qtyInBase:
+          $ref: "#/components/schemas/Quantity"
+        definedAs:
+          $ref: "#/components/schemas/DefinedAs"
+        stockState:
+          $ref: "#/components/schemas/StockState"
+        canBuy:
+          type: boolean
+        canSell:
+          type: boolean
+        isDefaultSell:
+          type: boolean
+    CreateProductRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, template]
+      properties:
+        code:
+          type: string
+          description: Unique per tenant, stored upper-case; the SKU prefix (CAT-06).
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_\-]{0,19}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        template:
+          $ref: "#/components/schemas/ProductTemplateCode"
+        categoryId:
+          type: string
+          format: uuid
+        baseUnit:
+          $ref: "#/components/schemas/UnitCode"
+        taxCategoryId:
+          type: string
+          format: uuid
+        tracking:
+          $ref: "#/components/schemas/Tracking"
+        properties:
+          type: object
+          maxProperties: 30
+          additionalProperties:
+            type: string
+            maxLength: 200
+        attributes:
+          type: array
+          maxItems: 5
+          items:
+            $ref: "#/components/schemas/NewAttribute"
+        exclusions:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/AttributeValueCodes"
+        stockStates:
+          type: array
+          description: Overrides the template's states.
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/StockState"
+        sellMode:
+          $ref: "#/components/schemas/SellMode"
+        conversions:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Conversion"
+        packagingUnits:
+          type: array
+          description: Given to every variant, besides its base unit.
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/NewPackagingUnit"
+    UpdateProductRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        categoryId:
+          type: string
+          format: uuid
+        taxCategoryId:
+          type: string
+          format: uuid
+        tracking:
+          $ref: "#/components/schemas/Tracking"
+        properties:
+          type: object
+          description: Replaces all properties.
+          maxProperties: 30
+          additionalProperties:
+            type: string
+            maxLength: 200
+    ReplaceConversionsRequest:
+      type: object
+      additionalProperties: false
+      required: [conversions]
+      properties:
+        conversions:
+          type: array
+          maxItems: 20
+          items:
+            $ref: "#/components/schemas/Conversion"
+    GenerateVariantsRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        exclusions:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/AttributeValueCodes"
+        dryRun:
+          type: boolean
+          default: false
+    GeneratedVariant:
+      type: object
+      required: [sku, name, attributeValues]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Absent in a dry run for variants not created yet.
+        sku:
+          type: string
+        name:
+          type: string
+        attributeValues:
+          $ref: "#/components/schemas/AttributeValueCodes"
+    GenerateVariantsResult:
+      type: object
+      required: [dryRun, created, deactivated, unchanged]
+      properties:
+        dryRun:
+          type: boolean
+        created:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeneratedVariant"
+        deactivated:
+          type: array
+          items:
+            $ref: "#/components/schemas/GeneratedVariant"
+        unchanged:
+          type: integer
+          format: int32
+
+    VariantAttributeValue:
+      type: object
+      required: [attributeId, attributeCode, valueId, valueCode, value]
+      properties:
+        attributeId:
+          type: string
+          format: uuid
+        attributeCode:
+          type: string
+        valueId:
+          type: string
+          format: uuid
+        valueCode:
+          type: string
+        value:
+          type: string
+    PackagingUnit:
+      type: object
+      required: [id, variantId, code, name, qtyInBase, stockState, isBase, canBuy, canSell, isDefaultSell, status, barcodes]
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        qtyInBase:
+          type: string
+        definedAs:
+          $ref: "#/components/schemas/DefinedAs"
+        stockState:
+          type: string
+        isBase:
+          type: boolean
+        canBuy:
+          type: boolean
+        canSell:
+          type: boolean
+        isDefaultSell:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/Status"
+        barcodes:
+          type: array
+          items:
+            type: string
+    PackagingUnitList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackagingUnit"
+    Variant:
+      type: object
+      required: [id, productId, sku, name, attributeValues, stockStates, sellMode, status, sellable, purchasable, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        attributeValues:
+          type: array
+          items:
+            $ref: "#/components/schemas/VariantAttributeValue"
+        stockStates:
+          type: array
+          items:
+            type: string
+        sellMode:
+          $ref: "#/components/schemas/SellMode"
+        status:
+          $ref: "#/components/schemas/Status"
+        sellable:
+          type: boolean
+          description: Active with at least one active `canSell` packaging unit (CAT-08).
+        purchasable:
+          type: boolean
+          description: Active with at least one active `canBuy` packaging unit (CAT-08).
+        packagingUnits:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackagingUnit"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    VariantPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Variant"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    VariantLookup:
+      type: object
+      required: [variant]
+      properties:
+        variant:
+          $ref: "#/components/schemas/Variant"
+        packagingUnitId:
+          type: string
+          format: uuid
+          description: The packaging unit the barcode maps to (barcode lookups only).
+    CreateVariantRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        sku:
+          $ref: "#/components/schemas/Sku"
+        attributeValues:
+          $ref: "#/components/schemas/AttributeValueCodes"
+        stockStates:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/StockState"
+        sellMode:
+          $ref: "#/components/schemas/SellMode"
+        packagingUnits:
+          type: array
+          description: Besides the base unit; default copies those of the product's oldest active variant.
+          maxItems: 30
+          items:
+            $ref: "#/components/schemas/NewPackagingUnit"
+    UpdateVariantRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        sku:
+          $ref: "#/components/schemas/Sku"
+        stockStates:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items:
+            $ref: "#/components/schemas/StockState"
+        sellMode:
+          $ref: "#/components/schemas/SellMode"
+    UpdatePackagingUnitRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        qtyInBase:
+          $ref: "#/components/schemas/Quantity"
+        definedAs:
+          $ref: "#/components/schemas/DefinedAs"
+        stockState:
+          $ref: "#/components/schemas/StockState"
+        canBuy:
+          type: boolean
+        canSell:
+          type: boolean
+        isDefaultSell:
+          type: boolean
+        status:
+          $ref: "#/components/schemas/Status"
+    AddBarcodeRequest:
+      type: object
+      additionalProperties: false
+      required: [code]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9.\-]{1,64}$'
+
+    TransformationLine:
+      type: object
+      required: [id, direction, variantId, stockState, qtyBase]
+      properties:
+        id:
+          type: string
+          format: uuid
+        direction:
+          $ref: "#/components/schemas/Direction"
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          type: string
+        qtyBase:
+          type: string
+          description: Quantity in the variant's base unit per run.
+        packagingUnitId:
+          type: string
+          format: uuid
+          description: When the line is a number of packaging units; `qtyBase` then follows the unit's size.
+        qty:
+          type: string
+        costSharePct:
+          type: string
+          description: OUT lines only; they sum to 100.
+    TransformationDefinition:
+      type: object
+      required: [id, code, name, kind, defVersion, status, lines, version, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/TransformationKind"
+        expectedYieldPct:
+          type: string
+        defVersion:
+          type: integer
+          format: int32
+          description: The latest published version (0 while never published).
+        status:
+          $ref: "#/components/schemas/DefinitionStatus"
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransformationLine"
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        publishedAt:
+          type: string
+          format: date-time
+    TransformationDefinitionPage:
+      type: object
+      required: [items, page]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransformationDefinition"
+        page:
+          $ref: "./common.yaml#/components/schemas/PageInfo"
+    NewTransformationLine:
+      type: object
+      additionalProperties: false
+      required: [direction, variantId]
+      description: Either `qtyBase`, or `packagingUnitId` with `qty`.
+      properties:
+        direction:
+          $ref: "#/components/schemas/Direction"
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: "#/components/schemas/StockState"
+        qtyBase:
+          $ref: "#/components/schemas/Quantity"
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: "#/components/schemas/Quantity"
+        costSharePct:
+          $ref: "#/components/schemas/Percent"
+    CreateTransformationDefinitionRequest:
+      type: object
+      additionalProperties: false
+      required: [code, name, kind, lines]
+      properties:
+        code:
+          type: string
+          pattern: '^[A-Za-z0-9][A-Za-z0-9_\-]{0,39}$'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        kind:
+          $ref: "#/components/schemas/TransformationKind"
+        expectedYieldPct:
+          $ref: "#/components/schemas/Percent"
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/NewTransformationLine"
+    UpdateTransformationDefinitionRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        expectedYieldPct:
+          $ref: "#/components/schemas/Percent"
+        lines:
+          type: array
+          description: Replaces all lines.
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: "#/components/schemas/NewTransformationLine"
+
+    CatalogSnapshot:
+      type: object
+      required: [version, full, units, products, variants]
+      properties:
+        version:
+          type: integer
+          format: int64
+        sinceVersion:
+          type: integer
+          format: int64
+        full:
+          type: boolean
+        units:
+          type: array
+          items:
+            $ref: "#/components/schemas/Unit"
+        products:
+          type: array
+          items:
+            $ref: "#/components/schemas/Product"
+        variants:
+          type: array
+          items:
+            $ref: "#/components/schemas/Variant"
+
+  examples:
+    Category:
+      value:
+        id: 0193b000-0000-7000-8000-000000000502
+        parentId: 0193b000-0000-7000-8000-000000000501
+        name: Dried fish
+        ancestorIds: [0193b000-0000-7000-8000-000000000501]
+        status: ACTIVE
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    SizeAttribute:
+      value:
+        id: 0193b000-0000-7000-8000-000000000402
+        code: SIZE
+        name: Size
+        sort: 2
+        values:
+          - id: 0193b000-0000-7000-8000-000000000421
+            code: XS
+            value: XS
+            sort: 1
+          - id: 0193b000-0000-7000-8000-000000000425
+            code: XL
+            value: XL
+            sort: 5
+    CanUnit:
+      value:
+        id: 0193b000-0000-7000-8000-000000000312
+        variantId: 0193b000-0000-7000-8000-000000000211
+        code: can
+        name: Can 18 kg
+        qtyInBase: "19565.28"
+        definedAs:
+          value: "18"
+          unit: kg
+        stockState: SEALED
+        isBase: false
+        canBuy: true
+        canSell: true
+        isDefaultSell: false
+        status: ACTIVE
+        barcodes: ["4792173000011"]
+    OilVariant:
+      value:
+        id: 0193b000-0000-7000-8000-000000000211
+        productId: 0193b000-0000-7000-8000-000000000102
+        sku: OIL
+        name: Cooking oil
+        attributeValues: []
+        stockStates: [SEALED, OPEN]
+        sellMode: BREAK_ON_SALE
+        status: ACTIVE
+        sellable: true
+        purchasable: true
+        packagingUnits:
+          - id: 0193b000-0000-7000-8000-000000000311
+            variantId: 0193b000-0000-7000-8000-000000000211
+            code: ml
+            name: Millilitre
+            qtyInBase: "1"
+            stockState: OPEN
+            isBase: true
+            canBuy: false
+            canSell: false
+            isDefaultSell: false
+            status: ACTIVE
+            barcodes: []
+          - id: 0193b000-0000-7000-8000-000000000312
+            variantId: 0193b000-0000-7000-8000-000000000211
+            code: can
+            name: Can 18 kg
+            qtyInBase: "19565.28"
+            definedAs:
+              value: "18"
+              unit: kg
+            stockState: SEALED
+            isBase: false
+            canBuy: true
+            canSell: true
+            isDefaultSell: false
+            status: ACTIVE
+            barcodes: []
+          - id: 0193b000-0000-7000-8000-000000000314
+            variantId: 0193b000-0000-7000-8000-000000000211
+            code: bottle-750
+            name: Bottle 750 ml
+            qtyInBase: "750"
+            stockState: OPEN
+            isBase: false
+            canBuy: false
+            canSell: true
+            isDefaultSell: false
+            status: ACTIVE
+            barcodes: []
+        version: 1
+        createdAt: "2026-11-21T09:42:13Z"
+    VariantPage:
+      value:
+        items:
+          - id: 0193b000-0000-7000-8000-000000000204
+            productId: 0193b000-0000-7000-8000-000000000101
+            sku: EGG-RED-L
+            name: Eggs Red L
+            attributeValues:
+              - attributeId: 0193b000-0000-7000-8000-000000000401
+                attributeCode: COLOUR
+                valueId: 0193b000-0000-7000-8000-000000000411
+                valueCode: RED
+                value: Red
+              - attributeId: 0193b000-0000-7000-8000-000000000402
+                attributeCode: SIZE
+                valueId: 0193b000-0000-7000-8000-000000000424
+                valueCode: L
+                value: L
+            stockStates: [DEFAULT]
+            sellMode: PREPACKED
+            status: ACTIVE
+            sellable: true
+            purchasable: true
+            packagingUnits:
+              - id: 0193b000-0000-7000-8000-000000000301
+                variantId: 0193b000-0000-7000-8000-000000000204
+                code: piece
+                name: Piece
+                qtyInBase: "1"
+                stockState: DEFAULT
+                isBase: true
+                canBuy: true
+                canSell: true
+                isDefaultSell: true
+                status: ACTIVE
+                barcodes: []
+              - id: 0193b000-0000-7000-8000-000000000302
+                variantId: 0193b000-0000-7000-8000-000000000204
+                code: tray
+                name: Tray of 30
+                qtyInBase: "30"
+                stockState: DEFAULT
+                isBase: false
+                canBuy: true
+                canSell: true
+                isDefaultSell: false
+                status: ACTIVE
+                barcodes: []
+            version: 0
+            createdAt: "2026-11-21T09:42:13Z"
+        page:
+          limit: 50
+          hasMore: false
+    OilProduct:
+      value:
+        id: 0193b000-0000-7000-8000-000000000102
+        code: OIL
+        name: Cooking oil
+        template: BULK_BREAK
+        baseUnit: ml
+        tracking:
+          batches: false
+          expiry: false
+          serials: false
+          decimalQty: true
+          weighed: false
+        taxCategoryId: 0193c000-0000-7000-8000-000000000801
+        properties: {}
+        status: ACTIVE
+        attributes: []
+        exclusions: []
+        conversions:
+          - fromUnit: kg
+            toUnit: ml
+            factor: "1086.96"
+            source: DENSITY
+        variantCount: 1
+        version: 0
+        createdAt: "2026-11-21T09:42:13Z"
+    RepackDefinition:
+      value:
+        id: 0193b000-0000-7000-8000-000000000702
+        code: KAROLA-REPACK-PACKET-250
+        name: Pack Packet 250 g
+        kind: REPACK
+        expectedYieldPct: "100"
+        defVersion: 1
+        status: PUBLISHED
+        lines:
+          - id: 0193b000-0000-7000-8000-000000000721
+            direction: IN
+            variantId: 0193b000-0000-7000-8000-000000000215
+            stockState: DEFAULT
+            qtyBase: "250"
+          - id: 0193b000-0000-7000-8000-000000000722
+            direction: OUT
+            variantId: 0193b000-0000-7000-8000-000000000215
+            stockState: PACKED_PACKET_250
+            qtyBase: "250"
+            packagingUnitId: 0193b000-0000-7000-8000-000000000331
+            qty: "1"
+            costSharePct: "100"
+        version: 1
+        createdAt: "2026-11-21T09:42:13Z"
+        publishedAt: "2026-11-21T09:42:13Z"

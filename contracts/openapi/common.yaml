@@ -48,6 +48,14 @@ components:
         minimum: 1
         maximum: 200
         default: 50
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      required: false
+      description: An ETag from an earlier response; unchanged resources answer 304 without a body.
+      schema:
+        type: string
+      example: W/"7"
     Cursor:
       name: cursor
       in: query
@@ -137,6 +145,20 @@ components:
         message:
           type: string
           example: must not be blank
+    Money:
+      type: object
+      description: An amount in one currency; the amount is a decimal string, never a JSON number (02 §5).
+      additionalProperties: false
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^-?(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$'
+          example: "1250.00"
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: LKR
     PageInfo:
       type: object
       required: [limit, hasMore]
@@ -154,6 +176,11 @@ components:
           example: false
 
   responses:
+    NotModified:
+      description: Not modified since the ETag given in If-None-Match.
+      headers:
+        ETag:
+          $ref: "#/components/headers/ETag"
     BadRequest:
       description: Malformed request (syntax, bad UUID, invalid parameter, missing Idempotency-Key).
       content:
