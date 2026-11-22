@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started and closed 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: none (phase 01 merged into `main` locally on 2026-11-22; CI green on the phase branch at `3c2dfa2`)
-- Next step (exact, so a new session can resume): push `main`, close the "Phase 01 started" issue (#1), then start phase 02 with `/run-phase 02`.
+- Current task: none (phase 01 merged into `main` and pushed on 2026-11-22; CI on `main` green, image built and signed: https://github.com/Dlahiru41/business-manager/actions/runs/45055301963)
+- Next step (exact, so a new session can resume): close the "Phase 01 started" issue (#1) on GitHub if still open, then start phase 02 with `/run-phase 02`.
 
 ## Task checklist (current phase)
 
