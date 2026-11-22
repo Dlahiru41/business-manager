@@ -27,7 +27,10 @@ tasks.named<org.springframework.boot.gradle.tasks.run.BootRun>("bootRun") {
     }
 }
 
-// The SBOM lists what ships: the runtime classpath, not build tools such as Error Prone.
+// The SBOM lists what ships: the runtime classpath, not build tools such as Error Prone. Components are identified by
+// their package URL, which is what the vulnerability scan needs; POM metadata (licences, authors) is not fetched:
+// repositories are declared in settings, so the lookups only failed one by one and slowed every bootJar down.
 tasks.withType<org.cyclonedx.gradle.CyclonedxDirectTask>().configureEach {
     includeConfigs.set(listOf("runtimeClasspath"))
+    includeMetadataResolution.set(false)
 }
