@@ -26,11 +26,14 @@ public class CreateRoleHandler {
 
     private final RoleRepository roles;
     private final RolePermissionResolver permissions;
+    private final GrantCeiling ceiling;
     private final IdGenerator ids;
 
-    public CreateRoleHandler(RoleRepository roles, RolePermissionResolver permissions, IdGenerator ids) {
+    public CreateRoleHandler(
+            RoleRepository roles, RolePermissionResolver permissions, GrantCeiling ceiling, IdGenerator ids) {
         this.roles = roles;
         this.permissions = permissions;
+        this.ceiling = ceiling;
         this.ids = ids;
     }
 
@@ -49,8 +52,10 @@ public class CreateRoleHandler {
         if (roles.findByCode(command.code()).isPresent()) {
             throw new BusinessRuleViolation(IamErrorCode.ROLE_CODE_TAKEN, Map.of("code", command.code()));
         }
-        Role role = roles.saveAndFlush(
-                Role.custom(ids.next(RoleId::new), tenant, command.code(), command.name(), command.permissions()));
+        // Validated first (malformed and platform grants are 422), then held against the caller's own grants.
+        Role draft = Role.custom(ids.next(RoleId::new), tenant, command.code(), command.name(), command.permissions());
+        ceiling.requireCovered(command.permissions());
+        Role role = roles.saveAndFlush(draft);
         permissions.evictAfterCommit(tenant);
         log.atInfo()
                 .addKeyValue("roleId", role.id().toString())

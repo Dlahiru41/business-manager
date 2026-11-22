@@ -8,10 +8,12 @@ import static com.bmp.iam.IamApi.token;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.bmp.iam.domain.port.IdentityProviderGateway;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
 import com.bmp.shared.security.SystemRole;
 import com.bmp.test.persistence.WithPostgres;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,6 +25,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
+import tools.jackson.databind.JsonNode;
 
 /** Users through the API: creation in the identity provider, updates, roles and IAM-01. */
 @SpringBootTest(classes = IamTestApplication.class)
@@ -291,5 +294,100 @@ class UserApiIT {
         assertThatProblem(anonymous).hasStatus(401).hasCode("UNAUTHENTICATED");
         assertThatProblem(cashier).hasStatus(403).hasCode("ACCESS_DENIED");
         CONTRACT.assertConforms(cashier);
+    }
+
+    @Test
+    void adoptsAnAccountOfThisTenantLeftWithoutAProfile() {
+        String username = unique("orphan");
+        UserId orphan = identityProvider.createUser(
+                new IdentityProviderGateway.NewIdentity(username, null, "Orphan", tenant, List.of()));
+
+        MvcTestResult created = api.createUser(tenant, username, "[{\"code\": \"CASHIER\"}]");
+
+        assertThat(created).hasStatus(201);
+        assertThat(id(created)).isEqualTo(orphan.value());
+        assertThat(identityProvider.account(orphan).enabled()).isTrue();
+        assertThat(identityProvider.account(orphan).roles()).containsExactly("CASHIER");
+    }
+
+    @Test
+    void neverAdoptsAnAccountOfAnotherTenant() {
+        String username = unique("foreign");
+        identityProvider.createUser(new IdentityProviderGateway.NewIdentity(
+                username, null, "Foreign", TenantId.of(UUID.randomUUID()), List.of()));
+
+        assertThatProblem(api.createUser(tenant, username, "[{\"code\": \"CASHIER\"}]"))
+                .hasStatus(409)
+                .hasCode("USERNAME_TAKEN");
+    }
+
+    @Test
+    void keepsTheProfileDisabledWhenTheAccountCannotBeEnabled() {
+        identityProvider.failOn("activate-user");
+        String username = unique("half");
+
+        MvcTestResult result = api.createUser(tenant, username, "[{\"code\": \"CASHIER\"}]");
+
+        assertThatProblem(result).hasStatus(503).hasCode("IDENTITY_PROVIDER_UNAVAILABLE");
+        JsonNode user = json(api.get("/api/v1/users", owner)).path("items").get(0);
+        assertThat(user.path("status").asString()).isEqualTo("DISABLED");
+        assertThat(identityProvider
+                        .account(UserId.of(UUID.fromString(user.path("id").asString())))
+                        .enabled())
+                .isFalse();
+    }
+
+    @Test
+    void nobodyGrantsOrChangesMoreThanTheyHold() {
+        api.post(
+                "/api/v1/roles",
+                owner,
+                "{\"code\": \"STAFF_ADMIN\", \"name\": \"Staff admin\", "
+                        + "\"permissions\": [\"iam:users\", \"iam:roles\", \"sales:*\"]}");
+        api.post(
+                "/api/v1/roles",
+                owner,
+                "{\"code\": \"SELLER\", \"name\": \"Seller\", \"permissions\": [\"sales:create\"]}");
+        String staffAdmin = token(tenant, UserId.of(UUID.randomUUID()), "STAFF_ADMIN");
+        MvcTestResult anOwner = api.createUser(tenant, unique("own"), "[{\"code\": \"OWNER\"}]");
+
+        MvcTestResult grantOwner = api.post(
+                "/api/v1/users",
+                staffAdmin,
+                "{\"username\": \"" + unique("x") + "\", \"displayName\": \"X\", \"roles\": [{\"code\": \"OWNER\"}]}");
+        MvcTestResult grantCashier = api.post(
+                "/api/v1/users",
+                staffAdmin,
+                "{\"username\": \"" + unique("x")
+                        + "\", \"displayName\": \"X\", \"roles\": [{\"code\": \"CASHIER\"}]}");
+        MvcTestResult grantSeller = api.post(
+                "/api/v1/users",
+                staffAdmin,
+                "{\"username\": \"" + unique("x") + "\", \"displayName\": \"X\", \"roles\": [{\"code\": \"SELLER\"}]}");
+        MvcTestResult disableOwner =
+                api.patch("/api/v1/users/" + id(anOwner), staffAdmin, "{\"status\": \"DISABLED\"}", etag(anOwner));
+        MvcTestResult roleWithEverything = api.post(
+                "/api/v1/roles",
+                staffAdmin,
+                "{\"code\": \"ALMIGHTY\", \"name\": \"Almighty\", \"permissions\": [\"*\"]}");
+        MvcTestResult roleWithin = api.post(
+                "/api/v1/roles",
+                staffAdmin,
+                "{\"code\": \"VIEWER\", \"name\": \"Viewer\", \"permissions\": [\"sales:read\"]}");
+        MvcTestResult deviceRole = api.createUser(tenant, unique("dev"), "[{\"code\": \"DEVICE\"}]");
+
+        assertThatProblem(grantOwner).hasStatus(403).hasCode("ROLE_GRANT_EXCEEDS_CALLER");
+        CONTRACT.assertConforms(grantOwner);
+        assertThatProblem(grantCashier)
+                .as("the cashier role holds catalog:read")
+                .hasStatus(403);
+        assertThat(grantSeller).hasStatus(201);
+        assertThatProblem(disableOwner).hasStatus(403).hasCode("ROLE_GRANT_EXCEEDS_CALLER");
+        assertThatProblem(roleWithEverything).hasStatus(403).hasCode("ROLE_GRANT_EXCEEDS_CALLER");
+        assertThat(roleWithin).hasStatus(201);
+        assertThatProblem(deviceRole)
+                .as("the device role is for devices")
+                .hasStatus(422)
+                .hasCode("UNKNOWN_ROLE");
     }
 }

@@ -48,7 +48,7 @@ paths:
       summary: Create a user in the identity provider and the tenant
       description: The identity provider asks the user to set a password (e-mail when given); no password is accepted here.
       x-permission: iam:users
-      x-error-codes: [VALIDATION_FAILED, UNKNOWN_ROLE, INVALID_LOCATION, USERNAME_TAKEN, IDENTITY_PROVIDER_UNAVAILABLE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      x-error-codes: [VALIDATION_FAILED, UNKNOWN_ROLE, INVALID_LOCATION, USERNAME_TAKEN, ROLE_GRANT_EXCEEDS_CALLER, IDENTITY_PROVIDER_REJECTED, IDENTITY_PROVIDER_UNAVAILABLE, IDENTITY_PROVIDER_MISCONFIGURED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
       parameters:
         - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
       requestBody:
@@ -88,6 +88,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
@@ -126,7 +128,7 @@ paths:
       operationId: updateUser
       summary: Update a user; the last active owner cannot be disabled (IAM-01)
       x-permission: iam:users
-      x-error-codes: [USER_NOT_FOUND, LAST_OWNER, INVALID_LOCATION, PRECONDITION_REQUIRED, VERSION_CONFLICT, IDENTITY_PROVIDER_UNAVAILABLE]
+      x-error-codes: [USER_NOT_FOUND, LAST_OWNER, INVALID_LOCATION, ROLE_GRANT_EXCEEDS_CALLER, PRECONDITION_REQUIRED, VERSION_CONFLICT, IDENTITY_PROVIDER_UNAVAILABLE, IDENTITY_PROVIDER_MISCONFIGURED]
       parameters:
         - $ref: "#/components/parameters/UserIdPath"
         - $ref: "./common.yaml#/components/parameters/IfMatch"
@@ -167,6 +169,8 @@ paths:
           $ref: "./common.yaml#/components/responses/UnprocessableContent"
         "428":
           $ref: "./common.yaml#/components/responses/PreconditionRequired"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
@@ -176,7 +180,7 @@ paths:
       operationId: replaceUserRoles
       summary: Replace the user's roles; the last active owner keeps OWNER (IAM-01)
       x-permission: iam:users
-      x-error-codes: [USER_NOT_FOUND, UNKNOWN_ROLE, LAST_OWNER, PRECONDITION_REQUIRED, VERSION_CONFLICT, IDENTITY_PROVIDER_UNAVAILABLE]
+      x-error-codes: [USER_NOT_FOUND, UNKNOWN_ROLE, LAST_OWNER, ROLE_GRANT_EXCEEDS_CALLER, PRECONDITION_REQUIRED, VERSION_CONFLICT, IDENTITY_PROVIDER_UNAVAILABLE, IDENTITY_PROVIDER_MISCONFIGURED]
       parameters:
         - $ref: "#/components/parameters/UserIdPath"
         - $ref: "./common.yaml#/components/parameters/IfMatch"
@@ -219,6 +223,8 @@ paths:
           $ref: "./common.yaml#/components/responses/UnprocessableContent"
         "428":
           $ref: "./common.yaml#/components/responses/PreconditionRequired"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
@@ -248,7 +254,7 @@ paths:
       operationId: createRole
       summary: Create a custom role
       x-permission: iam:roles
-      x-error-codes: [VALIDATION_FAILED, INVALID_PERMISSION, ROLE_CODE_TAKEN, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      x-error-codes: [VALIDATION_FAILED, INVALID_PERMISSION, ROLE_CODE_TAKEN, ROLE_GRANT_EXCEEDS_CALLER, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
       parameters:
         - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
       requestBody:
@@ -322,7 +328,7 @@ paths:
       operationId: updateRole
       summary: Rename a role, change its permissions or deactivate it (system roles cannot be deactivated — IAM-02)
       x-permission: iam:roles
-      x-error-codes: [ROLE_NOT_FOUND, INVALID_PERMISSION, SYSTEM_ROLE_IMMUTABLE, PRECONDITION_REQUIRED, VERSION_CONFLICT]
+      x-error-codes: [ROLE_NOT_FOUND, INVALID_PERMISSION, SYSTEM_ROLE_IMMUTABLE, ROLE_GRANT_EXCEEDS_CALLER, PRECONDITION_REQUIRED, VERSION_CONFLICT]
       parameters:
         - $ref: "#/components/parameters/RoleIdPath"
         - $ref: "./common.yaml#/components/parameters/IfMatch"
@@ -416,7 +422,7 @@ paths:
         The client secret is returned only in this response and is never stored by the platform. An idempotent replay
         returns the device without the secret.
       x-permission: iam:devices
-      x-error-codes: [VALIDATION_FAILED, INVALID_LOCATION, IDENTITY_PROVIDER_UNAVAILABLE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      x-error-codes: [VALIDATION_FAILED, INVALID_LOCATION, IDENTITY_PROVIDER_UNAVAILABLE, IDENTITY_PROVIDER_MISCONFIGURED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
       parameters:
         - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
       requestBody:
@@ -451,6 +457,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 
@@ -460,7 +468,7 @@ paths:
       operationId: revokeDevice
       summary: Revoke a device; its tokens are rejected at once on this instance and within 60 s everywhere (IAM-03)
       x-permission: iam:devices
-      x-error-codes: [DEVICE_NOT_FOUND, DEVICE_ALREADY_REVOKED, IDENTITY_PROVIDER_UNAVAILABLE, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED]
+      x-error-codes: [DEVICE_NOT_FOUND, DEVICE_ALREADY_REVOKED, IDENTITY_PROVIDER_UNAVAILABLE, IDENTITY_PROVIDER_MISCONFIGURED, IDEMPOTENCY_KEY_REQUIRED, IDEMPOTENCY_KEY_REUSED, REQUEST_IN_PROGRESS]
       parameters:
         - $ref: "#/components/parameters/DeviceIdPath"
         - $ref: "./common.yaml#/components/parameters/IdempotencyKey"
@@ -497,6 +505,8 @@ paths:
           $ref: "./common.yaml#/components/responses/Conflict"
         "422":
           $ref: "./common.yaml#/components/responses/UnprocessableContent"
+        "500":
+          $ref: "./common.yaml#/components/responses/InternalError"
         "503":
           $ref: "./common.yaml#/components/responses/ServiceUnavailable"
 

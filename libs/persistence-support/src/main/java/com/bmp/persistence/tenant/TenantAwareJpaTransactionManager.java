@@ -10,6 +10,7 @@ import java.sql.SQLException;
 import java.util.Map;
 import javax.sql.DataSource;
 import org.springframework.jdbc.datasource.ConnectionHolder;
+import org.springframework.orm.jpa.EntityManagerHolder;
 import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -23,12 +24,23 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class TenantAwareJpaTransactionManager extends JpaTransactionManager {
 
     private static final long serialVersionUID = 1L;
-    private static final String SET_TENANT = "SELECT set_config('" + TenantSql.TENANT_SETTING + "', ?, true)";
+    private static final String SET_TENANT = "SELECT set_config('%s', ?, true)".formatted(TenantSql.TENANT_SETTING);
 
     @Override
     protected void doBegin(Object transaction, TransactionDefinition definition) {
         super.doBegin(transaction, definition);
-        TenantContext.current().ifPresent(this::applyTenant);
+        try {
+            TenantContext.current().ifPresent(this::applyTenant);
+        } catch (RuntimeException e) {
+            // The transaction has begun: roll it back and release the EntityManager and connection before failing.
+            if (TransactionSynchronizationManager.getResource(obtainEntityManagerFactory())
+                            instanceof EntityManagerHolder holder
+                    && holder.getEntityManager().getTransaction().isActive()) {
+                holder.getEntityManager().getTransaction().rollback();
+            }
+            doCleanupAfterCompletion(transaction);
+            throw e;
+        }
     }
 
     private void applyTenant(TenantId tenant) {

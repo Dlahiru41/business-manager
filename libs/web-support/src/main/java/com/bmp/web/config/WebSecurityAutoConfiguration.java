@@ -92,8 +92,8 @@ public class WebSecurityAutoConfiguration {
     }
 
     @Bean
-    BmpJwtAuthenticationConverter bmpJwtAuthenticationConverter() {
-        return new BmpJwtAuthenticationConverter();
+    BmpJwtAuthenticationConverter bmpJwtAuthenticationConverter(SecurityProperties properties) {
+        return new BmpJwtAuthenticationConverter(properties.platformAdminClients());
     }
 
     @Bean

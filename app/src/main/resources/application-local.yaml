@@ -1,16 +1,15 @@
 # Local development: compose stack from deploy/local, readable plain-text logs, every trace sampled.
+# Credentials come from deploy/local/app-local.yaml (the working directory is the repository or the app folder).
 spring:
-  datasource:
-    password: ${BMP_APP_PASSWORD:bmp_app}
+  config:
+    import:
+      - optional:file:./deploy/local/app-local.yaml
+      - optional:file:../deploy/local/app-local.yaml
 bmp:
-  iam:
-    keycloak:
-      client-secret: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:local-dev-admin-secret}
+  security:
+    platform-admin-clients: bmp-dev-cli
   persistence:
-    migrator:
-      password: ${BMP_MIGRATOR_PASSWORD:bmp_migrator}
-    platform-admin:
-      password: ${BMP_PLATFORM_ADMIN_PASSWORD:bmp_platform_admin}
+    migrate-on-startup: true
 management:
   tracing:
     sampling:

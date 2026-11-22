@@ -1,5 +1,6 @@
 package com.bmp.persistence.config;
 
+import com.bmp.persistence.event.CompletedEventPurgeJob;
 import com.bmp.persistence.event.EventBacklogHealthIndicator;
 import com.bmp.persistence.event.EventContext;
 import com.bmp.persistence.event.EventContextInterceptor;
@@ -29,6 +30,7 @@ import org.springframework.context.annotation.Role;
 import org.springframework.core.Ordered;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.modulith.events.ApplicationModuleListener;
+import org.springframework.modulith.events.CompletedEventPublications;
 import org.springframework.modulith.events.FailedEventPublications;
 import org.springframework.transaction.PlatformTransactionManager;
 import tools.jackson.databind.json.JsonMapper;
@@ -95,6 +97,13 @@ class EventInfrastructureConfiguration {
             Clock clock) {
         return new EventResubmissionJob(
                 failedPublications, failedEventStore, meters.getIfUnique(SimpleMeterRegistry::new), clock);
+    }
+
+    @Bean
+    @ConditionalOnBean(CompletedEventPublications.class)
+    CompletedEventPurgeJob completedEventPurgeJob(
+            CompletedEventPublications completed, @Value("${bmp.events.completed-retention:P7D}") Duration retention) {
+        return new CompletedEventPurgeJob(completed, retention);
     }
 
     /** Gauge {@code bmp.events.incomplete}: publications not completed yet (abandoned ones excluded). */

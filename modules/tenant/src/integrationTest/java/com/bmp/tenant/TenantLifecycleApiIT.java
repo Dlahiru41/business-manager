@@ -87,11 +87,18 @@ class TenantLifecycleApiIT {
         String key = UUID.randomUUID().toString();
         String body = "{\"name\": \"Replay Stores\", \"businessType\": \"RETAIL\"}";
 
-        MvcTestResult first = api.post("/api/v1/tenants", JwtTestTokens.platformAdmin(), body, key);
-        MvcTestResult replay = api.post("/api/v1/tenants", JwtTestTokens.platformAdmin(), body, key);
+        String admin = JwtTestTokens.platformAdmin();
+
+        MvcTestResult first = api.post("/api/v1/tenants", admin, body, key);
+        MvcTestResult replay = api.post("/api/v1/tenants", admin, body, key);
+        MvcTestResult otherAdmin = api.post("/api/v1/tenants", JwtTestTokens.platformAdmin(), body, key);
 
         assertThat(replay).hasStatus(201).hasHeader("Idempotent-Replayed", "true");
         assertThat(json(replay).path("id")).isEqualTo(json(first).path("id"));
+        assertThatProblem(otherAdmin)
+                .as("a stored response is never replayed to another caller")
+                .hasStatus(422)
+                .hasCode("IDEMPOTENCY_KEY_REUSED");
     }
 
     @Test
@@ -117,6 +124,13 @@ class TenantLifecycleApiIT {
                 .hasCode("VALIDATION_FAILED")
                 .hasFieldError("currency", "UNKNOWN_CURRENCY")
                 .hasFieldError("timeZone", "UNKNOWN_TIME_ZONE");
+        assertThatProblem(api.post(
+                        "/api/v1/tenants",
+                        JwtTestTokens.platformAdmin(),
+                        "{\"name\": \"Yen shop\", \"businessType\": \"y\", \"currency\": \"JPY\"}"))
+                .as("money rounds to two decimals for now")
+                .hasStatus(422)
+                .hasFieldError("currency", "UNSUPPORTED_CURRENCY");
     }
 
     @Test

@@ -11,6 +11,7 @@ import com.bmp.shared.error.NotFoundException;
 import com.bmp.shared.error.VersionConflict;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Component;
@@ -43,6 +44,16 @@ class UserLoader {
                 : roles.findByIdIn(ids).stream()
                         .collect(Collectors.toMap(role -> role.id().value(), Role::code));
         return UserView.of(user, codes);
+    }
+
+    /** Every permission grant the user holds now through their roles. */
+    Set<String> permissionsOf(AppUser user) {
+        List<UUID> ids = user.roles().stream().map(RoleGrant::roleId).toList();
+        return ids.isEmpty()
+                ? Set.of()
+                : roles.findByIdIn(ids).stream()
+                        .flatMap(role -> role.effectiveGrants().stream())
+                        .collect(Collectors.toSet());
     }
 
     /** Role codes the user holds now, for the tokens issued by the identity provider. */

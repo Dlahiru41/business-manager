@@ -33,6 +33,7 @@ public class UpdateUserHandler {
     private final UserLoader loader;
     private final RoleAssignments assignments;
     private final OwnerGuard owners;
+    private final GrantCeiling ceiling;
     private final IdentityProviderGateway identityProvider;
     private final TransactionTemplate transaction;
     private final TransactionTemplate readOnly;
@@ -42,12 +43,14 @@ public class UpdateUserHandler {
             UserLoader loader,
             RoleAssignments assignments,
             OwnerGuard owners,
+            GrantCeiling ceiling,
             IdentityProviderGateway identityProvider,
             PlatformTransactionManager transactionManager) {
         this.users = users;
         this.loader = loader;
         this.assignments = assignments;
         this.owners = owners;
+        this.ceiling = ceiling;
         this.identityProvider = identityProvider;
         this.transaction = new TransactionTemplate(transactionManager);
         this.readOnly = new TransactionTemplate(transactionManager);
@@ -76,6 +79,8 @@ public class UpdateUserHandler {
     public UserView handle(UpdateUser command) {
         Plan plan = Objects.requireNonNull(readOnly.execute(status -> {
             AppUser user = loader.load(command.id(), command.expectedVersion());
+            // Nobody changes a user who holds more than they do (e.g. a manager disabling an owner).
+            ceiling.requireCovered(loader.permissionsOf(user));
             UUID location = command.defaultLocationId();
             if (location != null) {
                 assignments.requireActiveLocations(List.of(location));

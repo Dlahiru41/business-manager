@@ -31,6 +31,7 @@ public class ReplaceUserRolesHandler {
     private final UserLoader loader;
     private final RoleAssignments assignments;
     private final OwnerGuard owners;
+    private final GrantCeiling ceiling;
     private final IdentityProviderGateway identityProvider;
     private final TransactionTemplate transaction;
     private final TransactionTemplate readOnly;
@@ -40,12 +41,14 @@ public class ReplaceUserRolesHandler {
             UserLoader loader,
             RoleAssignments assignments,
             OwnerGuard owners,
+            GrantCeiling ceiling,
             IdentityProviderGateway identityProvider,
             PlatformTransactionManager transactionManager) {
         this.users = users;
         this.loader = loader;
         this.assignments = assignments;
         this.owners = owners;
+        this.ceiling = ceiling;
         this.identityProvider = identityProvider;
         this.transaction = new TransactionTemplate(transactionManager);
         this.readOnly = new TransactionTemplate(transactionManager);
@@ -71,6 +74,9 @@ public class ReplaceUserRolesHandler {
         Plan plan = Objects.requireNonNull(readOnly.execute(status -> {
             AppUser user = loader.load(command.id(), command.expectedVersion());
             RoleAssignments.Resolved resolved = assignments.resolve(command.roles());
+            // Neither taking away nor giving more than the caller holds.
+            ceiling.requireCovered(loader.permissionsOf(user));
+            ceiling.requireCovered(resolved.permissions());
             owners.check(owners.ownerRole(false), user, user.isActive(), holds(resolved));
             return new Plan(user.idpSubject(), loader.roleCodes(user), resolved.codes());
         }));

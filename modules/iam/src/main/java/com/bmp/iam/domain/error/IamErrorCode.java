@@ -2,6 +2,8 @@ package com.bmp.iam.domain.error;
 
 import static com.bmp.shared.error.ErrorCategory.CONFLICT;
 import static com.bmp.shared.error.ErrorCategory.DEPENDENCY;
+import static com.bmp.shared.error.ErrorCategory.FORBIDDEN;
+import static com.bmp.shared.error.ErrorCategory.INTERNAL;
 import static com.bmp.shared.error.ErrorCategory.NOT_FOUND;
 import static com.bmp.shared.error.ErrorCategory.VALIDATION;
 
@@ -27,7 +29,13 @@ public enum IamErrorCode implements ErrorCode {
     INVALID_LOCATION(VALIDATION),
     DEVICE_NOT_FOUND(NOT_FOUND),
     DEVICE_ALREADY_REVOKED(CONFLICT),
-    IDENTITY_PROVIDER_UNAVAILABLE(DEPENDENCY);
+    /** A caller may grant only roles and permissions they hold themselves (OWASP API5). */
+    ROLE_GRANT_EXCEEDS_CALLER(FORBIDDEN),
+    IDENTITY_PROVIDER_UNAVAILABLE(DEPENDENCY),
+    /** The identity provider refused the data (e.g. its username or e-mail policy). */
+    IDENTITY_PROVIDER_REJECTED(VALIDATION),
+    /** The identity provider refused the platform itself (credentials, permissions): an operator must act. */
+    IDENTITY_PROVIDER_MISCONFIGURED(INTERNAL);
 
     private final ErrorCategory category;
 

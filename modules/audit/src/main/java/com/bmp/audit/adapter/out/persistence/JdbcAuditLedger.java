@@ -55,7 +55,13 @@ class JdbcAuditLedger implements AuditLedger {
 
     @Override
     public ChainHead head() {
-        return jdbc.sql("SELECT sequence, hash FROM audit.audit_record ORDER BY sequence DESC LIMIT 1")
+        return jdbc.sql("""
+                        SELECT sequence, hash FROM audit.audit_record
+                         WHERE tenant_id = :tenant
+                         ORDER BY sequence DESC
+                         LIMIT 1
+                        """)
+                .param("tenant", TenantContext.require().value())
                 .query((rs, row) -> new ChainHead(rs.getLong("sequence"), rs.getString("hash")))
                 .optional()
                 .orElse(ChainHead.EMPTY);
@@ -105,7 +111,8 @@ class JdbcAuditLedger implements AuditLedger {
             int limit) {
         return jdbc.sql("""
                         SELECT %s FROM audit.audit_record
-                         WHERE sequence < :before
+                         WHERE tenant_id = :tenant
+                           AND sequence < :before
                            AND (CAST(:resourceType AS text) IS NULL OR resource_type = :resourceType)
                            AND (CAST(:resourceId AS text) IS NULL OR resource_id = :resourceId)
                            AND (CAST(:from AS timestamptz) IS NULL OR occurred_at >= :from)
@@ -113,6 +120,7 @@ class JdbcAuditLedger implements AuditLedger {
                          ORDER BY sequence DESC
                          LIMIT :limit
                         """.formatted(COLUMNS))
+                .param("tenant", TenantContext.require().value())
                 .param("before", beforeSequence)
                 .param("resourceType", resourceType)
                 .param("resourceId", resourceId)
@@ -127,10 +135,12 @@ class JdbcAuditLedger implements AuditLedger {
     public List<AuditRecord> chain(long afterSequence, int limit) {
         return jdbc.sql("""
                         SELECT %s FROM audit.audit_record
-                         WHERE sequence > :after
+                         WHERE tenant_id = :tenant
+                           AND sequence > :after
                          ORDER BY sequence
                          LIMIT :limit
                         """.formatted(COLUMNS))
+                .param("tenant", TenantContext.require().value())
                 .param("after", afterSequence)
                 .param("limit", limit)
                 .query(JdbcAuditLedger::map)

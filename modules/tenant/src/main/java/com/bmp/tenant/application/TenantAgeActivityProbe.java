@@ -1,6 +1,7 @@
 package com.bmp.tenant.application;
 
 import com.bmp.shared.id.TenantId;
+import com.bmp.tenant.api.spi.ActivityEvidence;
 import com.bmp.tenant.api.spi.BusinessActivityProbe;
 import com.bmp.tenant.domain.port.TenantRepository;
 import java.time.Clock;
@@ -28,9 +29,11 @@ public class TenantAgeActivityProbe implements BusinessActivityProbe {
     }
 
     @Override
-    public boolean hasBusinessDocuments(TenantId tenant) {
-        return tenants.findById(tenant.value())
-                .map(found -> found.createdBefore(clock.instant().minus(GRACE_PERIOD)))
-                .orElse(true);
+    public ActivityEvidence evidenceOf(TenantId tenant) {
+        boolean young = tenants.findById(tenant.value())
+                .map(found -> !found.createdBefore(clock.instant().minus(GRACE_PERIOD)))
+                .orElse(false);
+        // Only a guess either way: it never confirms, so a platform administrator can still correct an old tenant.
+        return young ? ActivityEvidence.NONE : ActivityEvidence.ASSUMED;
     }
 }

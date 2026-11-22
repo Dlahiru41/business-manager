@@ -23,8 +23,19 @@ public class RequestHasher {
     }
 
     public String hash(String method, String path, byte[] body) {
+        return hash(method, path, body, "");
+    }
+
+    /**
+     * Hash of a request as made by one caller: the same key, path and body sent by another caller is a different
+     * request (422 {@code IDEMPOTENCY_KEY_REUSED}), so a stored response is never replayed to someone else.
+     *
+     * @param path the path including the query string
+     * @param caller the authenticated subject, or {@code ""} when there is none
+     */
+    public String hash(String method, String path, byte[] body, String caller) {
         MessageDigest digest = sha256();
-        digest.update((method + " " + path + "\n").getBytes(StandardCharsets.UTF_8));
+        digest.update((caller + "\n" + method + " " + path + "\n").getBytes(StandardCharsets.UTF_8));
         digest.update(canonicalBody(body));
         return HexFormat.of().formatHex(digest.digest());
     }

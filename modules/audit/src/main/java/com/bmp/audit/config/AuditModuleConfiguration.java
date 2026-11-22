@@ -3,7 +3,10 @@ package com.bmp.audit.config;
 import com.bmp.audit.adapter.in.web.AuditInterceptor;
 import com.bmp.audit.api.AuditWriter;
 import com.bmp.persistence.migration.ModuleMigration;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
@@ -22,8 +25,8 @@ class AuditModuleConfiguration {
     }
 
     @Bean
-    AuditInterceptor auditInterceptor(AuditWriter writer, Clock clock) {
-        return new AuditInterceptor(writer, clock);
+    AuditInterceptor auditInterceptor(AuditWriter writer, Clock clock, ObjectProvider<MeterRegistry> meters) {
+        return new AuditInterceptor(writer, clock, meters.getIfUnique(SimpleMeterRegistry::new));
     }
 
     @Bean

@@ -9,6 +9,7 @@ import com.bmp.tenant.domain.error.TenantErrorCode;
 import com.bmp.tenant.domain.model.ReceiptTemplate;
 import com.bmp.tenant.domain.model.ReceiptTemplateId;
 import com.bmp.tenant.domain.port.ReceiptTemplateRepository;
+import com.bmp.tenant.domain.port.TenantRepository;
 import io.micrometer.observation.annotation.Observed;
 import java.util.Map;
 import java.util.Objects;
@@ -22,9 +23,11 @@ import org.springframework.transaction.annotation.Transactional;
 public class ReceiptTemplateHandlers {
 
     private final ReceiptTemplateRepository templates;
+    private final TenantRepository tenants;
     private final IdGenerator ids;
 
-    public ReceiptTemplateHandlers(ReceiptTemplateRepository templates, IdGenerator ids) {
+    public ReceiptTemplateHandlers(ReceiptTemplateRepository templates, TenantRepository tenants, IdGenerator ids) {
+        this.tenants = tenants;
         this.templates = templates;
         this.ids = ids;
     }
@@ -88,6 +91,8 @@ public class ReceiptTemplateHandlers {
 
     /** Flushes at once: the unique index allows a single default per tenant at every statement. */
     private void unsetCurrentDefault(@Nullable ReceiptTemplateId keep) {
+        // One default per tenant: concurrent switches are serialized on the tenant row.
+        tenants.lockById(TenantContext.require().value());
         templates.findDefault().filter(current -> !current.id().equals(keep)).ifPresent(current -> {
             current.unmarkDefault();
             templates.saveAndFlush(current);

@@ -32,6 +32,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,10 +56,14 @@ class CompensationTest {
     private final RoleAssignments assignments = mock(RoleAssignments.class);
     private final OwnerGuard owners = mock(OwnerGuard.class);
     private final UserLoader loader = mock(UserLoader.class);
+    private final GrantCeiling ceiling = mock(GrantCeiling.class);
     private final IdentityProviderGateway identityProvider = mock(IdentityProviderGateway.class);
     private final PlatformTransactionManager transactions = mock(PlatformTransactionManager.class);
     private final RoleAssignments.Resolved cashier = new RoleAssignments.Resolved(
-            List.of(RoleGrant.everywhere(CASHIER)), List.of("CASHIER"), Map.of(CASHIER.value(), "CASHIER"));
+            List.of(RoleGrant.everywhere(CASHIER)),
+            List.of("CASHIER"),
+            Map.of(CASHIER.value(), "CASHIER"),
+            Set.of("sales:create"));
 
     @BeforeEach
     void setUp() {
@@ -79,7 +84,7 @@ class CompensationTest {
     void deletesTheAccountWhenTheProfileCannotBeStored() {
         when(identityProvider.createUser(any())).thenReturn(SUBJECT);
         when(users.saveAndFlush(any())).thenThrow(new DataIntegrityViolationException("duplicate"));
-        CreateUserHandler handler = new CreateUserHandler(users, assignments, identityProvider, transactions);
+        CreateUserHandler handler = new CreateUserHandler(users, assignments, ceiling, identityProvider, transactions);
 
         inTenant(() -> assertThatThrownBy(() -> handler.handle(new CreateUserHandler.CreateUser(
                         "nimal", null, "Nimal", null, List.of(new RoleRequest("CASHIER", List.of())))))
@@ -95,7 +100,7 @@ class CompensationTest {
         doThrow(new IllegalStateException("identity provider down"))
                 .when(identityProvider)
                 .deleteUser(SUBJECT);
-        CreateUserHandler handler = new CreateUserHandler(users, assignments, identityProvider, transactions);
+        CreateUserHandler handler = new CreateUserHandler(users, assignments, ceiling, identityProvider, transactions);
 
         inTenant(() -> assertThatThrownBy(() -> handler.handle(new CreateUserHandler.CreateUser(
                         "nimal", "n@example.lk", "Nimal", null, List.of(new RoleRequest("CASHIER", List.of())))))
@@ -106,7 +111,7 @@ class CompensationTest {
     void reEnablesTheAccountWhenDisablingFailsLocally() {
         when(loader.load(any(), eq(0L))).thenReturn(user()).thenThrow(new VersionConflict(1));
         UpdateUserHandler handler =
-                new UpdateUserHandler(users, loader, assignments, owners, identityProvider, transactions);
+                new UpdateUserHandler(users, loader, assignments, owners, ceiling, identityProvider, transactions);
 
         inTenant(() -> assertThatThrownBy(() -> handler.handle(
                         new UpdateUserHandler.UpdateUser(SUBJECT.value(), 0, null, UserStatus.DISABLED, null)))
@@ -121,9 +126,9 @@ class CompensationTest {
         when(loader.load(any(), eq(0L))).thenReturn(user()).thenThrow(new VersionConflict(1));
         when(loader.roleCodes(any())).thenReturn(List.of("CASHIER"));
         when(assignments.resolve(anyList()))
-                .thenReturn(new RoleAssignments.Resolved(List.of(), List.of("MANAGER"), Map.of()));
-        ReplaceUserRolesHandler handler =
-                new ReplaceUserRolesHandler(users, loader, assignments, owners, identityProvider, transactions);
+                .thenReturn(new RoleAssignments.Resolved(List.of(), List.of("MANAGER"), Map.of(), Set.of()));
+        ReplaceUserRolesHandler handler = new ReplaceUserRolesHandler(
+                users, loader, assignments, owners, ceiling, identityProvider, transactions);
 
         inTenant(() -> assertThatThrownBy(() -> handler.handle(new ReplaceUserRolesHandler.ReplaceUserRoles(
                         SUBJECT.value(), 0, List.of(new RoleRequest("MANAGER", List.of())))))

@@ -8,6 +8,7 @@ import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.error.FieldError;
 import com.bmp.shared.error.ValidationFailure;
 import com.bmp.shared.id.LocationId;
+import com.bmp.shared.security.SystemRole;
 import com.bmp.tenant.api.TenantQueries;
 import java.util.Collection;
 import java.util.HashSet;
@@ -38,8 +39,9 @@ class RoleAssignments {
      * The resolved grants and the codes to put in the user's tokens, in request order.
      *
      * @param codesById code of each granted role, by role id
+     * @param permissions every permission grant the roles give, for the grant ceiling
      */
-    record Resolved(List<RoleGrant> grants, List<String> codes, Map<UUID, String> codesById) {}
+    record Resolved(List<RoleGrant> grants, List<String> codes, Map<UUID, String> codesById, Set<String> permissions) {}
 
     Resolved resolve(List<RoleRequest> requested) {
         Set<String> distinct = new HashSet<>();
@@ -53,7 +55,10 @@ class RoleAssignments {
         List<RoleGrant> grants = requested.stream()
                 .map(request -> {
                     Role role = byCode.get(request.code());
-                    if (role == null || !role.isActive()) {
+                    // The device role belongs to device clients; a person never holds it.
+                    if (role == null
+                            || !role.isActive()
+                            || SystemRole.DEVICE.code().equals(role.code())) {
                         throw new BusinessRuleViolation(IamErrorCode.UNKNOWN_ROLE, Map.of("code", request.code()));
                     }
                     requireActiveLocations(request.locationScope());
@@ -62,7 +67,10 @@ class RoleAssignments {
                 .toList();
         Map<UUID, String> codesById = byCode.values().stream()
                 .collect(Collectors.toMap(role -> role.id().value(), Role::code));
-        return new Resolved(grants, requested.stream().map(RoleRequest::code).toList(), codesById);
+        Set<String> permissions = byCode.values().stream()
+                .flatMap(role -> role.effectiveGrants().stream())
+                .collect(Collectors.toSet());
+        return new Resolved(grants, requested.stream().map(RoleRequest::code).toList(), codesById, permissions);
     }
 
     /** Throws {@code INVALID_LOCATION} for the first location that is not active in the tenant. */

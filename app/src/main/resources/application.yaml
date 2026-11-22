@@ -27,6 +27,8 @@ spring:
 bmp:
   security:
     issuer-uri: ${BMP_ISSUER_URI:http://localhost:8180/realms/bmp}
+    # Clients (azp) through which platform administrators sign in, comma-separated; none unless configured.
+    platform-admin-clients: ${BMP_PLATFORM_ADMIN_CLIENTS:}
   web:
     cors-allowed-origins: ${BMP_CORS_ALLOWED_ORIGINS:}
   iam:
@@ -36,6 +38,9 @@ bmp:
       client-id: bmp-admin
       client-secret: ${BMP_KEYCLOAK_ADMIN_CLIENT_SECRET:}
   persistence:
+    # The running app never connects as schema owner outside local and test (06 §1): migrations run as a separate
+    # job with the migrator role (bmp.persistence.migrate-on-startup=true and the migrator password set only there).
+    migrate-on-startup: ${BMP_MIGRATE_ON_STARTUP:false}
     migrator:
       username: bmp_migrator
       password: ${BMP_MIGRATOR_PASSWORD:}
@@ -66,7 +71,8 @@ management:
         liveness:
           include: livenessState
         readiness:
-          include: readinessState, db, eventBacklog
+          # The outbox backlog is shared by all instances: it is a health indicator and alert, not a readiness gate.
+          include: readinessState, db
   info:
     java:
       enabled: true

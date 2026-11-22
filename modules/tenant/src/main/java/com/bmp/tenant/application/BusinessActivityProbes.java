@@ -1,6 +1,7 @@
 package com.bmp.tenant.application;
 
 import com.bmp.shared.id.TenantId;
+import com.bmp.tenant.api.spi.ActivityEvidence;
 import com.bmp.tenant.api.spi.BusinessActivityProbe;
 import java.util.ArrayList;
 import java.util.List;
@@ -22,7 +23,7 @@ public class BusinessActivityProbes {
         this.probe = ordered.getFirst();
     }
 
-    public boolean hasBusinessDocuments(TenantId tenant) {
-        return probe.hasBusinessDocuments(tenant);
+    public ActivityEvidence evidenceOf(TenantId tenant) {
+        return probe.evidenceOf(tenant);
     }
 }

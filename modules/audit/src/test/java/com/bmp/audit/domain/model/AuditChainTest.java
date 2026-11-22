@@ -118,9 +118,9 @@ class AuditChainTest {
     }
 
     @Test
-    void distinguishesAbsentFromEmptyAndCutsLongUserAgents() {
+    void distinguishesAbsentFromEmptyLeavesNetworkDataOutAndCutsLongUserAgents() {
         AuditRecord empty = AuditRecord.append(UUID.randomUUID(), TENANT, ChainHead.EMPTY, entry("A", ""), NOW);
-        AuditRecord absent = new AuditRecord(
+        AuditRecord absentRequest = new AuditRecord(
                 empty.id(),
                 empty.tenantId(),
                 empty.sequence(),
@@ -137,15 +137,39 @@ class AuditChainTest {
                 empty.beforeHash(),
                 empty.afterHash(),
                 empty.ip(),
+                empty.userAgent(),
+                "",
+                empty.eventId(),
+                empty.prevHash(),
+                empty.hash());
+        AuditRecord erased = new AuditRecord(
+                empty.id(),
+                empty.tenantId(),
+                empty.sequence(),
+                empty.occurredAt(),
+                empty.recordedAt(),
+                empty.source(),
+                empty.action(),
+                empty.resourceType(),
+                empty.resourceId(),
+                empty.outcome(),
+                empty.actorId(),
+                empty.deviceId(),
+                empty.platformAdmin(),
+                empty.beforeHash(),
+                empty.afterHash(),
+                null,
                 null,
                 empty.requestId(),
                 empty.eventId(),
                 empty.prevHash(),
                 empty.hash());
+
+        assertThat(absentRequest.computeHash()).as("\"\" differs from a value").isNotEqualTo(empty.hash());
+        assertThat(erased.computeHash()).as("IP and user agent can be erased").isEqualTo(empty.hash());
         AuditRecord longAgent =
                 AuditRecord.append(UUID.randomUUID(), TENANT, ChainHead.EMPTY, entry("A", "x".repeat(1000)), NOW);
 
-        assertThat(absent.computeHash()).isNotEqualTo(empty.hash());
         assertThat(longAgent.userAgent()).hasSize(AuditRecord.MAX_USER_AGENT);
         assertThat(AuditRecord.sha256("abc"))
                 .isEqualTo("ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad");

@@ -15,7 +15,7 @@ import org.testcontainers.utility.MountableFile;
  */
 public final class BmpPostgres {
 
-    public static final String IMAGE = "postgres:18-alpine";
+    public static final String IMAGE = "postgres:18.7-alpine";
     public static final String DATABASE = "bmp";
     public static final String APP_USER = "bmp_app";
     public static final String MIGRATOR_USER = "bmp_migrator";

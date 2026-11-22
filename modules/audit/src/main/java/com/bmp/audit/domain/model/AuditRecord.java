@@ -18,7 +18,8 @@ import org.jspecify.annotations.Nullable;
 /**
  * One link of a tenant's audit chain (a ledger row: never updated or deleted). Its {@code hash} is the SHA-256 over
  * every other field and the previous record's hash, so changing, removing or reordering any record breaks the chain
- * from that point on.
+ * from that point on. The IP address and user agent are personal data kept for investigations only: they are left out
+ * of the hash, so that erasing them (ADR-017) keeps the chain verifiable.
  *
  * @param sequence position in the tenant's chain, starting at 1, without gaps
  * @param prevHash hash of the previous record, {@link #GENESIS_HASH} for the first
@@ -114,8 +115,6 @@ public record AuditRecord(
         field(canonical, platformAdmin);
         field(canonical, beforeHash);
         field(canonical, afterHash);
-        field(canonical, ip);
-        field(canonical, userAgent);
         field(canonical, requestId);
         field(canonical, eventId);
         field(canonical, prevHash);

@@ -2,6 +2,7 @@ package com.bmp.iam.adapter.out.idp;
 
 import com.bmp.iam.domain.error.IamErrorCode;
 import com.bmp.iam.domain.port.IdentityProviderGateway;
+import com.bmp.shared.error.BmpException;
 import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.error.IntegrationException;
 import com.bmp.shared.id.UserId;
@@ -128,7 +129,8 @@ public class KeycloakIdentityProvider implements IdentityProviderGateway {
     public UserId createUser(NewIdentity identity) {
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("username", identity.username());
-        body.put("enabled", true);
+        // Disabled until the profile is stored (activateUser), so a failure in between leaves no usable account.
+        body.put("enabled", false);
         String email = identity.email();
         if (email != null) {
             body.put("email", email);
@@ -158,11 +160,43 @@ public class KeycloakIdentityProvider implements IdentityProviderGateway {
             }
             throw rejected("create-user", e);
         }
-        UserId subject = UserId.of(lastSegment(location, "create-user"));
-        if (email != null) {
+        return UserId.of(lastSegment(location, "create-user"));
+    }
+
+    @Override
+    public void activateUser(UserId subject, boolean invite) {
+        updateUser("activate-user", subject, user -> user.put("enabled", true));
+        if (invite) {
             invite(subject);
         }
-        return subject;
+    }
+
+    @Override
+    public Optional<ExistingIdentity> findUser(String username) {
+        try {
+            JsonNode found = call(
+                    "find-user",
+                    true,
+                    () -> http.get()
+                            .uri(
+                                    "/admin/realms/{realm}/users?username={username}&exact=true",
+                                    settings.realm(),
+                                    username)
+                            .headers(this::authorize)
+                            .retrieve()
+                            .body(JsonNode.class));
+            if (found == null || !found.isArray() || found.isEmpty()) {
+                return Optional.empty();
+            }
+            JsonNode user = found.get(0);
+            JsonNode tenant = user.path("attributes").path(TENANT_ATTRIBUTE).path(0);
+            return Optional.of(new ExistingIdentity(
+                    UserId.of(UUID.fromString(user.path("id").asString())),
+                    tenant.isMissingNode() ? null : tenant.asString(),
+                    user.path("enabled").asBoolean(false)));
+        } catch (HttpClientErrorException e) {
+            throw rejected("find-user", e);
+        }
     }
 
     @Override
@@ -413,11 +447,17 @@ public class KeycloakIdentityProvider implements IdentityProviderGateway {
         }
     }
 
-    private IntegrationException rejected(String operation, HttpClientErrorException e) {
-        return new IntegrationException(
-                IamErrorCode.IDENTITY_PROVIDER_UNAVAILABLE,
-                Map.of("operation", operation, "status", e.getStatusCode().value()),
-                e);
+    /**
+     * A 4xx the caller cannot handle: 400 means Keycloak refused the data (422 to the client); anything else means the
+     * platform itself is refused (credentials, permissions, realm setup) and needs an operator, not a retry.
+     */
+    private BmpException rejected(String operation, HttpClientErrorException e) {
+        Map<String, Object> details =
+                Map.of("operation", operation, "status", e.getStatusCode().value());
+        if (e.getStatusCode().isSameCodeAs(HttpStatus.BAD_REQUEST)) {
+            return new BusinessRuleViolation(IamErrorCode.IDENTITY_PROVIDER_REJECTED, details);
+        }
+        return new IntegrationException(IamErrorCode.IDENTITY_PROVIDER_MISCONFIGURED, details, e);
     }
 
     private void authorize(HttpHeaders headers) {

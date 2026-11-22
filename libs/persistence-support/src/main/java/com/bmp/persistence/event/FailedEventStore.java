@@ -77,8 +77,10 @@ public class FailedEventStore {
     public boolean isParked(String consumer, UUID eventId, TenantId tenant) {
         return TenantContext.callWith(
                         tenant,
-                        () -> transactions.execute(status -> jdbc.sql("SELECT count(*) FROM platform.failed_event"
-                                        + " WHERE consumer = :consumer AND event_id = :eventId AND status = 'PARKED'")
+                        () -> transactions.execute(status -> jdbc.sql("""
+                                        SELECT count(*) FROM platform.failed_event
+                                         WHERE consumer = :consumer AND event_id = :eventId AND status = 'PARKED'
+                                        """)
                                 .param("consumer", consumer)
                                 .param("eventId", eventId)
                                 .query(Long.class)

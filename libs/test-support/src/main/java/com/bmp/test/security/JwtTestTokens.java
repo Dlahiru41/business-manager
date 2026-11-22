@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
@@ -38,6 +39,9 @@ public final class JwtTestTokens {
 
     public static final String ISSUER = "https://issuer.test.bmp/realms/bmp";
     public static final String AUDIENCE = "bmp-api";
+
+    /** Client of user tokens in tests; also the platform-administrator client of the test configurations. */
+    public static final String USER_CLIENT = "bmp-dev-cli";
 
     private static final RSAKey SIGNING_KEY = generate("test-signing-key");
     private static final RSAKey FOREIGN_KEY = generate("foreign-key");
@@ -89,6 +93,8 @@ public final class JwtTestTokens {
         private @Nullable TenantId tenant;
         private @Nullable DeviceId device;
         private final List<String> roles = new ArrayList<>();
+        private final List<String> flatRoleClaim = new ArrayList<>();
+        private @Nullable String client;
         private String issuer = ISSUER;
         private String audience = AUDIENCE;
         private Instant issuedAt = Instant.now();
@@ -112,6 +118,18 @@ public final class JwtTestTokens {
 
         public Builder roles(String... codes) {
             roles.addAll(Arrays.asList(codes));
+            return this;
+        }
+
+        /** The {@code azp} claim; defaults to {@link #USER_CLIENT}, or {@code device-<id>} for device tokens. */
+        public Builder client(String azp) {
+            this.client = azp;
+            return this;
+        }
+
+        /** Puts codes into the flat {@code roles} claim as they are, to test that forged roles are ignored. */
+        public Builder rawRolesClaim(String... codes) {
+            flatRoleClaim.addAll(Arrays.asList(codes));
             return this;
         }
 
@@ -142,8 +160,18 @@ public final class JwtTestTokens {
                     .audience(audience)
                     .issueTime(Date.from(issuedAt))
                     .expirationTime(Date.from(issuedAt.plus(lifetime)))
-                    .jwtID(UUID.randomUUID().toString())
-                    .claim("roles", List.copyOf(roles));
+                    .jwtID(UUID.randomUUID().toString());
+            // As Keycloak issues them (ADR-016): tenant roles in the flat claim, the platform role as a realm role.
+            String platformAdmin = "platform_admin";
+            List<String> tenantRoles = new ArrayList<>(
+                    roles.stream().filter(r -> !r.equals(platformAdmin)).toList());
+            tenantRoles.addAll(flatRoleClaim);
+            claims.claim("roles", List.copyOf(tenantRoles));
+            if (roles.contains(platformAdmin)) {
+                claims.claim("realm_access", Map.of("roles", List.of("default-roles-bmp", platformAdmin)));
+            }
+            String azp = client != null ? client : device != null ? "device-" + device.value() : USER_CLIENT;
+            claims.claim("azp", azp);
             if (tenant != null) {
                 claims.claim("tenant_id", tenant.value().toString());
             }

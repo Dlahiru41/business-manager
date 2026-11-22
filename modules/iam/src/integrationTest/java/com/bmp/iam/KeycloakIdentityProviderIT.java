@@ -171,7 +171,8 @@ class KeycloakIdentityProviderIT {
                 .issuedAt(Instant.now())
                 .expiresAt(Instant.now().plusSeconds(60))
                 .build();
-        return ((BmpAuthentication) new BmpJwtAuthenticationConverter().convert(jwt)).bmpPrincipal();
+        return ((BmpAuthentication) new BmpJwtAuthenticationConverter(List.of("bmp-dev-cli")).convert(jwt))
+                .bmpPrincipal();
     }
 
     @Test
@@ -189,6 +190,16 @@ class KeycloakIdentityProviderIT {
         String username = "it-" + UUID.randomUUID().toString().substring(0, 8);
         UserId subject = gateway.createUser(new NewIdentity(username, null, "IT user", PILOT, List.of("CASHIER")));
         setPassword(subject, DEV_PASSWORD);
+        assertThatThrownBy(() -> passwordToken(username, DEV_PASSWORD))
+                .as("created disabled until the profile is stored")
+                .isInstanceOf(HttpClientErrorException.class);
+        assertThat(gateway.findUser(username)).hasValueSatisfying(found -> {
+            assertThat(found.subject()).isEqualTo(subject);
+            assertThat(found.tenant()).isEqualTo(PILOT.toString());
+            assertThat(found.enabled()).isFalse();
+        });
+        assertThat(gateway.findUser("nobody-" + username)).isEmpty();
+        gateway.activateUser(subject, false);
 
         JsonNode first = passwordToken(username, DEV_PASSWORD);
         assertThat(first.path("sub").asString()).isEqualTo(subject.toString());

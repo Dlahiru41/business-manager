@@ -12,24 +12,28 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * The {@code RlsCoverageIT} check (06-persistence-and-data.md §2), usable by every module: every table with a
- * {@code tenant_id} column in the given schemas must have row-level security enabled <em>and forced</em> with at least
- * one policy, and ledger tables must not grant {@code UPDATE}/{@code DELETE} to {@code bmp_app}.
+ * The {@code RlsCoverageIT} check (06-persistence-and-data.md §2), usable by every module: every table of the given
+ * schemas (Flyway history aside) must be tenant-scoped, with row-level security enabled <em>and forced</em> and a
+ * policy that compares with {@code platform.current_tenant_id()} in both {@code USING} and {@code WITH CHECK}; ledger
+ * tables must not grant {@code UPDATE}/{@code DELETE} to {@code bmp_app}.
  */
 public final class RlsCoverage {
 
     private static final String UNPROTECTED_TABLES = """
             SELECT n.nspname || '.' || c.relname AS table_name, c.relrowsecurity, c.relforcerowsecurity,
+                   EXISTS (SELECT 1 FROM information_schema.columns col
+                            WHERE col.table_schema = n.nspname AND col.table_name = c.relname
+                              AND col.column_name = 'tenant_id') AS has_tenant_column,
                    EXISTS (SELECT 1 FROM pg_policies p
-                            WHERE p.schemaname = n.nspname AND p.tablename = c.relname) AS has_policy
+                            WHERE p.schemaname = n.nspname AND p.tablename = c.relname
+                              AND p.qual LIKE '%current_tenant_id()%'
+                              AND p.with_check LIKE '%current_tenant_id()%') AS has_tenant_policy
               FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE c.relkind IN ('r', 'p')
                AND NOT c.relispartition
                AND n.nspname = ANY (?)
-               AND EXISTS (SELECT 1 FROM information_schema.columns col
-                            WHERE col.table_schema = n.nspname AND col.table_name = c.relname
-                              AND col.column_name = 'tenant_id')
+               AND c.relname NOT LIKE 'flyway%'
             """;
 
     private static final String LEDGER_WRITE_GRANTS = """
@@ -39,6 +43,8 @@ public final class RlsCoverage {
                AND privilege_type IN ('UPDATE', 'DELETE', 'TRUNCATE')
                AND table_schema || '.' || table_name = ANY (?)
             """;
+
+    private static final String PLATFORM_SCHEMA = "platform.";
 
     private RlsCoverage() {}
 
@@ -52,14 +58,23 @@ public final class RlsCoverage {
                 try (ResultSet rows = statement.executeQuery()) {
                     while (rows.next()) {
                         String table = rows.getString("table_name");
-                        if (!rows.getBoolean("relrowsecurity")) {
+                        boolean secured = rows.getBoolean("relrowsecurity");
+                        if (!rows.getBoolean("has_tenant_column") && !secured) {
+                            // Shared infrastructure (outbox, inbox, locks) holds no tenant data; module tables must.
+                            if (!table.startsWith(PLATFORM_SCHEMA)) {
+                                violations.add(table + " has neither a tenant_id column nor row-level security");
+                            }
+                            continue;
+                        }
+                        if (!secured) {
                             violations.add(table + " has no row-level security");
                         }
                         if (!rows.getBoolean("relforcerowsecurity")) {
                             violations.add(table + " does not force row-level security");
                         }
-                        if (!rows.getBoolean("has_policy")) {
-                            violations.add(table + " has no policy");
+                        if (!rows.getBoolean("has_tenant_policy")) {
+                            violations.add(table + " has no policy comparing with platform.current_tenant_id() in"
+                                    + " both USING and WITH CHECK");
                         }
                     }
                 }

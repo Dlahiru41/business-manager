@@ -16,6 +16,7 @@ import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -38,6 +39,8 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
         this.createTenant = createTenant;
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
+        // Its own transaction: the tenant is fixed per transaction, so a lookup for another tenant must not join one.
+        this.readOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
 
     @Override

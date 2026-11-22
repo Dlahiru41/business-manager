@@ -116,13 +116,22 @@ class PersistenceInfrastructureIT {
             sql.execute("CREATE TABLE IF NOT EXISTS rls_probe.leaky (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)");
             sql.execute("GRANT USAGE ON SCHEMA rls_probe TO bmp_app");
             sql.execute("GRANT SELECT, UPDATE ON rls_probe.leaky TO bmp_app");
+            sql.execute(
+                    "CREATE TABLE IF NOT EXISTS rls_probe.permissive (id uuid PRIMARY KEY, tenant_id uuid NOT NULL)");
+            sql.execute("ALTER TABLE rls_probe.permissive ENABLE ROW LEVEL SECURITY");
+            sql.execute("ALTER TABLE rls_probe.permissive FORCE ROW LEVEL SECURITY");
+            sql.execute("CREATE POLICY anything ON rls_probe.permissive USING (true) WITH CHECK (true)");
+            sql.execute("CREATE TABLE IF NOT EXISTS rls_probe.untenanted (id uuid PRIMARY KEY)");
             try {
                 assertThat(RlsCoverage.violations(List.of("rls_probe"), List.of("rls_probe.leaky")))
                         .contains(
                                 "rls_probe.leaky has no row-level security",
                                 "rls_probe.leaky does not force row-level security",
-                                "rls_probe.leaky has no policy",
-                                "ledger grants bmp_app rls_probe.leaky:UPDATE");
+                                "rls_probe.leaky has no policy comparing with platform.current_tenant_id() in both USING and WITH CHECK",
+                                "ledger grants bmp_app rls_probe.leaky:UPDATE",
+                                "rls_probe.permissive has no policy comparing with platform.current_tenant_id() in both"
+                                        + " USING and WITH CHECK",
+                                "rls_probe.untenanted has neither a tenant_id column nor row-level security");
             } finally {
                 sql.execute("DROP SCHEMA rls_probe CASCADE");
             }

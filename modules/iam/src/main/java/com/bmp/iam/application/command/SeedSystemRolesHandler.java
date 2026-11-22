@@ -51,6 +51,10 @@ public class SeedSystemRolesHandler {
                 created++;
             }
         }
+        if (created == 0) {
+            log.debug("System roles already present tenantId={}", tenant);
+            return 0;
+        }
         permissions.evictAfterCommit(tenant);
         log.atInfo()
                 .addKeyValue("seededTenantId", tenant.toString())

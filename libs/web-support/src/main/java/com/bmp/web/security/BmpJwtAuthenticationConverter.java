@@ -28,13 +28,28 @@ public class BmpJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
     public static final String TENANT_CLAIM = "tenant_id";
     public static final String DEVICE_CLAIM = "device_id";
     public static final String ROLES_CLAIM = "roles";
+    public static final String CLIENT_CLAIM = "azp";
+
+    /** Client id prefix of device clients, {@code device-<deviceId>} (ADR-016). */
+    public static final String DEVICE_CLIENT_PREFIX = "device-";
+
+    private final Set<String> platformAdminClients;
+
+    /**
+     * @param platformAdminClients clients ({@code azp}) through which a platform administrator may sign in; empty
+     *     means no token is ever a platform administrator token
+     */
+    public BmpJwtAuthenticationConverter(Collection<String> platformAdminClients) {
+        this.platformAdminClients = Set.copyOf(platformAdminClients);
+    }
 
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
         UserId user = UserId.of(uuid(jwt.getSubject(), "sub"));
         String tenant = jwt.getClaimAsString(TENANT_CLAIM);
         String device = jwt.getClaimAsString(DEVICE_CLAIM);
-        Set<String> roles = roles(jwt);
+        String client = jwt.getClaimAsString(CLIENT_CLAIM);
+        Set<String> roles = isDeviceToken(device, client) ? deviceRoles(device, client) : userRoles(jwt, client);
         BmpPrincipal principal = new BmpPrincipal(
                 user,
                 tenant != null ? TenantId.of(uuid(tenant, TENANT_CLAIM)) : null,
@@ -46,15 +61,35 @@ public class BmpJwtAuthenticationConverter implements Converter<Jwt, AbstractAut
         return new BmpAuthentication(jwt, principal, authorities);
     }
 
-    private static Set<String> roles(Jwt jwt) {
+    private static boolean isDeviceToken(@Nullable String device, @Nullable String client) {
+        return device != null || (client != null && client.startsWith(DEVICE_CLIENT_PREFIX));
+    }
+
+    /** A device token comes from the device's own client and holds the device role, nothing else. */
+    private static Set<String> deviceRoles(@Nullable String device, @Nullable String client) {
+        if (device == null || !(DEVICE_CLIENT_PREFIX + device).equals(client)) {
+            throw new InvalidBearerTokenException("Device token does not match its client");
+        }
+        return Set.of(SystemRole.DEVICE.code());
+    }
+
+    /**
+     * Tenant roles come from the flat {@code roles} claim, never the device or platform role; the platform role comes
+     * only from Keycloak's {@code realm_access.roles} and only through an allowed client (ADR-016).
+     */
+    private Set<String> userRoles(Jwt jwt, @Nullable String client) {
         Set<String> roles = new LinkedHashSet<>();
         Collection<String> flat = jwt.getClaimAsStringList(ROLES_CLAIM);
         if (flat != null) {
-            roles.addAll(flat);
+            flat.stream()
+                    .filter(role ->
+                            !role.equals(SystemRole.PLATFORM_ADMIN.code()) && !role.equals(SystemRole.DEVICE.code()))
+                    .forEach(roles::add);
         }
-        // Realm roles only ever grant the platform role (ADR-016); Keycloak's built-in realm roles are ignored.
         Map<String, Object> realmAccess = jwt.getClaimAsMap("realm_access");
-        if (realmAccess != null
+        if (client != null
+                && platformAdminClients.contains(client)
+                && realmAccess != null
                 && realmAccess.get("roles") instanceof Collection<?> realmRoles
                 && realmRoles.contains(SystemRole.PLATFORM_ADMIN.code())) {
             roles.add(SystemRole.PLATFORM_ADMIN.code());

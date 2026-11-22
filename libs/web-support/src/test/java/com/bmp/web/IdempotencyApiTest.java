@@ -3,6 +3,9 @@ package com.bmp.web;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.bmp.shared.id.UserId;
+import com.bmp.shared.security.SystemRole;
+import com.bmp.test.security.JwtTestTokens;
 import com.bmp.web.idempotency.InMemoryIdempotencyStore;
 import com.bmp.web.idempotency.RequestHasher;
 import com.bmp.web.testapp.DummyController;
@@ -86,14 +89,22 @@ class IdempotencyApiTest {
     @Test
     void shouldRejectKeyStillInProgressWith409AndRetryAfter() {
         String key = UUID.randomUUID().toString();
-        String hash = new RequestHasher(jsonMapper).hash("POST", "/test/things", BODY.getBytes(StandardCharsets.UTF_8));
+        UserId caller = UserId.of(UUID.randomUUID());
+        String hash = new RequestHasher(jsonMapper)
+                .hash("POST", "/test/things", BODY.getBytes(StandardCharsets.UTF_8), caller.toString());
         store.claim(
                 WebSupportTestApplication.DEFAULT_TENANT,
                 key,
                 hash,
                 Instant.now().plusSeconds(60));
 
-        MvcTestResult result = create(key, BODY);
+        MvcTestResult result = mvc.post()
+                .uri("/test/things")
+                .header("Authorization", "Bearer " + token(caller, SystemRole.OWNER))
+                .header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY)
+                .exchange();
 
         assertThatProblem(result).hasStatus(409).hasCode("REQUEST_IN_PROGRESS");
         assertThat(result).hasHeader("Retry-After", "1");
@@ -171,5 +182,70 @@ class IdempotencyApiTest {
         assertThat(replay).bodyJson().extractingPath("$.id").isEqualTo(DummyController.THING_ID.toString());
         assertThat(store.storedBodies()).noneMatch(body -> body.contains("one-time"));
         assertThat(DummyController.CREATIONS).hasValue(1);
+    }
+
+    private static String token(UserId user, SystemRole role) {
+        return JwtTestTokens.builder()
+                .tenant(WebSupportTestApplication.DEFAULT_TENANT)
+                .user(user)
+                .roles(role.code())
+                .build();
+    }
+
+    private MvcTestResult securedWrite(String key, String token) {
+        return mvc.post()
+                .uri("/api/v1/test-secured/idempotent")
+                .header("Authorization", "Bearer " + token)
+                .header("Idempotency-Key", key)
+                .exchange();
+    }
+
+    @Test
+    void shouldNeverReplayAResponseToAnotherCaller() {
+        String key = UUID.randomUUID().toString();
+        String owner = token(UserId.of(UUID.randomUUID()), SystemRole.OWNER);
+        String cashier = token(UserId.of(UUID.randomUUID()), SystemRole.CASHIER);
+
+        assertThat(securedWrite(key, owner)).hasStatus(200);
+        MvcTestResult other = securedWrite(key, cashier);
+
+        assertThatProblem(other).hasStatus(422).hasCode("IDEMPOTENCY_KEY_REUSED");
+        assertThat(other).doesNotContainHeader("Idempotent-Replayed");
+    }
+
+    @Test
+    void shouldNotStoreRefusedRequests() {
+        String key = UUID.randomUUID().toString();
+        UserId cashierUser = UserId.of(UUID.randomUUID());
+        String cashier = token(cashierUser, SystemRole.CASHIER);
+
+        MvcTestResult first = securedWrite(key, cashier);
+        MvcTestResult again = securedWrite(key, cashier);
+        MvcTestResult allowedLater = securedWrite(key, token(cashierUser, SystemRole.OWNER));
+
+        assertThatProblem(first).hasStatus(403).hasCode("ACCESS_DENIED");
+        assertThatProblem(again).hasStatus(403);
+        assertThat(again).doesNotContainHeader("Idempotent-Replayed");
+        assertThat(allowedLater).as("the refusal was not stored").hasStatus(200);
+    }
+
+    @Test
+    void shouldTellQueryStringsApart() {
+        String key = UUID.randomUUID().toString();
+        mvc.post()
+                .uri("/test/things?variant=a")
+                .header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY)
+                .exchange();
+
+        MvcTestResult other = mvc.post()
+                .uri("/test/things?variant=b")
+                .header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(BODY)
+                .exchange();
+
+        assertThatProblem(other).hasStatus(422).hasCode("IDEMPOTENCY_KEY_REUSED");
     }
 }

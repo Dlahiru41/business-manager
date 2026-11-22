@@ -8,6 +8,7 @@ import com.bmp.shared.id.UserId;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,8 +49,26 @@ public class FakeIdentityProvider implements IdentityProviderGateway {
                         identity.email(),
                         identity.tenant().toString(),
                         identity.roleCodes(),
-                        true));
+                        false));
         return subject;
+    }
+
+    @Override
+    public void activateUser(UserId subject, boolean invite) {
+        failIfRequested("activate-user");
+        accounts.computeIfPresent(
+                subject, (id, a) -> new Account(a.username(), a.email(), a.tenant(), a.roles(), true));
+    }
+
+    @Override
+    public Optional<ExistingIdentity> findUser(String username) {
+        return accounts.entrySet().stream()
+                .filter(entry -> entry.getValue().username().equals(username))
+                .findFirst()
+                .map(entry -> new ExistingIdentity(
+                        entry.getKey(),
+                        entry.getValue().tenant(),
+                        entry.getValue().enabled()));
     }
 
     @Override

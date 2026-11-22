@@ -13,6 +13,7 @@ import com.bmp.tenant.domain.model.Location;
 import com.bmp.tenant.domain.model.LocationStatus;
 import com.bmp.tenant.domain.model.LocationType;
 import com.bmp.tenant.domain.port.LocationRepository;
+import com.bmp.tenant.domain.port.TenantRepository;
 import io.micrometer.observation.annotation.Observed;
 import java.util.Map;
 import java.util.UUID;
@@ -26,13 +27,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class LocationHandlers {
 
     private final LocationRepository locations;
+    private final TenantRepository tenants;
     private final ApplicationEventPublisher events;
     private final EventStampSource stamps;
     private final IdGenerator ids;
 
     public LocationHandlers(
-            LocationRepository locations, ApplicationEventPublisher events, EventStampSource stamps, IdGenerator ids) {
+            LocationRepository locations,
+            TenantRepository tenants,
+            ApplicationEventPublisher events,
+            EventStampSource stamps,
+            IdGenerator ids) {
         this.locations = locations;
+        this.tenants = tenants;
         this.events = events;
         this.stamps = stamps;
         this.ids = ids;
@@ -100,7 +107,9 @@ public class LocationHandlers {
 
     private void applyStatus(Location location, @Nullable LocationStatus status) {
         if (status == LocationStatus.INACTIVE && location.isActive()) {
-            // Rule TEN-01: a tenant has at least one (active) location.
+            // Rule TEN-01: a tenant has at least one (active) location. The tenant row lock serializes concurrent
+            // deactivations, which could otherwise each see the other location still active.
+            tenants.lockById(TenantContext.require().value());
             if (locations.countByStatus(LocationStatus.ACTIVE) <= 1) {
                 throw new BusinessRuleViolation(
                         TenantErrorCode.LAST_ACTIVE_LOCATION, Map.of("locationId", location.id()));

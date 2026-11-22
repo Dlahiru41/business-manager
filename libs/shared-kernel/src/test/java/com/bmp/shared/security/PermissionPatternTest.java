@@ -58,4 +58,23 @@ class PermissionPatternTest {
                 .isEqualTo(expected);
         assertThat(role.isTenantRole()).isEqualTo(role != SystemRole.PLATFORM_ADMIN);
     }
+
+    @ParameterizedTest
+    @CsvSource(
+            delimiter = '|',
+            value = {
+                "*                        | *             | true",
+                "sales:*                  | *             | false",
+                "*                        | sales:*       | true",
+                "sales:*                  | sales:*       | true",
+                "sales:create,sales:void  | sales:*       | false",
+                "*                        | platform:*    | false",
+                "sales:*                  | sales:void    | true",
+                "catalog:read             | sales:void    | false",
+                "*                        | platform:tenants | false"
+            })
+    void shouldTellWhetherHeldGrantsCoverAGrant(String held, String grant, boolean expected) {
+        assertThat(PermissionPattern.coveredBy(List.of(held.split(",", -1)), grant))
+                .isEqualTo(expected);
+    }
 }

@@ -6,6 +6,7 @@ import com.bmp.shared.id.UserId;
 import com.bmp.shared.security.Sensitive;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import org.jspecify.annotations.Nullable;
 
 /**
@@ -17,12 +18,19 @@ import org.jspecify.annotations.Nullable;
 public interface IdentityProviderGateway {
 
     /**
-     * Creates an enabled account that must set its password on first sign-in (an e-mail is sent when an address is
-     * given). Throws {@code USERNAME_TAKEN} when the username exists.
+     * Creates a <em>disabled</em> account that must set its password on first sign-in; {@link #activateUser} enables
+     * it once the profile is stored, so a failure in between never leaves a usable account without a profile. Throws
+     * {@code USERNAME_TAKEN} when the username exists.
      *
      * @return the account's subject, which becomes the user id
      */
     UserId createUser(NewIdentity identity);
+
+    /** Enables an account created by {@link #createUser} and, if asked, sends the "set your password" e-mail. */
+    void activateUser(UserId subject, boolean invite);
+
+    /** The account with exactly this username, if any. */
+    Optional<ExistingIdentity> findUser(String username);
 
     /** Removes an account created by {@link #createUser}; used only to compensate a failed local transaction. */
     void deleteUser(UserId subject);
@@ -80,6 +88,18 @@ public interface IdentityProviderGateway {
             Objects.requireNonNull(device, "device");
             Objects.requireNonNull(clientId, "clientId");
             Objects.requireNonNull(name, "name");
+        }
+    }
+
+    /**
+     * An account found by username.
+     *
+     * @param tenant value of its {@code tenant_id} attribute, if set
+     */
+    record ExistingIdentity(UserId subject, @Nullable String tenant, boolean enabled) {
+
+        public ExistingIdentity {
+            Objects.requireNonNull(subject, "subject");
         }
     }
 

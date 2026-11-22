@@ -97,38 +97,74 @@ class KeycloakIdentityProviderTest {
     }
 
     @Test
-    void createsAUserWithTenantAndRolesAndSendsTheInvitation() {
+    void createsADisabledUserWithTenantAndRolesThenActivatesAndInvites() {
         expectToken();
         server.expect(requestTo(ADMIN + "/users"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Authorization", "Bearer admin-token"))
                 .andExpect(jsonPath("$.username").value("nimal"))
+                .andExpect(jsonPath("$.enabled").value(false))
                 .andExpect(jsonPath("$.attributes.tenant_id[0]").value(TENANT.toString()))
                 .andExpect(jsonPath("$.attributes.bmp_roles[0]").value("CASHIER"))
                 .andExpect(jsonPath("$.requiredActions[0]").value("UPDATE_PASSWORD"))
                 .andExpect(jsonPath("$.credentials").doesNotExist())
                 .andRespond(withCreatedEntity(URI.create(ADMIN + "/users/" + SUBJECT)));
+        server.expect(requestTo(ADMIN + "/users/" + SUBJECT))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(
+                        withSuccess("{\"id\": \"" + SUBJECT + "\", \"enabled\": false}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ADMIN + "/users/" + SUBJECT))
+                .andExpect(method(HttpMethod.PUT))
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andRespond(withStatus(HttpStatus.NO_CONTENT));
         server.expect(requestTo(ADMIN + "/users/" + SUBJECT + "/execute-actions-email?lifespan=86400"))
                 .andExpect(method(HttpMethod.PUT))
                 .andRespond(withStatus(HttpStatus.NO_CONTENT));
 
         UserId created =
                 gateway.createUser(new NewIdentity("nimal", "nimal@example.lk", "Nimal", TENANT, List.of("CASHIER")));
+        gateway.activateUser(created, true);
 
         assertThat(created).isEqualTo(SUBJECT);
         server.verify();
     }
 
     @Test
-    void aFailedInvitationDoesNotFailTheCreation() {
+    void aFailedInvitationDoesNotFailTheActivation() {
         expectToken();
-        server.expect(requestTo(ADMIN + "/users"))
-                .andRespond(withCreatedEntity(URI.create(ADMIN + "/users/" + SUBJECT)));
+        server.expect(requestTo(ADMIN + "/users/" + SUBJECT))
+                .andRespond(
+                        withSuccess("{\"id\": \"" + SUBJECT + "\", \"enabled\": false}", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ADMIN + "/users/" + SUBJECT)).andRespond(withStatus(HttpStatus.NO_CONTENT));
         server.expect(requestTo(ADMIN + "/users/" + SUBJECT + "/execute-actions-email?lifespan=86400"))
                 .andRespond(withStatus(HttpStatus.BAD_REQUEST));
 
-        assertThat(gateway.createUser(new NewIdentity("nimal", "n@example.lk", "N", TENANT, List.of())))
-                .isEqualTo(SUBJECT);
+        gateway.activateUser(SUBJECT, true);
+        server.verify();
+    }
+
+    @Test
+    void findsAUserByExactUsername() {
+        expectToken();
+        server.expect(requestTo(ADMIN + "/users?username=nimal&exact=true"))
+                .andRespond(withSuccess(
+                        "[{\"id\": \"" + SUBJECT + "\", \"enabled\": true, \"attributes\": {\"tenant_id\": [\"" + TENANT
+                                + "\"]}}]",
+                        MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ADMIN + "/users?username=ghost&exact=true"))
+                .andRespond(withSuccess("[]", MediaType.APPLICATION_JSON));
+        server.expect(requestTo(ADMIN + "/users?username=bare&exact=true"))
+                .andRespond(withSuccess("[{\"id\": \"" + SUBJECT + "\"}]", MediaType.APPLICATION_JSON));
+
+        assertThat(gateway.findUser("nimal")).hasValueSatisfying(found -> {
+            assertThat(found.subject()).isEqualTo(SUBJECT);
+            assertThat(found.tenant()).isEqualTo(TENANT.toString());
+            assertThat(found.enabled()).isTrue();
+        });
+        assertThat(gateway.findUser("ghost")).isEmpty();
+        assertThat(gateway.findUser("bare"))
+                .hasValueSatisfying(found -> assertThat(found.tenant()).isNull());
+        server.verify();
     }
 
     @Test
@@ -268,13 +304,16 @@ class KeycloakIdentityProviderTest {
     }
 
     @Test
-    void rejectsUnexpectedClientErrorsAndAnOpenCircuit() {
+    void separatesRejectedDataMisconfigurationAndAnOpenCircuit() {
         expectToken();
+        server.expect(requestTo(ADMIN + "/users")).andRespond(withStatus(HttpStatus.BAD_REQUEST));
         server.expect(requestTo(ADMIN + "/users/" + SUBJECT)).andRespond(withStatus(HttpStatus.FORBIDDEN));
 
+        assertThatThrownBy(() -> gateway.createUser(new NewIdentity("x", null, "X", TENANT, List.of())))
+                .satisfies(e -> assertThat(code(e)).isEqualTo("IDENTITY_PROVIDER_REJECTED"));
         assertThatThrownBy(() -> gateway.setEnabled(SUBJECT, true))
                 .isInstanceOf(IntegrationException.class)
-                .satisfies(e -> assertThat(code(e)).isEqualTo("IDENTITY_PROVIDER_UNAVAILABLE"));
+                .satisfies(e -> assertThat(code(e)).isEqualTo("IDENTITY_PROVIDER_MISCONFIGURED"));
 
         breaker.transitionToOpenState();
         assertThatThrownBy(() -> gateway.deleteUser(SUBJECT))

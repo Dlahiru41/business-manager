@@ -31,10 +31,12 @@ public class UpdateRoleHandler {
 
     private final RoleRepository roles;
     private final RolePermissionResolver permissions;
+    private final GrantCeiling ceiling;
 
-    public UpdateRoleHandler(RoleRepository roles, RolePermissionResolver permissions) {
+    public UpdateRoleHandler(RoleRepository roles, RolePermissionResolver permissions, GrantCeiling ceiling) {
         this.roles = roles;
         this.permissions = permissions;
+        this.ceiling = ceiling;
     }
 
     /**
@@ -57,6 +59,9 @@ public class UpdateRoleHandler {
         if (role.version() != command.expectedVersion()) {
             throw new VersionConflict(role.version());
         }
+        // A role more powerful than the caller stays out of their reach, and so do the grants they would add
+        // (checked after the domain has validated them, so malformed grants stay 422).
+        ceiling.requireCovered(role.permissions());
         String name = command.name();
         if (name != null) {
             role.rename(name);
@@ -64,6 +69,7 @@ public class UpdateRoleHandler {
         Set<String> grants = command.permissions();
         if (grants != null) {
             role.changePermissions(grants);
+            ceiling.requireCovered(grants);
         }
         RoleStatus status = command.status();
         if (status == RoleStatus.INACTIVE && role.isActive()) {

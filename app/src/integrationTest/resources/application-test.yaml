@@ -6,6 +6,10 @@ management:
     sampling:
       probability: 1.0
 bmp:
+  persistence:
+    migrate-on-startup: true
+  security:
+    platform-admin-clients: bmp-dev-cli
   iam:
     keycloak:
       # Never called by these tests; the real adapter is covered by the iam module's KeycloakIdentityProviderIT.

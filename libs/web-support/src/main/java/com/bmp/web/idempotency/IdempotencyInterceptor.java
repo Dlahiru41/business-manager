@@ -5,6 +5,7 @@ import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.error.PlatformErrorCode;
 import com.bmp.shared.id.TenantId;
 import com.bmp.web.request.RequestAttributes;
+import com.bmp.web.security.AccessPolicy;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -71,6 +72,10 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
                 .register(meters);
     }
 
+    private static final int SERVER_ERROR = 500;
+    private static final int UNAUTHORIZED = 401;
+    private static final int FORBIDDEN = 403;
+
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler)
             throws IOException {
@@ -81,7 +86,12 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
         }
         String key = requireKey(request.getHeader(HEADER));
         TenantId scope = TenantContext.current().orElse(PLATFORM_SCOPE);
-        String hash = hasher.hash(request.getMethod(), request.getRequestURI(), body(request));
+        String query = request.getQueryString();
+        String target = query != null ? request.getRequestURI() + "?" + query : request.getRequestURI();
+        String caller = AccessPolicy.currentPrincipal()
+                .map(principal -> principal.userId().toString())
+                .orElse("");
+        String hash = hasher.hash(request.getMethod(), target, body(request), caller);
         Instant now = clock.instant();
         return switch (store.begin(scope, key, hash, now, now.plus(ttl))) {
             case IdempotencyStore.Started _ -> {
@@ -106,7 +116,8 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
             return;
         }
         int status = response.getStatus();
-        if (status >= 500) {
+        // Server errors may succeed on retry; refused requests (401/403) are not results to replay either.
+        if (status >= SERVER_ERROR || status == UNAUTHORIZED || status == FORBIDDEN) {
             store.release(claim.scope(), claim.key());
             return;
         }

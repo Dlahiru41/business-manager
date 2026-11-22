@@ -144,13 +144,17 @@ class SecurityApiTest {
         String token = JwtTestTokens.builder()
                 .tenant(tenant)
                 .device(device)
-                .roles("CASHIER")
+                .roles("DEVICE", "CASHIER")
                 .build();
-        assertThat(get(PATH + "/sales", token)).hasStatusOk();
+        assertThat(get(PATH + "/sync", token)).hasStatusOk();
+        assertThatProblem(get(PATH + "/sales", token))
+                .as("a device holds the DEVICE role only, whatever its token claims")
+                .hasStatus(403)
+                .hasCode("ACCESS_DENIED");
 
         devices.revoke(device);
 
-        assertThatProblem(get(PATH + "/sales", token)).hasStatus(403).hasCode("DEVICE_REVOKED");
+        assertThatProblem(get(PATH + "/sync", token)).hasStatus(403).hasCode("DEVICE_REVOKED");
     }
 
     @Test

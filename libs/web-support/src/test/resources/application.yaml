@@ -11,3 +11,4 @@ bmp:
     max-request-bytes: 4096
   security:
     issuer-uri: https://issuer.test.bmp/realms/bmp
+    platform-admin-clients: bmp-dev-cli

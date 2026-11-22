@@ -22,6 +22,7 @@ import io.micrometer.observation.annotation.Observed;
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Currency;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -161,13 +162,30 @@ public class CreateTenantHandler {
         return new Tenant.Regional(currency, zone, hour);
     }
 
+    /**
+     * Money rounds to two decimals (RoundingPolicy) until rounding follows each currency's minor units; until then a
+     * currency with another number of decimals (JPY, KWD, ...) is refused rather than rounded wrongly.
+     */
+    static final FieldError TWO_DECIMALS_ONLY =
+            new FieldError("currency", "UNSUPPORTED_CURRENCY", "only currencies with two decimals are supported");
+
+    static boolean hasTwoDecimals(CurrencyCode currency) {
+        return Currency.getInstance(currency.code()).getDefaultFractionDigits() == 2;
+    }
+
     private static @Nullable CurrencyCode currency(@Nullable String code, List<FieldError> errors) {
+        CurrencyCode currency;
         try {
-            return CurrencyCode.of(code != null ? code : DEFAULT_CURRENCY);
+            currency = CurrencyCode.of(code != null ? code : DEFAULT_CURRENCY);
         } catch (IllegalArgumentException e) {
             errors.add(new FieldError("currency", "UNKNOWN_CURRENCY", "is not an ISO 4217 currency"));
             return null;
         }
+        if (!hasTwoDecimals(currency)) {
+            errors.add(TWO_DECIMALS_ONLY);
+            return null;
+        }
+        return currency;
     }
 
     private static @Nullable ZoneId zone(@Nullable String id, List<FieldError> errors) {

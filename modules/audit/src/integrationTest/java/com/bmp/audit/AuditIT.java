@@ -20,6 +20,7 @@ import com.bmp.test.persistence.BmpPostgres;
 import com.bmp.test.persistence.RlsCoverage;
 import com.bmp.test.persistence.WithPostgres;
 import com.bmp.test.security.JwtTestTokens;
+import com.bmp.test.web.ContractSecurity;
 import com.bmp.test.web.OpenApiValidation;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -37,6 +38,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
@@ -68,6 +70,9 @@ class AuditIT {
 
     @Autowired
     PlatformTransactionManager transactionManager;
+
+    @Autowired
+    ApplicationContext context;
 
     private TenantId tenant;
     private UserId owner;
@@ -162,6 +167,18 @@ class AuditIT {
 
         JsonNode item = records("", ownerToken).get(0);
         assertThat(item.path("platformAdmin").asBoolean()).isTrue();
+
+        UUID thing = UUID.randomUUID();
+        assertThat(mvc.get()
+                        .uri("/api/v1/things/" + thing)
+                        .header("Authorization", "Bearer " + admin)
+                        .header("X-Tenant-Id", tenant.toString()))
+                .hasStatus(200);
+        JsonNode read = records("?resourceId=" + thing, ownerToken).get(0);
+        assertThat(read.path("action").asString()).isEqualTo("GET /api/v1/things/{thingId}");
+        assertThat(read.path("platformAdmin").asBoolean())
+                .as("reads for a tenant are audited (08 §2)")
+                .isTrue();
     }
 
     @Test
@@ -265,5 +282,12 @@ class AuditIT {
         assertThat(Objects.requireNonNull(TenantContext.callWith(tenant, audit::verify))
                         .checked())
                 .isZero();
+    }
+
+    @Test
+    void everyOperationIsProtectedAsTheContractSays() {
+        String nobody = JwtTestTokens.builder().tenant(tenant).roles("NOBODY").build();
+
+        ContractSecurity.assertEveryOperationIsProtected("audit", mvc, context, nobody);
     }
 }

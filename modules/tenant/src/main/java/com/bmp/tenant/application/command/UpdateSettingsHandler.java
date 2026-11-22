@@ -1,7 +1,6 @@
 package com.bmp.tenant.application.command;
 
 import com.bmp.shared.context.TenantContext;
-import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.error.FieldError;
 import com.bmp.shared.error.NotFoundException;
 import com.bmp.shared.error.ValidationFailure;
@@ -21,6 +20,7 @@ import com.bmp.tenant.domain.model.Tenant;
 import com.bmp.tenant.domain.port.LocationRepository;
 import com.bmp.tenant.domain.port.SettingStore;
 import com.bmp.tenant.domain.port.TenantRepository;
+import com.bmp.tenant.domain.service.RegionalLock;
 import com.bmp.web.security.AccessPolicy;
 import io.micrometer.observation.annotation.Observed;
 import java.time.DateTimeException;
@@ -167,7 +167,10 @@ public class UpdateSettingsHandler {
         List<FieldError> errors = new ArrayList<>();
         if (group == SettingGroup.GENERAL) {
             try {
-                CurrencyCode.of(document.get("currency").asString());
+                if (!CreateTenantHandler.hasTwoDecimals(
+                        CurrencyCode.of(document.get("currency").asString()))) {
+                    errors.add(CreateTenantHandler.TWO_DECIMALS_ONLY);
+                }
             } catch (IllegalArgumentException e) {
                 errors.add(new FieldError("currency", "UNKNOWN_CURRENCY", "is not an ISO 4217 currency"));
             }
@@ -191,11 +194,8 @@ public class UpdateSettingsHandler {
             return;
         }
         for (String key : changed) {
-            // Rule TEN-02: currency and time zone cannot change once any business document exists.
-            if (LOCKED_GENERAL_KEYS.contains(key)
-                    && activity.hasBusinessDocuments(tenant)
-                    && !access.isGranted(PLATFORM_PERMISSION)) {
-                throw new BusinessRuleViolation(TenantErrorCode.SETTING_LOCKED, Map.of("key", key));
+            if (LOCKED_GENERAL_KEYS.contains(key)) {
+                RegionalLock.check(key, activity.evidenceOf(tenant), access.isGranted(PLATFORM_PERMISSION));
             }
         }
     }

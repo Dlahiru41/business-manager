@@ -1,6 +1,7 @@
 bmp:
   security:
     issuer-uri: https://issuer.test.bmp/realms/bmp
+    platform-admin-clients: bmp-dev-cli
   iam:
     keycloak:
       # Never called in these tests: FakeIdentityProvider replaces the gateway (KeycloakIdentityProviderIT uses a real one).

@@ -6,6 +6,7 @@ import com.bmp.shared.event.EventMetadata;
 import com.bmp.shared.event.EventStamp;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.money.CurrencyCode;
+import com.bmp.tenant.api.spi.ActivityEvidence;
 import com.bmp.tenant.api.spi.BusinessActivityProbe;
 import com.bmp.tenant.domain.model.Tenant;
 import com.bmp.tenant.domain.port.TenantRepository;
@@ -28,6 +29,11 @@ class ActivityProbeTest {
         @Override
         public Optional<Tenant> findById(UUID id) {
             return Optional.ofNullable(stored.get(id));
+        }
+
+        @Override
+        public Optional<Tenant> lockById(UUID id) {
+            return findById(id);
         }
 
         @Override
@@ -59,12 +65,12 @@ class ActivityProbeTest {
         TenantAgeActivityProbe probe = new TenantAgeActivityProbe(tenants, clock);
         Tenant tenant = storedTenant();
 
-        assertThat(probe.hasBusinessDocuments(tenant.id())).isFalse();
+        assertThat(probe.evidenceOf(tenant.id())).isEqualTo(ActivityEvidence.NONE);
         clock.advance(Duration.ofHours(25));
-        assertThat(probe.hasBusinessDocuments(tenant.id())).isTrue();
-        assertThat(probe.hasBusinessDocuments(TenantId.of(UUID.randomUUID())))
+        assertThat(probe.evidenceOf(tenant.id())).isEqualTo(ActivityEvidence.ASSUMED);
+        assertThat(probe.evidenceOf(TenantId.of(UUID.randomUUID())))
                 .as("unknown tenants are treated conservatively")
-                .isTrue();
+                .isEqualTo(ActivityEvidence.ASSUMED);
     }
 
     @Test
@@ -72,16 +78,16 @@ class ActivityProbeTest {
         @Order(1)
         class SalesProbe implements BusinessActivityProbe {
             @Override
-            public boolean hasBusinessDocuments(TenantId tenant) {
-                return false;
+            public ActivityEvidence evidenceOf(TenantId tenant) {
+                return ActivityEvidence.CONFIRMED;
             }
         }
         TenantAgeActivityProbe fallback = new TenantAgeActivityProbe(tenants, clock);
 
         BusinessActivityProbes probes = new BusinessActivityProbes(List.of(fallback, new SalesProbe()));
 
-        assertThat(probes.hasBusinessDocuments(TenantId.of(UUID.randomUUID()))).isFalse();
-        assertThat(new BusinessActivityProbes(List.of(fallback)).hasBusinessDocuments(TenantId.of(UUID.randomUUID())))
-                .isTrue();
+        assertThat(probes.evidenceOf(TenantId.of(UUID.randomUUID()))).isEqualTo(ActivityEvidence.CONFIRMED);
+        assertThat(new BusinessActivityProbes(List.of(fallback)).evidenceOf(TenantId.of(UUID.randomUUID())))
+                .isEqualTo(ActivityEvidence.ASSUMED);
     }
 }
