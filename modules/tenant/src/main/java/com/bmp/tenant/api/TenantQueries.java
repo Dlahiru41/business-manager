@@ -13,4 +13,10 @@ public interface TenantQueries {
 
     /** Whether the location exists and is active in the current tenant. */
     boolean isActiveLocation(LocationId location);
+
+    /**
+     * The effective value of a business setting of the current tenant (its default when never set), as JSON text,
+     * e.g. {@code true} or {@code "LKR"}; empty for an unknown group or key.
+     */
+    Optional<String> setting(String group, String key);
 }

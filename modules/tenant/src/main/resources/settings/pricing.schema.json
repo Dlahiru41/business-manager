@@ -15,6 +15,11 @@
     "cashierCanOverridePrice": {
       "type": "boolean",
       "default": false
+    },
+    "priceChangesRequireOwner": {
+      "description": "PRC-08: only owners may change price lists, prices and price rules.",
+      "type": "boolean",
+      "default": false
     }
   }
 }
