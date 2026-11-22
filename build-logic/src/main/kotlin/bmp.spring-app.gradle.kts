@@ -10,7 +10,7 @@ plugins {
 
 tasks.named<BootBuildImage>("bootBuildImage") {
     imageName.set("bmp/${project.name}:${project.version}")
-    environment.put("BP_JVM_VERSION", the<JavaPluginExtension>().toolchain.languageVersion.get().toString())
+    environment.put("BP_JVM_VERSION", project.extensions.getByType<JavaPluginExtension>().toolchain.languageVersion.get().toString())
     // Used with --publishImage in CI (main only); credentials come from the environment, never from the build.
     docker {
         publishRegistry {
