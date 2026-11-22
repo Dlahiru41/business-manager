@@ -4,6 +4,7 @@ import com.bmp.catalog.application.query.CategoryView;
 import com.bmp.catalog.domain.error.CatalogErrorCode;
 import com.bmp.catalog.domain.model.CatalogStatus;
 import com.bmp.catalog.domain.model.Category;
+import com.bmp.catalog.domain.port.CatalogRevisions;
 import com.bmp.catalog.domain.port.CategoryRepository;
 import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.error.BusinessRuleViolation;
@@ -23,11 +24,14 @@ public class CategoryHandlers {
     private final CategoryRepository categories;
     private final CatalogLoader loader;
     private final IdGenerator ids;
+    private final CatalogRevisions revisions;
 
-    public CategoryHandlers(CategoryRepository categories, CatalogLoader loader, IdGenerator ids) {
+    public CategoryHandlers(
+            CategoryRepository categories, CatalogLoader loader, IdGenerator ids, CatalogRevisions revisions) {
         this.categories = categories;
         this.loader = loader;
         this.ids = ids;
+        this.revisions = revisions;
     }
 
     /** PATCH semantics: {@code null} fields stay; {@code moveToRoot} moves the category to the top level. */
@@ -49,6 +53,10 @@ public class CategoryHandlers {
     @Transactional
     @Observed(name = "bmp.catalog.update-category")
     public CategoryView update(UpdateCategory command) {
+        if (command.parentId() != null || command.moveToRoot()) {
+            // The tenant's catalog revision row lock serialises moves, so no two moves check cycles on stale paths.
+            revisions.next();
+        }
         Category category = loader.category(command.categoryId());
         IfMatch.check(command.expectedVersion(), category.version());
         if (command.name() != null) {

@@ -33,6 +33,10 @@ public record LineDraft(
         Objects.requireNonNull(qtyBase, "qtyBase");
     }
 
+    LineDraft withQtyBase(BigDecimal newQtyBase) {
+        return new LineDraft(direction, variantId, stockState, newQtyBase, packagingUnitId, qty, costSharePct);
+    }
+
     LineDraft withCostShare(BigDecimal share) {
         return new LineDraft(direction, variantId, stockState, qtyBase, packagingUnitId, qty, share);
     }

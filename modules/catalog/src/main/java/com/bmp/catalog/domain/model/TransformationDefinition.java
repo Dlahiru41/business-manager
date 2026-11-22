@@ -268,13 +268,13 @@ public class TransformationDefinition implements Auditable {
         List<LineDraft> valid = new ArrayList<>();
         BigDecimal shares = BigDecimal.ZERO;
         for (LineDraft draft : drafts) {
-            Variant.normalizedQty(draft.qtyBase(), draft.direction() + " " + draft.variantId());
-            LineDraft line = draft;
+            LineDraft line = draft.withQtyBase(
+                    Variant.normalizedQty(draft.qtyBase(), draft.direction() + " " + draft.variantId()));
             if (draft.direction() == Direction.OUT) {
                 BigDecimal share = draft.costSharePct();
                 if (share == null && outs.size() == 1) {
                     share = HUNDRED;
-                    line = draft.withCostShare(HUNDRED);
+                    line = line.withCostShare(HUNDRED);
                 }
                 if (share == null || share.signum() < 0) {
                     throw costShareInvalid(shares);

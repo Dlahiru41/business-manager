@@ -126,6 +126,27 @@ class VariantTest {
     }
 
     @Test
+    void cat07AReactivatedUnitMustDrawFromOneOfTheCurrentStates() {
+        Variant oil = oil();
+        UUID bottle = oil.packagingUnits().stream()
+                .filter(u -> u.code().equals("bottle-750"))
+                .findFirst()
+                .orElseThrow()
+                .id();
+        oil.changeStockStates(List.of(StockStates.SEALED, StockStates.OPEN, "RESERVED"));
+        oil.changePackagingUnit(bottle, new PackagingUnitChange(null, null, null, "RESERVED", null, null, null, null));
+        oil.changePackagingUnit(
+                bottle, new PackagingUnitChange(null, null, null, null, null, null, false, CatalogStatus.INACTIVE));
+        oil.changeStockStates(List.of(StockStates.SEALED, StockStates.OPEN));
+
+        assertCode(
+                () -> oil.changePackagingUnit(
+                        bottle,
+                        new PackagingUnitChange(null, null, null, null, null, null, null, CatalogStatus.ACTIVE)),
+                CatalogErrorCode.INVALID_STOCK_STATE);
+    }
+
+    @Test
     void cat08SellableAndPurchasableNeedAnActiveUnitThatAllowsIt() {
         Variant oil = oil();
         assertThat(oil.isSellable()).isTrue();

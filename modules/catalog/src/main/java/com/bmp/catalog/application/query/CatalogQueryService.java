@@ -88,7 +88,12 @@ public class CatalogQueryService {
 
     @Transactional(readOnly = true)
     public PageResponse<UnitView> units(@Nullable Dimension dimension, PageQuery query) {
-        List<UnitView> page = units.findPage(dimension, after(query), query.fetchSize()).stream()
+        PageKey after = after(query);
+        if (after != null && !after.sortKey().matches("[01]:.+")) {
+            throw new BusinessRuleViolation(
+                    PlatformErrorCode.INVALID_PARAMETER, "The cursor is invalid", Map.of("parameter", "cursor"));
+        }
+        List<UnitView> page = units.findPage(dimension, after, query.fetchSize()).stream()
                 .map(UnitView::of)
                 .toList();
         return PageResponse.of(page, query, u -> List.of(unitKey(u), u.id().toString()));

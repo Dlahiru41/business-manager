@@ -8,13 +8,18 @@ import com.bmp.catalog.domain.model.CatalogStatus;
 import com.bmp.catalog.domain.model.DefinedQuantity;
 import com.bmp.catalog.domain.model.PackagingUnit;
 import com.bmp.catalog.domain.model.PackagingUnitChange;
+import com.bmp.catalog.domain.model.PackagingUnitDraft;
 import com.bmp.catalog.domain.model.Product;
 import com.bmp.catalog.domain.model.Variant;
 import com.bmp.catalog.domain.port.CatalogRevisions;
 import com.bmp.catalog.domain.port.VariantRepository;
+import com.bmp.catalog.domain.service.ProductTemplateApplier;
+import com.bmp.shared.id.IdGenerator;
 import com.bmp.web.etag.IfMatch;
 import io.micrometer.observation.annotation.Observed;
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -36,6 +41,7 @@ public class PackagingUnitHandlers {
     private final DefinitionPublisher definitions;
     private final CatalogViews views;
     private final CatalogEvents events;
+    private final IdGenerator ids;
 
     public PackagingUnitHandlers(
             CatalogLoader loader,
@@ -44,7 +50,8 @@ public class PackagingUnitHandlers {
             VariantShapes shapes,
             DefinitionPublisher definitions,
             CatalogViews views,
-            CatalogEvents events) {
+            CatalogEvents events,
+            IdGenerator ids) {
         this.loader = loader;
         this.variants = variants;
         this.revisions = revisions;
@@ -52,6 +59,7 @@ public class PackagingUnitHandlers {
         this.definitions = definitions;
         this.views = views;
         this.events = events;
+        this.ids = ids;
     }
 
     /** A packaging unit with the version of its variant (the ETag of packaging unit resources). */
@@ -74,9 +82,18 @@ public class PackagingUnitHandlers {
         Variant variant = loader.variant(variantId);
         Product product = loader.product(variant.productId().value());
         UnitDirectory directory = views.directory();
-        PackagingUnit unit =
-                variant.addPackagingUnit(shapes.drafts(product, directory).other(spec), UUID.randomUUID());
-        return saved(variant, product, unit.id(), directory);
+        PackagingUnitDraft draft = shapes.drafts(product, directory).other(spec);
+        if (spec.stockState() == null && !variant.stockStates().contains(draft.stockState())) {
+            // Rule CAT-09: a template state (an own packet's PACKED_<CODE>) comes with the unit that implies it.
+            List<String> states = new ArrayList<>(variant.stockStates());
+            states.add(draft.stockState());
+            variant.changeStockStates(states);
+        }
+        PackagingUnit unit = variant.addPackagingUnit(draft, ids.newUuid());
+        UnitResult result = saved(variant, product, unit.id(), directory);
+        definitions.createImpliedFor(
+                ProductTemplateApplier.strategy(product.template()), loader.variant(variantId), unit.id());
+        return result;
     }
 
     @Transactional

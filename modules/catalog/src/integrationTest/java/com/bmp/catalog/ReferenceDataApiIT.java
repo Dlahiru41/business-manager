@@ -7,6 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.bmp.shared.security.SystemRole;
 import com.bmp.test.persistence.WithPostgres;
+import com.bmp.web.pagination.CursorCodec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -84,6 +85,15 @@ class ReferenceDataApiIT {
                 .hasCode("ACCESS_DENIED");
         assertThat(api.client.get("/api/v1/units", api.token(SystemRole.CASHIER)))
                 .hasStatusOk();
+    }
+
+    @Test
+    void aCursorOfAnotherListIsRefusedOnUnits() {
+        String foreign = CursorCodec.encode(List.of("EGG", UUID.randomUUID().toString()));
+
+        assertThatProblem(api.get("/api/v1/units?cursor=" + foreign))
+                .hasStatus(400)
+                .hasCode("INVALID_PARAMETER");
     }
 
     @Test

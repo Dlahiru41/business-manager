@@ -105,6 +105,35 @@ class VariantApiIT {
     }
 
     @Test
+    void cat09AnOwnPacketAddedLaterGetsItsStateAndItsRepackDefinition() {
+        JsonNode karola = api.create("""
+                {"code": "KAROLA2", "name": "Karola", "template": "LOOSE_REPACK", "baseUnit": "g",
+                 "packagingUnits": [
+                   {"code": "kg", "name": "Kilogram", "definedAs": {"value": "1", "unit": "kg"}, "canBuy": true, "canSell": true}]}
+                """);
+        JsonNode variant = karola.path("variants").get(0);
+        String units = "/api/v1/variants/" + variant.path("id").asString() + "/packaging-units";
+
+        MvcTestResult added = api.post(
+                units,
+                "{\"code\": \"packet-100\", \"name\": \"Packet 100 g\", \"qtyInBase\": \"100\", \"canSell\": true}");
+
+        assertThat(added).hasStatus(201);
+        assertThat(json(added).path("stockState").asString()).isEqualTo("PACKED_PACKET_100");
+        assertThat(json(added).path("id").asString().charAt(14)).as("a UUIDv7").isEqualTo('7');
+        assertThat(json(api.get("/api/v1/variants:lookup?sku=KAROLA2"))
+                        .path("variant")
+                        .path("stockStates")
+                        .toString())
+                .contains("PACKED_PACKET_100");
+        assertThat(json(api.get("/api/v1/transformation-definitions?kind=REPACK&variantId="
+                                + variant.path("id").asString()))
+                        .path("items"))
+                .singleElement()
+                .satisfies(d -> assertThat(d.path("status").asString()).isEqualTo("PUBLISHED"));
+    }
+
+    @Test
     void cat05NewlyExcludedCombinationsAreDeactivatedNotDeleted() {
         JsonNode eggs = api.create(EGGS);
         String product = "/api/v1/products/" + eggs.path("id").asString();

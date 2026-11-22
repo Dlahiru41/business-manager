@@ -109,6 +109,23 @@ class DefinitionPublisher {
         return json.writeValueAsString(snapshot);
     }
 
+    /** Rule CAT-09: the definitions the template implies for one new packaging unit of an existing variant. */
+    void createImpliedFor(TemplateStrategy strategy, Variant variant, UUID unitId) {
+        for (DefinitionPlan plan : strategy.transformations(variant.sku(), variant)) {
+            if (plan.lines().stream().anyMatch(line -> unitId.equals(line.packagingUnitId()))) {
+                publish(definitions.saveAndFlush(TransformationDefinition.draft(
+                        ids.newUuid(),
+                        TenantContext.require(),
+                        plan.code(),
+                        plan.name(),
+                        plan.kind(),
+                        plan.expectedYieldPct(),
+                        plan.lines(),
+                        ids::newUuid)));
+            }
+        }
+    }
+
     /** Every definition implied for these variants, for callers that create several variants at once. */
     void createImplied(TemplateStrategy strategy, List<Variant> variants) {
         variants.forEach(variant -> createImplied(strategy, variant));

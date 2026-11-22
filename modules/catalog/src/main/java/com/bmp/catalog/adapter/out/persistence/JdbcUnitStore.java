@@ -4,6 +4,7 @@ import com.bmp.catalog.domain.model.Dimension;
 import com.bmp.catalog.domain.model.UnitOfMeasure;
 import com.bmp.catalog.domain.port.PageKey;
 import com.bmp.catalog.domain.port.UnitRepository;
+import com.bmp.shared.context.TenantContext;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
@@ -34,8 +35,12 @@ class JdbcUnitStore implements UnitRepository {
     public List<UnitOfMeasure> findAll() {
         return jdbc.sql("""
                         SELECT id, tenant_id, code, name, dimension, to_si_factor FROM catalog.unit_of_measure
+                         WHERE tenant_id IS NULL OR tenant_id = :tenantId
                          ORDER BY tenant_id IS NOT NULL, lower(code), id
-                        """).query(JdbcUnitStore::unit).list();
+                        """)
+                .param("tenantId", TenantContext.require().value())
+                .query(JdbcUnitStore::unit)
+                .list();
     }
 
     @Override
@@ -43,17 +48,28 @@ class JdbcUnitStore implements UnitRepository {
     public Optional<UnitOfMeasure> findById(UUID id) {
         return jdbc.sql("""
                         SELECT id, tenant_id, code, name, dimension, to_si_factor FROM catalog.unit_of_measure
-                         WHERE id = :id
-                        """).param("id", id).query(JdbcUnitStore::unit).optional();
+                         WHERE id = :id AND (tenant_id IS NULL OR tenant_id = :tenantId)
+                        """)
+                .param("id", id)
+                .param("tenantId", TenantContext.require().value())
+                .query(JdbcUnitStore::unit)
+                .optional();
     }
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<UnitOfMeasure> findByCode(String code) {
-        return jdbc.sql("""
+        return jdbc
+                .sql("""
                         SELECT id, tenant_id, code, name, dimension, to_si_factor FROM catalog.unit_of_measure
-                         WHERE lower(code) = :code ORDER BY tenant_id IS NOT NULL
-                        """).param("code", code.toLowerCase(Locale.ROOT)).query(JdbcUnitStore::unit).list().stream()
+                         WHERE lower(code) = :code AND (tenant_id IS NULL OR tenant_id = :tenantId)
+                         ORDER BY tenant_id IS NOT NULL
+                        """)
+                .param("code", code.toLowerCase(Locale.ROOT))
+                .param("tenantId", TenantContext.require().value())
+                .query(JdbcUnitStore::unit)
+                .list()
+                .stream()
                 .findFirst();
     }
 
@@ -65,13 +81,15 @@ class JdbcUnitStore implements UnitRepository {
         String afterCode = after != null ? after.sortKey().substring(2) : "";
         return jdbc.sql("""
                         SELECT id, tenant_id, code, name, dimension, to_si_factor FROM catalog.unit_of_measure
-                         WHERE (CAST(:dimension AS text) IS NULL OR dimension = :dimension)
+                         WHERE (tenant_id IS NULL OR tenant_id = :tenantId)
+                           AND (CAST(:dimension AS text) IS NULL OR dimension = :dimension)
                            AND (CAST(:afterId AS uuid) IS NULL
                                 OR ((tenant_id IS NOT NULL)::int, lower(code), id)
                                    > (CAST(:afterGroup AS int), :afterCode, CAST(:afterId AS uuid)))
                          ORDER BY tenant_id IS NOT NULL, lower(code), id
                          LIMIT :limit
                         """)
+                .param("tenantId", TenantContext.require().value())
                 .param("dimension", dimension != null ? dimension.name() : null)
                 .param("afterId", after != null ? after.id() : null)
                 .param("afterGroup", after != null ? afterGroup : "0")

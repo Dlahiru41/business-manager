@@ -237,6 +237,10 @@ public class Variant implements Auditable {
                     change.canBuy() != null ? change.canBuy() : unit.canBuy(),
                     change.canSell() != null ? change.canSell() : unit.canSell());
         }
+        if (change.status() == CatalogStatus.ACTIVE) {
+            // Rule CAT-07: a unit becoming active again must draw from one of the variant's current states.
+            StockStates.requireIn(stockStates, unit.stockState(), unit.code());
+        }
         if (change.status() != null) {
             unit.changeStatus(change.status());
         }

@@ -47,6 +47,14 @@ class TransformationDefinitionTest {
     }
 
     @Test
+    void cat10LineQuantitiesAreKeptAtStorageScale() {
+        TransformationDefinition definition = openCan(List.of(in("19565.2812345"), out("19565.2812345", null)));
+
+        assertThat(definition.lines())
+                .allSatisfy(line -> assertThat(line.qtyBase()).isEqualTo(new BigDecimal("19565.281235")));
+    }
+
+    @Test
     void cat10OutCostSharesSumToHundredAndASingleOutLineDefaultsToHundred() {
         TransformationDefinition single = openCan(List.of(in("19565.28"), out("19565.28", null)));
 
