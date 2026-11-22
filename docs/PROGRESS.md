@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: T01-05 Pricing module: replicas and domain
-- Next step (exact, so a new session can resume): continue T01-05 with `/run-phase 01`.
+- Current task: T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT`
+- Next step (exact, so a new session can resume): write `PilotShopFixture` in `libs/test-support` and `CatalogPricingFlowIT` in `app/src/integrationTest` with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
@@ -29,8 +29,8 @@ Phase 01:
 - [x] T01-02 Catalog domain model (TDD) — LOOSE_REPACK keeps own packets in a state `PACKED_<CODE>` per packet unit (counted apart from loose stock); BULK_BREAK/LOOSE_REPACK definition lines are sized by the packaging unit so a conversion change resizes them (CAT-14)
 - [x] T01-03 Catalog persistence and migrations — category path is a text path of ids (no `ltree` extension needed); tracking flags are columns (filtered on); `catalog_revision` per tenant orders sync deltas; published definition versions frozen in `transformation_definition_version` (append-only); standard units seeded before RLS is forced
 - [x] T01-04 Catalog application layer and API — snapshot events built after flush and per-tenant catalog revisions (ADR-019); modelling choices in ADR-020; `include` is a comma-separated string (the contract validator cannot parse form arrays); catalog wired into `app`
-- [ ] T01-05 Pricing module: replicas and domain
-- [ ] T01-06 Pricing persistence, API, snapshot
+- [x] T01-05 Pricing module: replicas and domain — pure `PriceResolver`/`TaxCalculator`/`PriceSchedule`; `variant_price_ref` replica keeps the highest `aggregateVersion`, early deactivations leave a tombstone; Retail/Wholesale seeded on `TenantCreated`; pricing implements the catalog's `TaxCategoryLookup` SPI (ADR-021)
+- [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
 - [ ] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT`
 - [ ] Definition of Done
   - [ ] Every CAT-xx and PRC-xx rule has a named test
@@ -54,6 +54,8 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — Phase review items deferred (no rule broken today; each needs design or volume first): idempotency records stuck `IN_PROGRESS` after a crash need a lease and recovery; API audit records should move to the outbox (today: synchronous, counted by `bmp.audit.lost` when lost); reject tenant-user tokens without an ACTIVE iam profile (closes the 15-minute window of disabled users); an allow-list of user clients (`azp`) besides the platform one; Keycloak fine-grained admin permissions for `bmp-admin`; key order of `iam.role_permission`/`user_role` (tenant_id first) and the globally unique `idp_subject`/`idp_client_id`; GitHub Actions pinned by commit SHA and image signing by digest; error categories of `METHOD_NOT_ALLOWED`/`UNAUTHENTICATED`; tenant defaults (LKR, Asia/Colombo) as configuration.
 - 2026-11-22 — Currencies without two decimals (JPY, KWD, ...) are refused at tenant creation and in settings until money rounds to each currency's minor units.
 - 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
+- 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
+- 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:

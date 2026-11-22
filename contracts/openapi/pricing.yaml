@@ -1628,6 +1628,10 @@ components:
           $ref: "./common.yaml#/components/schemas/Money"
     ResolvedLine:
       type: object
+      description: |
+        `unitPrice` is the list (or derived) price of one unit before rules; `amount` is quantity × price after rules,
+        rounded, tax included when `taxInclusive`; `discount` is quantity × list price, rounded, minus `amount`
+        (negative for markups); `lineTotal` is what the customer pays (net + tax).
       required: [variantId, packagingUnitId, qty, status, appliedRules, taxes]
       properties:
         lineId:
@@ -1645,20 +1649,16 @@ components:
           enum: [PRICED, PRICE_NOT_FOUND, NOT_SELLABLE]
           description: "`NOT_SELLABLE`: unknown or inactive variant, or a unit that is not sold."
         unitPrice:
-          description: The list (or derived) price of one unit, before rules.
           $ref: "./common.yaml#/components/schemas/Money"
         amount:
-          description: Quantity × unit price after rules, rounded; tax included when `taxInclusive`.
           $ref: "./common.yaml#/components/schemas/Money"
         discount:
-          description: Quantity × list price, rounded, minus `amount` (negative for markups).
           $ref: "./common.yaml#/components/schemas/Money"
         netAmount:
           $ref: "./common.yaml#/components/schemas/Money"
         taxAmount:
           $ref: "./common.yaml#/components/schemas/Money"
         lineTotal:
-          description: What the customer pays for the line (net + tax).
           $ref: "./common.yaml#/components/schemas/Money"
         taxInclusive:
           type: boolean
@@ -1682,6 +1682,7 @@ components:
             $ref: "#/components/schemas/LineTax"
     Totals:
       type: object
+      description: Sums of the priced lines.
       required: [netAmount, taxAmount, discount, lineTotal]
       properties:
         netAmount:
@@ -1708,7 +1709,6 @@ components:
           items:
             $ref: "#/components/schemas/ResolvedLine"
         totals:
-          description: Sums of the priced lines.
           $ref: "#/components/schemas/Totals"
 
     TaxCategory:
