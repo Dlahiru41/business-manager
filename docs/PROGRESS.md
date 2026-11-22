@@ -7,7 +7,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | Phase | Name | Status | Branch | Closed on |
 | --- | --- | --- | --- | --- |
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
-| 01 | Catalog and pricing | not started | | |
+| 01 | Catalog and pricing | in progress | phase/01-catalog-and-pricing | |
 | 02 | Inventory and procurement | not started | | |
 | 03 | Sales, payments, sync and printing | not started | | |
 | 04 | Finance and reporting | not started | | |
@@ -18,33 +18,28 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 00 — Foundation
-- Current task: none (phase 00 merged into `main` and pushed on 2026-11-22; CI green)
-- Next step (exact, so a new session can resume): start phase 01 with `/run-phase 01`.
+- Phase: 01 — Catalog and pricing (started 2026-11-22, branch `phase/01-catalog-and-pricing`)
+- Current task: T01-01 Contracts
+- Next step (exact, so a new session can resume): continue T01-01 with `/run-phase 01`.
 
 ## Task checklist (current phase)
 
-Phase 00:
-- [x] T00-01 Repository and build scaffold
-- [x] T00-02 Shared kernel (`libs/shared-kernel`)
-- [x] T00-03 Web support (`libs/web-support`) — JDBC `IdempotencyStore` + cleanup job land with T00-04 (they need the tenant transaction hook and the platform-admin role)
-- [x] T00-04 Persistence support (`libs/persistence-support`) — ADR-012, ADR-013
-- [x] T00-05 Observability baseline — trace in local Grafana checked with the DoD (needs compose)
-- [x] T00-06 Security — ADR-014; Keycloak Testcontainers IT and the cross-tenant 404 test need real endpoints and are added with T00-07/T00-08
-- [x] T00-07 Tenant module — ADR-012, ADR-015; extra platform endpoints `POST /tenants/{id}/suspend|reactivate` (TEN-04 needs a way to suspend)
-- [x] T00-08 IAM module — ADR-016 (tenant roles as the `bmp_roles` user attribute; Keycloak 26.8 needs `kc-admin-api` and a mapper allow-list); `@Idempotent(redact)` keeps device secrets out of replay storage; generator option `containerDefaultToNull` (PATCH can tell "absent" from "empty", fixes receipt-template PATCH clearing omitted JSON fields)
-- [x] T00-09 Audit module (skeleton) — per-tenant SHA-256 hash chain with gapless sequence (advisory lock), API-write interceptor, generic `DomainEvent` listener, `GET /api/v1/audit-records`; tamper detection proven in `AuditIT`
-- [x] T00-10 Local environment and developer experience — compose (PostgreSQL 18.7, Keycloak 26.8.2, Mailpit, otel-lgtm with the "BMP overview" dashboard), `local` profile seeds both test tenants and their users (`IamProvisioning`), `http/*.http`, root README; Spring Boot Docker Compose support not used (compose is started explicitly)
-- [x] T00-11 Architecture tests and documentation — `ModularityTests` (docs in `app/build/spring-modulith-docs`), `ArchitectureTest` with `HexagonalRules`/`CodingRules`/`SecurityRules`; READMEs for tenant, iam, audit
-- [x] T00-12 CI pipeline — `.github/workflows/ci.yml` (build + gates, Spectral, oasdiff breaking check on PRs, CycloneDX SBOM + Trivy, signed image push on `main`), `contracts/.spectral.yaml`; not yet run on GitHub (no remote configured)
-- [x] Definition of Done
-  - [x] `docker compose up` + `./gradlew :app:bootRun` start cleanly; `/actuator/health` UP (on a machine with its own PostgreSQL on 5432: `BMP_POSTGRES_PORT=55432`, see README)
-  - [x] With tokens from local Keycloak: location created, settings read and updated, user created, device registered (curl run of the `http/*.http` flows)
-  - [x] Tenant isolation, RLS coverage, idempotency, problem details, security (401/403/404, per operation from the contracts) tests green
-  - [x] Logs are ECS JSON with trace/tenant/request ids outside `local` (`ObservabilityIT`); traces visible in local Grafana
-  - [x] All quality gates green in CI — first green run on GitHub: https://github.com/Dlahiru41/business-manager/actions/runs/44994946578 (build, contracts, SBOM + Trivy, signed image). Getting there took four CI fixes: executable `gradlew`, a lower-case image name, the toolchain lookup in `bootBuildImage`, and fewer/longer-retried downloads after Maven Central rate limits (HTTP 429).
-  - [x] ADR-011, ADR-012 and the event publication style ADR (ADR-015) written
-  - [x] Phase summary written; `code-reviewer` run, every BLOCKER (none) and MAJOR (8) fixed
+Phase 01:
+- [ ] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI)
+- [ ] T01-02 Catalog domain model (TDD)
+- [ ] T01-03 Catalog persistence and migrations
+- [ ] T01-04 Catalog application layer and API
+- [ ] T01-05 Pricing module: replicas and domain
+- [ ] T01-06 Pricing persistence, API, snapshot
+- [ ] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT`
+- [ ] Definition of Done
+  - [ ] Every CAT-xx and PRC-xx rule has a named test
+  - [ ] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14)
+  - [ ] OpenAPI conformance validated in all API tests; Spectral clean
+  - [ ] Tenant isolation ITs for catalog and pricing
+  - [ ] Module READMEs, `.http` files, AsyncAPI updated
+  - [ ] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim)
+  - [ ] PROGRESS summary written
 
 ## Open questions
 
