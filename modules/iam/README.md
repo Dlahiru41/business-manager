@@ -21,18 +21,22 @@ new aggregate. The ETag always equals the stored version.
 | --- | --- | --- |
 | IAM-01 | A tenant keeps at least one active owner: disabling the last one or removing its `OWNER` role is 409 `LAST_OWNER`. Owner changes lock the tenant's owner role row, so concurrent changes are serialized. | `LastOwnerRule`, `OwnerGuard` |
 | IAM-02 | System roles cannot be deactivated, and the owner role keeps `*` (409 `SYSTEM_ROLE_IMMUTABLE`). Custom role codes never equal a system role code. | `Role` |
+| Grant ceiling | A caller grants, creates or changes only roles and permissions their own grants cover (403 `ROLE_GRANT_EXCEEDS_CALLER`): only a holder of `*` manages owners. The `DEVICE` role is never given to a person. | `GrantCeiling`, `RoleAssignments` |
 | IAM-03 | Revoked devices are rejected at once on the revoking instance and within 60 s everywhere (403 `DEVICE_REVOKED`); the client is disabled in Keycloak and its secret rotated. | `RevokeDeviceHandler`, `DeviceStatusLookup` |
 
 ## Identity provider (ADR-016)
 
 - Accounts get the admin-only attributes `tenant_id` and `bmp_roles` (mapped to the `roles` claim) and the required
-  action `UPDATE_PASSWORD`; an e-mail is sent when an address is given (best effort). Users without e-mail get a
+  action `UPDATE_PASSWORD`. They are created **disabled** and enabled (with the invitation e-mail, best effort) only
+  after the profile is stored; if enabling fails the profile is disabled too. An account of the same tenant without a
+  profile (a creation whose answer was lost) is adopted when the creation is retried. Users without e-mail get a
   temporary password from an administrator in the Keycloak console.
 - Calls are never made inside a database transaction. Order: validate locally, change Keycloak, commit locally; if
   the local commit fails the Keycloak change is undone (`Compensation`, logged at ERROR if the undo fails).
 - Adapter: `RestClient` with 2 s connect / 5 s read timeouts, retries (2, exponential back-off) only for idempotent
   calls on I/O errors and 5xx, circuit breaker `keycloak` (metrics through Micrometer). Unavailability is 503
-  `IDENTITY_PROVIDER_UNAVAILABLE`.
+  `IDENTITY_PROVIDER_UNAVAILABLE`; data Keycloak refuses is 422 `IDENTITY_PROVIDER_REJECTED`; any other refusal
+  (credentials, permissions) is 500 `IDENTITY_PROVIDER_MISCONFIGURED` for an operator.
 - Settings `bmp.iam.keycloak.*`; the client secret comes from `BMP_KEYCLOAK_ADMIN_CLIENT_SECRET`.
 
 ## Permissions

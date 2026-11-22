@@ -41,6 +41,19 @@ of [deploy/local/keycloak/realm-bmp.json](deploy/local/keycloak/realm-bmp.json):
 Override any default by copying `deploy/local/.env.example` to `deploy/local/.env` (git-ignored). Never reuse local
 values elsewhere: outside `local`, every secret comes from the environment and the app refuses to start without it.
 
+## Configuration outside `local`
+
+Every secret comes from the environment, and the app refuses to start without the required ones.
+
+| Variable | Purpose |
+| --- | --- |
+| `BMP_DB_URL`, `BMP_APP_PASSWORD` | Database and the `bmp_app` role |
+| `BMP_MIGRATE_ON_STARTUP`, `BMP_MIGRATOR_PASSWORD` | `true` and the migrator password only in the migration job; the running app never connects as schema owner |
+| `BMP_PLATFORM_ADMIN_PASSWORD` | `bmp_platform_admin` role for audited platform jobs |
+| `BMP_ISSUER_URI`, `BMP_KEYCLOAK_URL`, `BMP_KEYCLOAK_ADMIN_CLIENT_SECRET` | Keycloak realm and the `bmp-admin` service account |
+| `BMP_PLATFORM_ADMIN_CLIENTS` | Clients (`azp`) through which platform administrators sign in; none by default |
+| `BMP_OTLP_TRACES_ENDPOINT`, `BMP_TRACE_SAMPLING` | Tracing export |
+
 ## Try the API
 
 Open `http/` in IntelliJ, copy `http/http-client.private.env.json.example` to `http/http-client.private.env.json`,

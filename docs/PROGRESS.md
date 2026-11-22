@@ -47,6 +47,11 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-21 — Default role permissions follow 08-security.md §3 literally, so only OWNER has `tenant:read`/`tenant:*`; MANAGER etc. may need `tenant:read` for settings — assumption: least privilege, tenants extend roles via the iam API (ADR-014).
 - 2026-11-22 — Users without e-mail get their first password from an administrator in the Keycloak console (no API for it in phase 00); disabled users keep already-issued access tokens until they expire (≤ 15 min). Assumption: acceptable for the pilot (ADR-016).
 - 2026-11-22 — Location scope of role grants is stored and returned but not yet enforced; enforcement belongs to the handlers of location-bound modules (inventory, sales) from phase 02.
+- 2026-11-22 — Personal Data Protection Act legal review is pending (ADR-017): lawful basis, retention per category, IP addresses in the audit trail, hosting region, breach procedure, processor agreement. Assumption: conservative defaults of ADR-017.
+- 2026-11-22 — Spring Boot Docker Compose support (optional in T00-10) is not used: the stack is started explicitly, which keeps `bootRun` independent of Docker and avoids starting Keycloak from the app.
+- 2026-11-22 — Phase review items deferred (no rule broken today; each needs design or volume first): idempotency records stuck `IN_PROGRESS` after a crash need a lease and recovery; API audit records should move to the outbox (today: synchronous, counted by `bmp.audit.lost` when lost); reject tenant-user tokens without an ACTIVE iam profile (closes the 15-minute window of disabled users); an allow-list of user clients (`azp`) besides the platform one; Keycloak fine-grained admin permissions for `bmp-admin`; key order of `iam.role_permission`/`user_role` (tenant_id first) and the globally unique `idp_subject`/`idp_client_id`; GitHub Actions pinned by commit SHA and image signing by digest; error categories of `METHOD_NOT_ALLOWED`/`UNAUTHENTICATED`; tenant defaults (LKR, Asia/Colombo) as configuration.
+- 2026-11-22 — Currencies without two decimals (JPY, KWD, ...) are refused at tenant creation and in settings until money rounds to each currency's minor units.
+- 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
 - 2026-11-21 — Sinhala (`si`) and Tamil (`ta`) message bundles are English placeholders (`i18n/*/messages_si|ta.properties`); translations needed before go-live.
 
 Known questions from the client (Requirements Understanding Document §9), to be configured, not coded:
@@ -63,3 +68,42 @@ Known questions from the client (Requirements Understanding Document §9), to be
 ## Phase summaries
 
 _Filled in when each phase closes: what was built, ADRs, limitations._
+
+### Phase 00 — Foundation (2026-11-22)
+
+**Built.** A Gradle 9 multi-project build (convention plugins, pinned catalog, Error Prone + NullAway, Spotless,
+JaCoCo gates, PIT wiring, contract-first OpenAPI generation) for a Spring Boot 4.2 / Java 25 modular monolith:
+- `libs/shared-kernel`: Money/Quantity/Allocation, typed UUIDv7 ids, Tenant/Actor contexts (ScopedValue), error
+  hierarchy, domain event envelope, BusinessDate, permission patterns, `@Sensitive`.
+- `libs/web-support`: Problem Details with stable codes and i18n, request ids, access log, size limits, idempotency
+  (JDBC store, replay, redaction of one-time secrets), ETag/If-Match, keyset cursors, JWT resource server with tenant
+  resolution, platform-admin acting via `X-Tenant-Id`, permission evaluation, ECS logging with masking.
+- `libs/persistence-support`: per-module Flyway, fail-closed RLS with a transaction-scoped tenant (ADR-013), JPA
+  auditing, Modulith JDBC outbox with tenant-bound listeners, inbox, failed-event store and resubmission, number
+  sequences (ADR-012), backlog health and gauge, ShedLock.
+- `libs/test-support`: PostgreSQL 18 Testcontainers with the production role model, JWT test tokens, contract and
+  event-contract validation, RLS coverage checker, ArchUnit rule sets.
+- Modules: **tenant** (tenants, locations, versioned settings with JSON schemas, receipt templates; TEN-01..04),
+  **iam** (users, roles, devices, Keycloak gateway with resilience and compensation; IAM-01..03; ADR-016), **audit**
+  (hash-chained append-only trail of API writes and all domain events).
+- App: actuator on a management port, OTLP tracing, Prometheus/OTLP metrics, Modulith verification and ArchUnit
+  tests, local seed data. Local stack (`deploy/local`), `.http` collections, README, GitHub Actions pipeline.
+
+**Verified.** `./gradlew build` green (all gates, unit + Testcontainers ITs incl. Keycloak 26.8.2). Locally:
+compose + `bootRun` start cleanly, health UP; with tokens from local Keycloak: location created, settings read and
+updated, user created (invitation in Mailpit), device registered, its token accepted, revoked and rejected; audit
+trail filled; traces and metrics visible in Grafana. Spectral lint clean; Trivy scan of the SBOM clean. A fresh clone
+compiles.
+
+**ADRs.** 011 pinned versions · 012 number sequences per module · 013 fail-closed RLS · 014 identity, tenant claim
+and permissions · 015 event publication style · 016 tenant roles in the identity provider · 017 personal data
+protection (legal review pending).
+
+**Limitations / carried forward.**
+- CI has not run on GitHub yet (no remote configured); its jobs were exercised locally (build, Spectral, Trivy).
+- Location scope of role grants is stored, not enforced (phase 02 handlers). Permission-sensitive reads are not
+  audited automatically. Disabled users keep issued access tokens until expiry (≤ 15 min).
+- Security filter-chain spans appear as separate trace roots next to the HTTP request span; to be tidied with the
+  observability work of phase 06.
+- Failed-event administration is a job and a store, without an admin endpoint yet.
+- `si`/`ta` messages are English placeholders.

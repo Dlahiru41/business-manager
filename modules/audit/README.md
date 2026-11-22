@@ -12,18 +12,21 @@ form. Appends of one tenant are serialized with a transaction-scoped advisory lo
 recomputes the chain and names the first broken record; `AuditIT` proves that an edited row is detected.
 
 Instants are stored and hashed to the microsecond (the database precision). User agents are cut at 256 characters.
+IP address and user agent are stored outside the hashed form, so they can be erased (ADR-017) without breaking the
+chain. Partitioning is deferred (ADR-018).
 
 ## What is recorded
 
 | Source | When | Fields |
 | --- | --- | --- |
-| `API` | Every request but GET/HEAD/OPTIONS that reached a controller, including refused ones (403, 409, 422 ...). Idempotent replays are not recorded again. | `METHOD /path/template`, resource type (collection after `/api/v1/`), resource id (first `...Id` path variable, else the `Location` id), status, actor, device, platform-administrator flag, IP, user agent, request id |
+| `API` | Every request but GET/HEAD/OPTIONS that reached a controller, including refused ones (403, 409, 422 ...), and every request, reads included, a platform administrator makes for a tenant (`X-Tenant-Id`). Idempotent replays are not recorded again. | `METHOD /path/template`, resource type (collection after `/api/v1/`), resource id (first `...Id` path variable, else the `Location` id), status, actor, device, platform-administrator flag, IP, user agent, request id |
 | `EVENT` | Every domain event of every module, after its transaction commits (inbox: once per event) | event type, publishing module, aggregate id, actor, device, request id, event id, SHA-256 of the payload |
 | `SYSTEM` | `AuditWriter.record(...)` called by a module (jobs, permission-sensitive reads) | as given |
 
 Requests without a tenant are recorded under the `tenantId` path variable when there is one (platform operations
 on a tenant), otherwise not at all; tenant creation is still audited through `TenantCreated`. If an audit record
-cannot be written after the change completed, an ERROR is logged for an operator.
+cannot be written after the change completed, an ERROR is logged and `bmp.audit.lost` is incremented (alert on it);
+moving API records to the outbox is an open question.
 
 ## API (`contracts/openapi/audit.yaml`)
 

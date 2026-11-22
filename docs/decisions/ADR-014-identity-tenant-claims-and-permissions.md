@@ -31,6 +31,9 @@ unavailable". The access token must carry `tenant_id`, `roles` and (for tills) `
 - `platform_admin` holds `platform:*`. It holds tenant permissions only while acting for a tenant through
   `X-Tenant-Id`; such requests are logged and flagged for the audit trail. A tenant user who sends `X-Tenant-Id` is
   rejected (403), never silently ignored.
+- Platform endpoints that act on a tenant (`/api/v1/tenants/{tenantId}/...`, permission `platform:tenants`) are the
+  one place a tenant id comes from the URL. They are the audited platform path: the audit interceptor records them in
+  that tenant's trail, and every platform-administrator request for a tenant is audited (ADR-016).
 - Tenant status and device status are SPIs (`TenantStatusProvider`, `DeviceStatusProvider`). Their defaults reject
   everything (fail closed) until the tenant and iam modules provide real lookups.
 - Actuator: only `health` and `info` are anonymous. Prometheus/metrics need a `platform_admin` token, on the internal
