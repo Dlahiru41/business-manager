@@ -39,13 +39,21 @@ cases open. Each choice below is the most conservative option that keeps prices 
    rates apply to the net plus the taxes before them.
 9. **Retail and Wholesale are seeded on `TenantCreated`** in the tenant's currency, tax-inclusive per the tenant
    setting, so a new tenant can price immediately. They are ordinary lists afterwards (renamable, deactivatable).
+10. **A price applies from its minimum quantity, also for weighed units.** PRC-02 sets the default `minQty` to 1 and
+   PRC-04 picks the row with the highest `minQty` ≤ quantity, so 0.75 kg finds no kilogram price at the default
+   minimum. Rather than letting a price apply below its stated minimum, a tenant gives the kilogram price of loose
+   goods a minimum such as 0.001 (one gram); the pilot fixture does so. `minQty` must be greater than 0
+   (`VALIDATION_FAILED`).
 
 ## Consequences
 - Price history and every till's view of a list can be reproduced from `price` and `price_list_version` alone.
 - Adding a rule condition kind costs a migration and a contract change (additive).
 - If a tenant ever holds thousands of rules, item 4 must move to keyset paging; the cursor format stays opaque.
 
-## Open question
-The seeded MANAGER role holds `pricing:write` but not `pricing:read`, so a manager may change prices yet cannot list
-price lists or resolve a basket. The role mapping is the client's business decision and stays as specified; tenants can
-grant `pricing:read` to MANAGER through the IAM role API. Recorded in `docs/PROGRESS.md`.
+## Open questions
+- Should the default `minQty` of weighed units be below 1 (item 10)? Kept at 1 as specified until the client decides.
+- The seeded MANAGER role holds `pricing:write` but not `pricing:read`, so a manager may change prices yet cannot list
+  price lists or resolve a basket. The role mapping is the client's business decision and stays as specified; tenants
+  can grant `pricing:read` to MANAGER through the IAM role API.
+
+Both are recorded in `docs/PROGRESS.md`.

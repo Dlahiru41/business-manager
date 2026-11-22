@@ -64,6 +64,20 @@ class PricingModelTest {
     }
 
     @Test
+    void prc02APriceStartsAtAPositiveMinimumQuantity() {
+        UUID variant = UUID.randomUUID();
+        UUID unit = UUID.randomUUID();
+
+        assertThat(new PriceKey(variant, unit, new BigDecimal("0.001")).minQty())
+                .as("a weighed unit may be priced from one gram of a kilogram")
+                .isEqualByComparingTo("0.001");
+        assertThatThrownBy(() -> new PriceKey(variant, unit, BigDecimal.ZERO)).isInstanceOf(ValidationFailure.class);
+        assertThatThrownBy(() -> new PriceKey(variant, unit, new BigDecimal("0.0000001")))
+                .as("rounds to zero at storage scale")
+                .isInstanceOf(ValidationFailure.class);
+    }
+
+    @Test
     void prc03EveryPriceChangeTakesTheNextListVersion() {
         PriceList retail = list("R", ListChannel.RETAIL, 1);
 

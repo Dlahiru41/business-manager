@@ -1274,6 +1274,10 @@ components:
           $ref: "./common.yaml#/components/schemas/PageInfo"
     PriceInput:
       type: object
+      description: >-
+        One price row. `minQty` (in the packaging unit, default 1, greater than 0) is the quantity the price applies
+        from; a weighed unit sold in fractions (0.75 kg) needs a smaller minimum such as 0.001. Without `validFrom`
+        the price starts now and ends the open price of the same key.
       additionalProperties: false
       required: [variantId, packagingUnitId, amount]
       properties:

@@ -23,7 +23,8 @@ rounding per line).
 
 1. Candidate lists for the request: customer, then customer group, then channel, then `ANY`; within a tier by
    priority, then code. The first list with a price for the line wins.
-2. Within the list: the price valid at `at` with the highest `minQty` ≤ quantity.
+2. Within the list: the price valid at `at` with the highest `minQty` ≤ quantity. `minQty` defaults to 1, so a weighed unit
+   sold in fractions (0.75 kg) needs a price with a smaller minimum, e.g. 0.001 (ADR-021 item 10).
 3. No price in the unit asked: if the tenant setting `pricing.derivePriceFromBase` is on, the base-unit price ×
    `qtyInBase` (`source = DERIVED`); otherwise the line is `PRICE_NOT_FOUND` (PRC-05). Unknown or not sellable units
    are `NOT_SELLABLE`.
