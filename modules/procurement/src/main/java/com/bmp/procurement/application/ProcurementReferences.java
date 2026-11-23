@@ -38,6 +38,17 @@ public class ProcurementReferences {
                         ProcurementErrorCode.UNKNOWN_SUPPLIER, Map.of("supplierId", supplierId)));
     }
 
+    /** Whether the party is an active supplier (SUPPLIER or BOTH). */
+    public boolean isActiveSupplier(UUID partyId) {
+        return parties.findParty(PartyId.of(partyId))
+                .filter(p -> p.active() && p.isSupplier())
+                .isPresent();
+    }
+
+    public boolean isActiveLocation(UUID locationId) {
+        return tenants.isActiveLocation(LocationId.of(locationId));
+    }
+
     public void location(UUID locationId) {
         if (!tenants.isActiveLocation(LocationId.of(locationId))) {
             throw new BusinessRuleViolation(ProcurementErrorCode.UNKNOWN_LOCATION, Map.of("locationId", locationId));

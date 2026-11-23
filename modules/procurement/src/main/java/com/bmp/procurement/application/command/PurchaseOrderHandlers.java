@@ -11,6 +11,7 @@ import com.bmp.procurement.domain.port.PurchaseOrderRepository;
 import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.id.IdGenerator;
 import com.bmp.shared.id.LocationId;
+import com.bmp.shared.id.PartyId;
 import com.bmp.web.etag.IfMatch;
 import io.micrometer.observation.annotation.Observed;
 import java.math.BigDecimal;
@@ -135,7 +136,8 @@ public class PurchaseOrderHandlers {
 
     /**
      * Rule PRO-06: one draft order per preferred supplier and location, each variant's reorder quantity in its first
-     * buyable unit (rounded up) at the last known cost.
+     * buyable unit (rounded up) at the last known cost. Suggestions without an active preferred supplier, a buyable
+     * unit or an active location are skipped.
      */
     @Transactional
     @Observed(name = "bmp.procurement.orders-from-reorder-list")
@@ -149,7 +151,11 @@ public class PurchaseOrderHandlers {
                 suggestions.suggestions(locationId == null ? null : LocationId.of(locationId))) {
             UUID variant = suggestion.variantId().value();
             Optional<Purchasable> unit = references.firstPurchasable(variant);
-            if (suggestion.preferredSupplierId() == null || unit.isEmpty()) {
+            PartyId preferred = suggestion.preferredSupplierId();
+            if (preferred == null
+                    || unit.isEmpty()
+                    || !references.isActiveSupplier(preferred.value())
+                    || !references.isActiveLocation(suggestion.locationId().value())) {
                 skipped.add(variant);
                 continue;
             }
@@ -162,10 +168,7 @@ public class PurchaseOrderHandlers {
                     ? BigDecimal.ZERO
                     : suggestion.lastUnitCostBase().multiply(qtyInBase).setScale(6, RoundingMode.HALF_UP);
             grouped.computeIfAbsent(
-                            List.of(
-                                    suggestion.preferredSupplierId().value(),
-                                    suggestion.locationId().value()),
-                            k -> new ArrayList<>())
+                            List.of(preferred.value(), suggestion.locationId().value()), k -> new ArrayList<>())
                     .add(new LineInput(variant, unit.get().packagingUnitId(), qty, cost));
         }
         List<PurchaseOrder> drafted = new ArrayList<>();

@@ -132,6 +132,37 @@ class JdbcBalanceStore implements BalanceStore {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public void overwrite(Map<BalanceKey, BalanceState> rebuilt) {
+        List<BalanceKey> keys = new ArrayList<>(rebuilt.keySet());
+        keys.sort(null);
+        UUID tenant = TenantContext.require().value();
+        for (BalanceKey key : keys) {
+            BalanceState state = rebuilt.get(key);
+            if (state == null) {
+                continue;
+            }
+            jdbc.sql("""
+                            UPDATE inventory.stock_balance
+                               SET on_hand = :onHand, stock_value = :value, avg_unit_cost = :avg,
+                                   version = version + 1, updated_at = :now
+                             WHERE tenant_id = :tenantId AND variant_id = :variantId AND location_id = :locationId
+                               AND stock_state = :state AND batch_id = :batchId
+                            """)
+                    .param("onHand", state.onHand())
+                    .param("value", state.value())
+                    .param("avg", state.avgUnitCost())
+                    .param("now", Jsonb.utc(clock.instant()))
+                    .param("tenantId", tenant)
+                    .param("variantId", key.variantId())
+                    .param("locationId", key.locationId())
+                    .param("state", key.stockState())
+                    .param("batchId", key.batchId())
+                    .update();
+        }
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public BigDecimal available(UUID variantId, UUID locationId) {
         return jdbc.sql("""
                         SELECT coalesce(sum(on_hand - reserved), 0) FROM inventory.stock_balance

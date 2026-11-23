@@ -112,7 +112,7 @@ final class InventoryApi {
         return checked(client.post(path, owner, body));
     }
 
-    MvcTestResult put(String path, String body, String ifMatch) {
+    MvcTestResult put(String path, String body, @org.jspecify.annotations.Nullable String ifMatch) {
         return checked(client.put(path, owner, body, ifMatch));
     }
 

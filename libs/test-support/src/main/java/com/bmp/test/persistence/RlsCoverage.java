@@ -31,17 +31,24 @@ public final class RlsCoverage {
               FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
              WHERE c.relkind IN ('r', 'p')
-               AND NOT c.relispartition
                AND n.nspname = ANY (?)
                AND c.relname NOT LIKE 'flyway%'
             """;
 
+    /** Grants on the ledger tables and on their partitions (a partition can be written directly). */
     private static final String LEDGER_WRITE_GRANTS = """
-            SELECT table_schema || '.' || table_name || ':' || privilege_type
-              FROM information_schema.role_table_grants
-             WHERE grantee = 'bmp_app'
-               AND privilege_type IN ('UPDATE', 'DELETE', 'TRUNCATE')
-               AND table_schema || '.' || table_name = ANY (?)
+            SELECT g.table_schema || '.' || g.table_name || ':' || g.privilege_type
+              FROM information_schema.role_table_grants g
+             WHERE g.grantee = 'bmp_app'
+               AND g.privilege_type IN ('UPDATE', 'DELETE', 'TRUNCATE')
+               AND (g.table_schema || '.' || g.table_name = ANY (?)
+                    OR EXISTS (SELECT 1 FROM pg_inherits i
+                                 JOIN pg_class child ON child.oid = i.inhrelid
+                                 JOIN pg_namespace cn ON cn.oid = child.relnamespace
+                                 JOIN pg_class parent ON parent.oid = i.inhparent
+                                 JOIN pg_namespace pn ON pn.oid = parent.relnamespace
+                                WHERE cn.nspname = g.table_schema AND child.relname = g.table_name
+                                  AND pn.nspname || '.' || parent.relname = ANY (?)))
             """;
 
     private static final String PLATFORM_SCHEMA = "platform.";
@@ -81,6 +88,7 @@ public final class RlsCoverage {
             }
             try (PreparedStatement statement = connection.prepareStatement(LEDGER_WRITE_GRANTS)) {
                 statement.setArray(1, textArray(connection, ledgerTables));
+                statement.setArray(2, textArray(connection, ledgerTables));
                 try (ResultSet rows = statement.executeQuery()) {
                     while (rows.next()) {
                         violations.add("ledger grants bmp_app " + rows.getString(1));

@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: T02-07 Valuation, reorder list, rebuild
-- Next step (exact, so a new session can resume): in `modules/inventory`, implement `StockApi` (balances, movements, valuation, rebuild-balances replaying the ledger through the costing policy) and `ReorderApi` (reorder list, reorder policy under If-Match), the `ReorderSuggestionProvider` for procurement, contract/isolation ITs, README, `http/inventory.http`, ADR-024, with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
+- Current task: T02-09 Flow test with the pilot shop
+- Next step (exact, so a new session can resume): add `app/src/integrationTest/java/com/bmp/ReceiveAndTransformFlowIT.java` (pilot shop: egg, oil and karola receipts through procurement, open a can, pack karola, broken eggs, one reorder alert, valuation = Σ balances), then the Definition of Done (PIT on party/inventory/procurement, code review), with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
 
 ## Task checklist (current phase)
 
@@ -31,7 +31,7 @@ Phase 02:
 - [x] T02-04 Inventory ledger core — `stock_movement` partitioned by month (2026–2028 + default, RLS on every partition, INSERT/SELECT only); balances keep `stock_value = Σ cost_amount`; negative stock is trued up on the next receipt with a CORRECTION movement under both policies; FIFO layers keep their value; FEFO spreads issues of batch-tracked variants; the low flag lives on `reorder_policy`; 50-thread concurrency IT
 - [x] T02-05 Transformations, adjustments, transfers, opening balances, counts — transformations lock inputs and outputs first, issue inputs at current cost and share it by costSharePct (largest remainder); count variance = counted − system at the line's snapshot (movements since are in both); openings are once per variant/location/state, checked under the balance lock; transfers mirror the outgoing batches and costs
 - [x] T02-06 Inventory listeners for purchasing — `GoodsReceived` (inbox-guarded) becomes one RECEIPT movement per line: deliveries at their line total into the named or a generated batch, returns to the supplier at current cost (reason `RETURN_TO_SUPPLIER`); receipts always post (may go negative, inactive variants included) and publish `StockReceived` with signed lines
-- [ ] T02-07 Valuation, reorder list, rebuild
+- [x] T02-07 Valuation, reorder list, rebuild — balances, movements, valuation (Σ movement costs up to `asOf`, by variant/product/category/location; no category = nil UUID) and the reorder list read with `JdbcClient`; reorder levels under If-Match; inventory implements procurement's `ReorderSuggestionProvider` (procurement skips inactive suppliers/locations); `rebuild-balances` locks the tenant's balances, then replays the ledger through the costing policy (moving-average cost and FIFO layers are not sums) and rewrites what differs; RLS coverage now includes partitions and their grants (ADR-024)
 - [x] T02-08 Procurement module — done before T02-06 because inventory listens to `GoodsReceived`; returns are receipts with negative lines naming the delivery they correct, at most what arrived less earlier returns (checked again under lock when posting); over-receipt allowed; numbers taken at creation; invoice due date from the supplier's payment terms; the reorder SPI default is a `@Fallback` bean (ADR-023)
 - [ ] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`)
 - [ ] Definition of Done

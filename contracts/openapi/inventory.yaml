@@ -1019,6 +1019,7 @@ paths:
       - VALIDATION_FAILED
       - STOCK_ITEM_NOT_FOUND
       - UNKNOWN_LOCATION
+      - PRECONDITION_REQUIRED
       - VERSION_CONFLICT
       parameters:
       - name: variantId
@@ -1873,10 +1874,15 @@ components:
         key:
           type: string
           format: uuid
+          description: The variant, product, category or location. Stock of products without a category is grouped under
+            the nil UUID `00000000-0000-0000-0000-000000000000`.
         label:
           type: string
+          description: SKU, product name or location name; absent for categories.
         qtyBase:
           $ref: '#/components/schemas/SignedQuantity'
+          description: 'Σ of base quantities: meaningful by variant and product (one base unit), a count of mixed units
+            otherwise.'
         value:
           $ref: ./common.yaml#/components/schemas/Money
     Valuation:

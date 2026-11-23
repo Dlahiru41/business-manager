@@ -528,7 +528,9 @@ class ProcurementApiIT {
                         suggestion(shop.small, location, "400", shop.supplier, "38.5"),
                         suggestion(shop.large, location, "100", shop.supplier, null),
                         suggestion(shop.oil, location, "30000", other, "0.705"),
-                        suggestion(shop.medium, location, "60", null, "42")));
+                        suggestion(shop.medium, location, "60", null, "42"),
+                        suggestion(shop.small, LocationId.of(UUID.randomUUID()), "10", shop.supplier, "38"),
+                        suggestion(shop.large, location, "10", api.customer("Walk-in"), "46")));
 
         MvcTestResult result = api.post("/api/v1/purchase-orders:from-reorder-list", "{}");
         assertThat(result).hasStatus(201);
@@ -536,8 +538,8 @@ class ProcurementApiIT {
         assertThat(orders).hasSize(2);
         assertThat(json(result).path("skippedVariantIds"))
                 .extracting(JsonNode::asString)
-                .as("no preferred supplier")
-                .containsExactly(id(shop.medium));
+                .as("no preferred supplier, an unknown location, a customer as supplier")
+                .containsExactly(id(shop.medium), id(shop.small), id(shop.large));
         JsonNode eggs = orders.get(0);
         assertThat(eggs.path("supplierId").asString()).isEqualTo(shop.supplier.toString());
         assertThat(eggs.path("status").asString()).isEqualTo("DRAFT");

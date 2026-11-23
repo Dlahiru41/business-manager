@@ -5,6 +5,7 @@ import com.bmp.test.web.ApiClient;
 import com.bmp.test.web.OpenApiValidation;
 import java.util.List;
 import java.util.Objects;
+import org.jspecify.annotations.Nullable;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import tools.jackson.databind.JsonNode;
 
@@ -109,7 +110,7 @@ public final class PilotShop {
         return checked(client.post(path, owner, body));
     }
 
-    public MvcTestResult put(String path, String body, String ifMatch) {
+    public MvcTestResult put(String path, String body, @Nullable String ifMatch) {
         return checked(client.put(path, owner, body, ifMatch));
     }
 
@@ -137,8 +138,23 @@ public final class PilotShop {
         if (path.startsWith("/api/v1/price") || path.startsWith("/api/v1/tax-")) {
             return "pricing";
         }
-        if (path.startsWith("/api/v1/settings") || path.startsWith("/api/v1/tenant")) {
+        if (path.startsWith("/api/v1/settings")
+                || path.startsWith("/api/v1/tenant")
+                || path.startsWith("/api/v1/locations")) {
             return "tenant";
+        }
+        if (path.startsWith("/api/v1/parties") || path.startsWith("/api/v1/customer-groups")) {
+            return "party";
+        }
+        if (path.startsWith("/api/v1/purchase-orders")
+                || path.startsWith("/api/v1/goods-receipts")
+                || path.startsWith("/api/v1/supplier-invoices")) {
+            return "procurement";
+        }
+        if (path.startsWith("/api/v1/stock")
+                || path.startsWith("/api/v1/admin/stock")
+                || path.endsWith("/reorder-policy")) {
+            return "inventory";
         }
         return "catalog";
     }

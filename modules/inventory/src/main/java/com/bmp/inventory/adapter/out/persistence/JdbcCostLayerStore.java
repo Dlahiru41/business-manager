@@ -82,6 +82,8 @@ class JdbcCostLayerStore implements CostLayerStore {
                                     value_remaining, unit_cost, received_at)
                             VALUES (:tenantId, :id, :variantId, :locationId, :state, :batchId, :qty, :value, :unitCost,
                                     :receivedAt)
+                            ON CONFLICT (tenant_id, id) DO UPDATE
+                               SET qty_remaining = EXCLUDED.qty_remaining, value_remaining = EXCLUDED.value_remaining
                             """)
                     .param("tenantId", tenant)
                     .param("id", added.id())

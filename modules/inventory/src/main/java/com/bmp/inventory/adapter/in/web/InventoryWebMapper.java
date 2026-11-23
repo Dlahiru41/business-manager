@@ -5,6 +5,7 @@ import com.bmp.inventory.adapter.in.web.generated.model.MovementType;
 import com.bmp.inventory.adapter.in.web.generated.model.PostedMovements;
 import com.bmp.inventory.adapter.in.web.generated.model.RunInput;
 import com.bmp.inventory.adapter.in.web.generated.model.RunOutput;
+import com.bmp.inventory.adapter.in.web.generated.model.StockBalance;
 import com.bmp.inventory.adapter.in.web.generated.model.StockBalancePagePage;
 import com.bmp.inventory.adapter.in.web.generated.model.StockBalanceStockValue;
 import com.bmp.inventory.adapter.in.web.generated.model.StockCount;
@@ -12,7 +13,12 @@ import com.bmp.inventory.adapter.in.web.generated.model.StockCountLine;
 import com.bmp.inventory.adapter.in.web.generated.model.StockFlag;
 import com.bmp.inventory.adapter.in.web.generated.model.StockMovement;
 import com.bmp.inventory.adapter.in.web.generated.model.TransformationRun;
+import com.bmp.inventory.adapter.in.web.generated.model.Valuation;
+import com.bmp.inventory.adapter.in.web.generated.model.ValuationGroup;
+import com.bmp.inventory.adapter.in.web.generated.model.ValuationRow;
 import com.bmp.inventory.application.query.MovementView;
+import com.bmp.inventory.application.query.StockQueryService;
+import com.bmp.inventory.application.query.StockReadModel;
 import com.bmp.inventory.domain.model.RunLine;
 import com.bmp.web.pagination.PageResponse;
 import java.math.BigDecimal;
@@ -128,6 +134,42 @@ interface InventoryWebMapper {
                 .varianceCost(cost == null ? null : money(cost, currency))
                 .varianceReason(line.varianceReason())
                 .snapshotAt(time(line.snapshotAt()));
+    }
+
+    default StockBalance balance(StockReadModel.BalanceRow b, String currency) {
+        return new StockBalance()
+                .variantId(b.variantId())
+                .productId(b.productId())
+                .sku(b.sku())
+                .locationId(b.locationId())
+                .stockState(b.stockState())
+                .batchId(b.batchId())
+                .batchCode(b.batchCode())
+                .expiresOn(b.expiresOn())
+                .onHand(decimal(b.onHand()))
+                .reserved(decimal(b.reserved()))
+                .available(decimal(b.available()))
+                .avgUnitCost(decimal(b.avgUnitCost()))
+                .stockValue(money(b.stockValue(), currency))
+                .reorderLevel(b.reorderLevel() == null ? null : decimal(b.reorderLevel()))
+                .belowReorder(b.belowReorder())
+                .negative(b.onHand().signum() < 0)
+                .lastMovementAt(b.lastMovementAt() == null ? null : time(b.lastMovementAt()));
+    }
+
+    default Valuation valuation(StockQueryService.Valuation v) {
+        return new Valuation()
+                .asOf(time(v.asOf()))
+                .groupBy(ValuationGroup.valueOf(v.groupBy().name()))
+                .locationId(v.locationId())
+                .rows(v.rows().stream()
+                        .map(r -> new ValuationRow()
+                                .key(r.key())
+                                .label(r.label())
+                                .qtyBase(decimal(r.qtyBase()))
+                                .value(money(r.value(), v.currency())))
+                        .toList())
+                .total(money(v.total(), v.currency()));
     }
 
     default StockBalanceStockValue money(BigDecimal amount, String currency) {
