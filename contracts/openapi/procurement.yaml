@@ -1,0 +1,1764 @@
+openapi: 3.1.0
+info:
+  title: BMP Procurement API
+  version: 1.0.0
+  description: 'Purchase orders, goods receipts and supplier invoices (phase 02, rules PRO-01..PRO-07).
+
+
+    Orders and receipts are counted in packaging units the variant can be bought in (PRO-01); a receipt line also holds
+
+    its quantity and cost per base unit (`qtyBase = qty × qtyInBase`, `unitCostBase = unitCost / qtyInBase`, PRO-03).
+
+    Posting a receipt publishes `GoodsReceived`, which inventory books as stock (PRO-04); posted receipts never change,
+    a
+
+    correction is a return receipt with negative lines and needs `procurement:correct` (PRO-02). Supplier invoices match
+
+    posted receipts and carry the price variance (PRO-05). Numbers come from per-tenant sequences: `PO-000001`,
+
+    `GRN-000001` (PRO-07).
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: PurchaseOrders
+  description: Orders to suppliers (PRO-01, PRO-06).
+- name: GoodsReceipts
+  description: Deliveries received, with or without an order (PRO-02..PRO-04).
+- name: SupplierInvoices
+  description: Supplier invoices matched to receipts (PRO-05).
+paths:
+  /api/v1/purchase-orders:
+    get:
+      tags:
+      - PurchaseOrders
+      operationId: listPurchaseOrders
+      summary: Purchase orders, newest first
+      x-permission: procurement:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PurchaseOrderStatus'
+      - name: supplierId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrderPage'
+              example:
+                items:
+                - id: 0193f000-0000-7000-8000-000000000101
+                  number: PO-000001
+                  supplierId: 0193d000-0000-7000-8000-000000000101
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  status: SENT
+                  expectedOn: '2026-11-25'
+                  total:
+                    amount: '138000.00'
+                    currency: LKR
+                  lines:
+                  - id: 0193f000-0000-7000-8000-000000000111
+                    variantId: 0193c000-0000-7000-8000-000000000301
+                    packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                    qty: '10'
+                    unitCost: '13800.00'
+                    lineTotal:
+                      amount: '138000.00'
+                      currency: LKR
+                    receivedQty: '0'
+                  version: 1
+                  createdAt: '2026-11-23T08:30:00Z'
+                  sentAt: '2026-11-23T08:35:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - PurchaseOrders
+      operationId: createPurchaseOrder
+      summary: Draft a purchase order (PRO-01)
+      x-permission: procurement:order
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_SUPPLIER
+      - UNKNOWN_LOCATION
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_PURCHASABLE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePurchaseOrderRequest'
+            example:
+              supplierId: 0193d000-0000-7000-8000-000000000101
+              locationId: 0193b000-0000-7000-8000-000000000401
+              expectedOn: '2026-11-25'
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000301
+                packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                qty: '10'
+                unitCost: '13800.00'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+              example:
+                id: 0193f000-0000-7000-8000-000000000101
+                number: PO-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: DRAFT
+                expectedOn: '2026-11-25'
+                total:
+                  amount: '138000.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000111
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                  qty: '10'
+                  unitCost: '13800.00'
+                  lineTotal:
+                    amount: '138000.00'
+                    currency: LKR
+                  receivedQty: '0'
+                version: 0
+                createdAt: '2026-11-23T08:30:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/purchase-orders/{orderId}:
+    get:
+      tags:
+      - PurchaseOrders
+      operationId: getPurchaseOrder
+      summary: Get a purchase order
+      x-permission: procurement:read
+      x-error-codes:
+      - PURCHASE_ORDER_NOT_FOUND
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+              examples:
+                default:
+                  $ref: '#/components/examples/PurchaseOrder'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - PurchaseOrders
+      operationId: updatePurchaseOrder
+      summary: Change a draft purchase order
+      x-permission: procurement:order
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - PURCHASE_ORDER_NOT_FOUND
+      - PURCHASE_ORDER_STATE_INVALID
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_PURCHASABLE
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePurchaseOrderRequest'
+            example:
+              expectedOn: '2026-11-26'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+              example:
+                id: 0193f000-0000-7000-8000-000000000101
+                number: PO-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: DRAFT
+                expectedOn: '2026-11-25'
+                total:
+                  amount: '138000.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000111
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                  qty: '10'
+                  unitCost: '13800.00'
+                  lineTotal:
+                    amount: '138000.00'
+                    currency: LKR
+                  receivedQty: '0'
+                version: 0
+                createdAt: '2026-11-23T08:30:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/purchase-orders/{orderId}/send:
+    post:
+      tags:
+      - PurchaseOrders
+      operationId: sendPurchaseOrder
+      summary: Mark an order as sent to the supplier
+      x-permission: procurement:order
+      x-error-codes:
+      - PURCHASE_ORDER_NOT_FOUND
+      - PURCHASE_ORDER_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+              example:
+                id: 0193f000-0000-7000-8000-000000000101
+                number: PO-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: SENT
+                expectedOn: '2026-11-25'
+                total:
+                  amount: '138000.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000111
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                  qty: '10'
+                  unitCost: '13800.00'
+                  lineTotal:
+                    amount: '138000.00'
+                    currency: LKR
+                  receivedQty: '0'
+                version: 1
+                createdAt: '2026-11-23T08:30:00Z'
+                sentAt: '2026-11-23T08:35:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/purchase-orders/{orderId}/cancel:
+    post:
+      tags:
+      - PurchaseOrders
+      operationId: cancelPurchaseOrder
+      summary: Cancel an order that nothing was received for
+      x-permission: procurement:order
+      x-error-codes:
+      - PURCHASE_ORDER_NOT_FOUND
+      - PURCHASE_ORDER_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: orderId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PurchaseOrder'
+              example:
+                id: 0193f000-0000-7000-8000-000000000101
+                number: PO-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: CANCELLED
+                expectedOn: '2026-11-25'
+                total:
+                  amount: '138000.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000111
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                  qty: '10'
+                  unitCost: '13800.00'
+                  lineTotal:
+                    amount: '138000.00'
+                    currency: LKR
+                  receivedQty: '0'
+                version: 1
+                createdAt: '2026-11-23T08:30:00Z'
+                sentAt: '2026-11-23T08:35:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/purchase-orders:from-reorder-list:
+    post:
+      tags:
+      - PurchaseOrders
+      operationId: createPurchaseOrdersFromReorderList
+      summary: Draft orders for everything below its reorder level (PRO-06)
+      description: One draft order per preferred supplier and location, for each variant's reorder quantity in its first
+        buyable packaging unit (rounded up), at the last received cost.
+      x-permission: procurement:order
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_LOCATION
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FromReorderListRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FromReorderListResult'
+              example:
+                orders:
+                - id: 0193f000-0000-7000-8000-000000000101
+                  number: PO-000001
+                  supplierId: 0193d000-0000-7000-8000-000000000101
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  status: DRAFT
+                  expectedOn: '2026-11-25'
+                  total:
+                    amount: '138000.00'
+                    currency: LKR
+                  lines:
+                  - id: 0193f000-0000-7000-8000-000000000111
+                    variantId: 0193c000-0000-7000-8000-000000000301
+                    packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                    qty: '10'
+                    unitCost: '13800.00'
+                    lineTotal:
+                      amount: '138000.00'
+                      currency: LKR
+                    receivedQty: '0'
+                  version: 0
+                  createdAt: '2026-11-23T08:30:00Z'
+                skippedVariantIds: []
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/goods-receipts:
+    get:
+      tags:
+      - GoodsReceipts
+      operationId: listGoodsReceipts
+      summary: Goods receipts, newest first
+      x-permission: procurement:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/GoodsReceiptStatus'
+      - name: supplierId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: purchaseOrderId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: invoiced
+        in: query
+        required: false
+        schema:
+          type: boolean
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceiptPage'
+              example:
+                items:
+                - id: 0193f000-0000-7000-8000-000000000201
+                  number: GRN-000001
+                  supplierId: 0193d000-0000-7000-8000-000000000101
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  status: POSTED
+                  receivedAt: '2026-11-23T09:00:00Z'
+                  postedAt: '2026-11-23T09:05:00Z'
+                  total:
+                    amount: '12750.00'
+                    currency: LKR
+                  lines:
+                  - id: 0193f000-0000-7000-8000-000000000211
+                    variantId: 0193c000-0000-7000-8000-000000000202
+                    packagingUnitId: 0193c000-0000-7000-8000-000000000302
+                    qty: '10'
+                    qtyBase: '300'
+                    stockState: DEFAULT
+                    unitCost: '1275.00'
+                    unitCostBase: '42.500000'
+                    lineTotal:
+                      amount: '12750.00'
+                      currency: LKR
+                  invoiced: false
+                  version: 2
+                  createdAt: '2026-11-23T09:00:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - GoodsReceipts
+      operationId: createGoodsReceipt
+      summary: Record a delivery or a return (PRO-02, PRO-03)
+      description: A draft; `post` books it. Negative lines (a return) need `procurement:correct` and `correctsReceiptId`,
+        and send back at most what that receipt brought in less earlier returns.
+      x-permission: procurement:receive
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_SUPPLIER
+      - UNKNOWN_LOCATION
+      - PURCHASE_ORDER_MISMATCH
+      - MIXED_LINE_SIGNS
+      - CORRECTION_PERMISSION_REQUIRED
+      - CORRECTION_TARGET_INVALID
+      - EXPIRY_REQUIRED
+      - PURCHASE_ORDER_STATE_INVALID
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_PURCHASABLE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGoodsReceiptRequest'
+            example:
+              supplierId: 0193d000-0000-7000-8000-000000000101
+              locationId: 0193b000-0000-7000-8000-000000000401
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000202
+                packagingUnitId: 0193c000-0000-7000-8000-000000000302
+                qty: '10'
+                unitCost: '1275.00'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceipt'
+              example:
+                id: 0193f000-0000-7000-8000-000000000201
+                number: GRN-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: DRAFT
+                receivedAt: '2026-11-23T09:00:00Z'
+                total:
+                  amount: '12750.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000211
+                  variantId: 0193c000-0000-7000-8000-000000000202
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000302
+                  qty: '10'
+                  qtyBase: '300'
+                  stockState: DEFAULT
+                  unitCost: '1275.00'
+                  unitCostBase: '42.500000'
+                  lineTotal:
+                    amount: '12750.00'
+                    currency: LKR
+                invoiced: false
+                version: 0
+                createdAt: '2026-11-23T09:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/goods-receipts/{receiptId}:
+    get:
+      tags:
+      - GoodsReceipts
+      operationId: getGoodsReceipt
+      summary: Get a goods receipt
+      x-permission: procurement:read
+      x-error-codes:
+      - GOODS_RECEIPT_NOT_FOUND
+      parameters:
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceipt'
+              examples:
+                default:
+                  $ref: '#/components/examples/GoodsReceipt'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - GoodsReceipts
+      operationId: updateGoodsReceipt
+      summary: Change a draft goods receipt
+      x-permission: procurement:receive
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - GOODS_RECEIPT_NOT_FOUND
+      - GOODS_RECEIPT_STATE_INVALID
+      - PURCHASE_ORDER_MISMATCH
+      - MIXED_LINE_SIGNS
+      - CORRECTION_PERMISSION_REQUIRED
+      - CORRECTION_TARGET_INVALID
+      - EXPIRY_REQUIRED
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_PURCHASABLE
+      parameters:
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGoodsReceiptRequest'
+            example:
+              notes: Two trays cracked on arrival
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceipt'
+              example:
+                id: 0193f000-0000-7000-8000-000000000201
+                number: GRN-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: DRAFT
+                receivedAt: '2026-11-23T09:00:00Z'
+                total:
+                  amount: '12750.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000211
+                  variantId: 0193c000-0000-7000-8000-000000000202
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000302
+                  qty: '10'
+                  qtyBase: '300'
+                  stockState: DEFAULT
+                  unitCost: '1275.00'
+                  unitCostBase: '42.500000'
+                  lineTotal:
+                    amount: '12750.00'
+                    currency: LKR
+                invoiced: false
+                version: 0
+                createdAt: '2026-11-23T09:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/goods-receipts/{receiptId}/post:
+    post:
+      tags:
+      - GoodsReceipts
+      operationId: postGoodsReceipt
+      summary: Post a goods receipt (PRO-02, PRO-04)
+      description: Updates the order's received quantities and publishes `GoodsReceived`; the receipt never changes afterwards.
+        Its GRN number was taken when it was created. A return is checked again against what is left to send back.
+      x-permission: procurement:receive
+      x-error-codes:
+      - GOODS_RECEIPT_NOT_FOUND
+      - GOODS_RECEIPT_STATE_INVALID
+      - CORRECTION_PERMISSION_REQUIRED
+      - CORRECTION_TARGET_INVALID
+      - PURCHASE_ORDER_STATE_INVALID
+      - EXPIRY_REQUIRED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceipt'
+              examples:
+                default:
+                  $ref: '#/components/examples/GoodsReceipt'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/goods-receipts/{receiptId}/cancel:
+    post:
+      tags:
+      - GoodsReceipts
+      operationId: cancelGoodsReceipt
+      summary: Discard a draft goods receipt
+      x-permission: procurement:receive
+      x-error-codes:
+      - GOODS_RECEIPT_NOT_FOUND
+      - GOODS_RECEIPT_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: receiptId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GoodsReceipt'
+              example:
+                id: 0193f000-0000-7000-8000-000000000201
+                number: GRN-000001
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: CANCELLED
+                receivedAt: '2026-11-23T09:00:00Z'
+                total:
+                  amount: '12750.00'
+                  currency: LKR
+                lines:
+                - id: 0193f000-0000-7000-8000-000000000211
+                  variantId: 0193c000-0000-7000-8000-000000000202
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000302
+                  qty: '10'
+                  qtyBase: '300'
+                  stockState: DEFAULT
+                  unitCost: '1275.00'
+                  unitCostBase: '42.500000'
+                  lineTotal:
+                    amount: '12750.00'
+                    currency: LKR
+                invoiced: false
+                version: 0
+                createdAt: '2026-11-23T09:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/supplier-invoices:
+    get:
+      tags:
+      - SupplierInvoices
+      operationId: listSupplierInvoices
+      summary: Supplier invoices, newest first
+      x-permission: procurement:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/SupplierInvoiceStatus'
+      - name: supplierId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierInvoicePage'
+              example:
+                items:
+                - id: 0193f000-0000-7000-8000-000000000301
+                  supplierId: 0193d000-0000-7000-8000-000000000101
+                  supplierRef: KPF/2026/1187
+                  invoiceDate: '2026-11-23'
+                  dueDate: '2026-12-23'
+                  subtotal:
+                    amount: '12900.00'
+                    currency: LKR
+                  tax:
+                    amount: '0.00'
+                    currency: LKR
+                  total:
+                    amount: '12900.00'
+                    currency: LKR
+                  status: POSTED
+                  receipts:
+                  - receiptId: 0193f000-0000-7000-8000-000000000201
+                    receiptNumber: GRN-000001
+                    receiptValue:
+                      amount: '12750.00'
+                      currency: LKR
+                  receiptValue:
+                    amount: '12750.00'
+                    currency: LKR
+                  priceVariance:
+                    amount: '150.00'
+                    currency: LKR
+                  version: 1
+                  createdAt: '2026-11-23T11:00:00Z'
+                  postedAt: '2026-11-23T11:05:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - SupplierInvoices
+      operationId: createSupplierInvoice
+      summary: Record a supplier invoice against receipts (PRO-05)
+      x-permission: procurement:invoice
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_SUPPLIER
+      - SUPPLIER_INVOICE_REF_TAKEN
+      - RECEIPT_NOT_POSTED
+      - RECEIPT_ALREADY_INVOICED
+      - SUPPLIER_MISMATCH
+      - UNKNOWN_RECEIPT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSupplierInvoiceRequest'
+            example:
+              supplierId: 0193d000-0000-7000-8000-000000000101
+              supplierRef: KPF/2026/1187
+              invoiceDate: '2026-11-23'
+              subtotal: '12900.00'
+              tax: '0.00'
+              receiptIds:
+              - 0193f000-0000-7000-8000-000000000201
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierInvoice'
+              example:
+                id: 0193f000-0000-7000-8000-000000000301
+                supplierId: 0193d000-0000-7000-8000-000000000101
+                supplierRef: KPF/2026/1187
+                invoiceDate: '2026-11-23'
+                dueDate: '2026-12-23'
+                subtotal:
+                  amount: '12900.00'
+                  currency: LKR
+                tax:
+                  amount: '0.00'
+                  currency: LKR
+                total:
+                  amount: '12900.00'
+                  currency: LKR
+                status: DRAFT
+                receipts:
+                - receiptId: 0193f000-0000-7000-8000-000000000201
+                  receiptNumber: GRN-000001
+                  receiptValue:
+                    amount: '12750.00'
+                    currency: LKR
+                receiptValue:
+                  amount: '12750.00'
+                  currency: LKR
+                priceVariance:
+                  amount: '150.00'
+                  currency: LKR
+                version: 0
+                createdAt: '2026-11-23T11:00:00Z'
+                postedAt: '2026-11-23T11:05:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/supplier-invoices/{invoiceId}:
+    get:
+      tags:
+      - SupplierInvoices
+      operationId: getSupplierInvoice
+      summary: Get a supplier invoice
+      x-permission: procurement:read
+      x-error-codes:
+      - SUPPLIER_INVOICE_NOT_FOUND
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierInvoice'
+              examples:
+                default:
+                  $ref: '#/components/examples/SupplierInvoice'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/supplier-invoices/{invoiceId}/post:
+    post:
+      tags:
+      - SupplierInvoices
+      operationId: postSupplierInvoice
+      summary: Post a supplier invoice (PRO-05)
+      description: Marks its receipts invoiced and publishes `SupplierInvoicePosted` with the price variance.
+      x-permission: procurement:invoice
+      x-error-codes:
+      - SUPPLIER_INVOICE_NOT_FOUND
+      - INVOICE_STATE_INVALID
+      - RECEIPT_ALREADY_INVOICED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: invoiceId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierInvoice'
+              examples:
+                default:
+                  $ref: '#/components/examples/SupplierInvoice'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    PurchaseOrderStatus:
+      type: string
+      enum:
+      - DRAFT
+      - SENT
+      - PARTIALLY_RECEIVED
+      - RECEIVED
+      - CANCELLED
+    PurchaseOrderLine:
+      type: object
+      required:
+      - id
+      - variantId
+      - packagingUnitId
+      - qty
+      - unitCost
+      - lineTotal
+      - receivedQty
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+          description: Per packaging unit.
+        lineTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        receivedQty:
+          $ref: '#/components/schemas/SignedQuantity'
+          description: Posted so far, in the line's packaging unit.
+    PurchaseOrder:
+      type: object
+      required:
+      - id
+      - number
+      - supplierId
+      - locationId
+      - status
+      - total
+      - lines
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: PO-000001
+        supplierId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PurchaseOrderStatus'
+        expectedOn:
+          type: string
+          format: date
+        notes:
+          type: string
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrderLine'
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+        cancelledAt:
+          type: string
+          format: date-time
+    PurchaseOrderPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrder'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    PurchaseOrderLineInput:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - packagingUnitId
+      - qty
+      - unitCost
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+          description: Per packaging unit.
+    CreatePurchaseOrderRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - supplierId
+      - locationId
+      - lines
+      properties:
+        supplierId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        expectedOn:
+          type: string
+          format: date
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PurchaseOrderLineInput'
+    UpdatePurchaseOrderRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        expectedOn:
+          type: string
+          format: date
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 500
+        lines:
+          type: array
+          description: Replaces all lines (DRAFT orders only).
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/PurchaseOrderLineInput'
+    FromReorderListRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        locationId:
+          type: string
+          format: uuid
+          description: All locations when absent.
+    FromReorderListResult:
+      type: object
+      required:
+      - orders
+      - skippedVariantIds
+      properties:
+        orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/PurchaseOrder'
+        skippedVariantIds:
+          type: array
+          description: Below their reorder level but without a preferred supplier or buyable unit.
+          items:
+            type: string
+            format: uuid
+    GoodsReceiptStatus:
+      type: string
+      enum:
+      - DRAFT
+      - POSTED
+      - CANCELLED
+    GoodsReceiptLine:
+      type: object
+      required:
+      - id
+      - variantId
+      - packagingUnitId
+      - qty
+      - qtyBase
+      - stockState
+      - unitCost
+      - unitCostBase
+      - lineTotal
+      properties:
+        id:
+          type: string
+          format: uuid
+        purchaseOrderLineId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/SignedQuantity'
+        qtyBase:
+          $ref: '#/components/schemas/SignedQuantity'
+        stockState:
+          type: string
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+        unitCostBase:
+          $ref: '#/components/schemas/UnitCost'
+        lineTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        batchCode:
+          type: string
+        expiresOn:
+          type: string
+          format: date
+    GoodsReceipt:
+      type: object
+      required:
+      - id
+      - number
+      - supplierId
+      - locationId
+      - status
+      - receivedAt
+      - total
+      - lines
+      - invoiced
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: GRN-000001
+        supplierId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        purchaseOrderId:
+          type: string
+          format: uuid
+        correctsReceiptId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/GoodsReceiptStatus'
+        receivedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        postedBy:
+          type: string
+          format: uuid
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoodsReceiptLine'
+        invoiced:
+          type: boolean
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    GoodsReceiptPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/GoodsReceipt'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    GoodsReceiptLineInput:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - packagingUnitId
+      - qty
+      - unitCost
+      properties:
+        purchaseOrderLineId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/SignedQuantity'
+          description: Negative on a return to the supplier (PRO-02).
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+          description: Per packaging unit.
+        batchCode:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Generated when the variant tracks batches and none is given (INV-14).
+        expiresOn:
+          type: string
+          format: date
+          description: Required when the variant tracks expiry (INV-14).
+    CreateGoodsReceiptRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - supplierId
+      - locationId
+      - lines
+      properties:
+        supplierId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        purchaseOrderId:
+          type: string
+          format: uuid
+        correctsReceiptId:
+          type: string
+          format: uuid
+          description: The posted receipt a return corrects (negative lines).
+        receivedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/GoodsReceiptLineInput'
+    UpdateGoodsReceiptRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        receivedAt:
+          type: string
+          format: date-time
+        notes:
+          type: string
+          minLength: 1
+          maxLength: 500
+        lines:
+          type: array
+          description: Replaces all lines (DRAFT receipts only).
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/GoodsReceiptLineInput'
+    SupplierInvoiceStatus:
+      type: string
+      enum:
+      - DRAFT
+      - POSTED
+    InvoiceMatch:
+      type: object
+      required:
+      - receiptId
+      - receiptNumber
+      - receiptValue
+      properties:
+        receiptId:
+          type: string
+          format: uuid
+        receiptNumber:
+          type: string
+        receiptValue:
+          $ref: ./common.yaml#/components/schemas/Money
+    SupplierInvoice:
+      type: object
+      required:
+      - id
+      - supplierId
+      - supplierRef
+      - invoiceDate
+      - subtotal
+      - tax
+      - total
+      - status
+      - receipts
+      - receiptValue
+      - priceVariance
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        supplierId:
+          type: string
+          format: uuid
+        supplierRef:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        subtotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        tax:
+          $ref: ./common.yaml#/components/schemas/Money
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
+        status:
+          $ref: '#/components/schemas/SupplierInvoiceStatus'
+        receipts:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceMatch'
+        receiptValue:
+          $ref: ./common.yaml#/components/schemas/Money
+        priceVariance:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: subtotal − receipt value (PRO-05).
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        postedAt:
+          type: string
+          format: date-time
+    SupplierInvoicePage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SupplierInvoice'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreateSupplierInvoiceRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - supplierId
+      - supplierRef
+      - invoiceDate
+      - subtotal
+      - receiptIds
+      properties:
+        supplierId:
+          type: string
+          format: uuid
+        supplierRef:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: The supplier's invoice number; unique per supplier.
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+          description: 'Default: invoice date + the supplier''s payment terms.'
+        subtotal:
+          $ref: '#/components/schemas/Amount'
+          description: Before tax.
+        tax:
+          $ref: '#/components/schemas/Amount'
+        receiptIds:
+          type: array
+          description: Posted receipts of the same supplier, not invoiced yet.
+          minItems: 1
+          maxItems: 50
+          items:
+            type: string
+            format: uuid
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'
+  examples:
+    PurchaseOrder:
+      value:
+        id: 0193f000-0000-7000-8000-000000000101
+        number: PO-000001
+        supplierId: 0193d000-0000-7000-8000-000000000101
+        locationId: 0193b000-0000-7000-8000-000000000401
+        status: SENT
+        expectedOn: '2026-11-25'
+        total:
+          amount: '138000.00'
+          currency: LKR
+        lines:
+        - id: 0193f000-0000-7000-8000-000000000111
+          variantId: 0193c000-0000-7000-8000-000000000301
+          packagingUnitId: 0193c000-0000-7000-8000-000000000321
+          qty: '10'
+          unitCost: '13800.00'
+          lineTotal:
+            amount: '138000.00'
+            currency: LKR
+          receivedQty: '0'
+        version: 1
+        createdAt: '2026-11-23T08:30:00Z'
+        sentAt: '2026-11-23T08:35:00Z'
+    GoodsReceipt:
+      value:
+        id: 0193f000-0000-7000-8000-000000000201
+        number: GRN-000001
+        supplierId: 0193d000-0000-7000-8000-000000000101
+        locationId: 0193b000-0000-7000-8000-000000000401
+        status: POSTED
+        receivedAt: '2026-11-23T09:00:00Z'
+        postedAt: '2026-11-23T09:05:00Z'
+        total:
+          amount: '12750.00'
+          currency: LKR
+        lines:
+        - id: 0193f000-0000-7000-8000-000000000211
+          variantId: 0193c000-0000-7000-8000-000000000202
+          packagingUnitId: 0193c000-0000-7000-8000-000000000302
+          qty: '10'
+          qtyBase: '300'
+          stockState: DEFAULT
+          unitCost: '1275.00'
+          unitCostBase: '42.500000'
+          lineTotal:
+            amount: '12750.00'
+            currency: LKR
+        invoiced: false
+        version: 2
+        createdAt: '2026-11-23T09:00:00Z'
+    SupplierInvoice:
+      value:
+        id: 0193f000-0000-7000-8000-000000000301
+        supplierId: 0193d000-0000-7000-8000-000000000101
+        supplierRef: KPF/2026/1187
+        invoiceDate: '2026-11-23'
+        dueDate: '2026-12-23'
+        subtotal:
+          amount: '12900.00'
+          currency: LKR
+        tax:
+          amount: '0.00'
+          currency: LKR
+        total:
+          amount: '12900.00'
+          currency: LKR
+        status: POSTED
+        receipts:
+        - receiptId: 0193f000-0000-7000-8000-000000000201
+          receiptNumber: GRN-000001
+          receiptValue:
+            amount: '12750.00'
+            currency: LKR
+        receiptValue:
+          amount: '12750.00'
+          currency: LKR
+        priceVariance:
+          amount: '150.00'
+          currency: LKR
+        version: 1
+        createdAt: '2026-11-23T11:00:00Z'
+        postedAt: '2026-11-23T11:05:00Z'

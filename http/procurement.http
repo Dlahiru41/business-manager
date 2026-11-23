@@ -1,0 +1,92 @@
+# Procurement module (contracts/openapi/procurement.yaml). Get tokens with auth.http first, then run tenant.http
+# (locationId), party.http (supplierId) and catalog.http (oilVariantId, canId) so the variables below are set.
+
+### Order 10 cans of oil (PRO-01; number PO-000001, PRO-07)
+POST {{baseUrl}}/api/v1/purchase-orders
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"supplierId": "{{supplierId}}", "locationId": "{{locationId}}", "expectedOn": "2026-11-25",
+ "lines": [{"variantId": "{{oilVariantId}}", "packagingUnitId": "{{canId}}", "qty": "10", "unitCost": "13800.00"}]}
+
+> {%
+client.global.set("orderId", response.body.id);
+client.global.set("orderLineId", response.body.lines[0].id);
+client.global.set("orderEtag", response.headers.valueOf("ETag"));
+%}
+
+### Change the draft under its ETag
+PATCH {{baseUrl}}/api/v1/purchase-orders/{{orderId}}
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{orderEtag}}
+
+{"notes": "Morning delivery please"}
+
+### Send it
+POST {{baseUrl}}/api/v1/purchase-orders/{{orderId}}/send
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### Receive the cans against the order (PRO-02, PRO-03: qtyBase in ml, unitCostBase per ml)
+POST {{baseUrl}}/api/v1/goods-receipts
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"supplierId": "{{supplierId}}", "locationId": "{{locationId}}", "purchaseOrderId": "{{orderId}}",
+ "lines": [{"purchaseOrderLineId": "{{orderLineId}}", "variantId": "{{oilVariantId}}",
+            "packagingUnitId": "{{canId}}", "qty": "10", "unitCost": "13800.00"}]}
+
+> {% client.global.set("receiptId", response.body.id); %}
+
+### Post it: the order becomes RECEIVED and GoodsReceived goes to inventory (PRO-04)
+POST {{baseUrl}}/api/v1/goods-receipts/{{receiptId}}/post
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### Return two dented cans (needs procurement:correct)
+POST {{baseUrl}}/api/v1/goods-receipts
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"supplierId": "{{supplierId}}", "locationId": "{{locationId}}", "correctsReceiptId": "{{receiptId}}",
+ "notes": "Two cans dented",
+ "lines": [{"variantId": "{{oilVariantId}}", "packagingUnitId": "{{canId}}", "qty": "-2", "unitCost": "13800.00"}]}
+
+> {% client.global.set("returnId", response.body.id); %}
+
+### Post the return
+POST {{baseUrl}}/api/v1/goods-receipts/{{returnId}}/post
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### The supplier's invoice for the delivery (PRO-05: price variance 150.00)
+POST {{baseUrl}}/api/v1/supplier-invoices
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"supplierId": "{{supplierId}}", "supplierRef": "KPF/2026/{{$randomInt}}", "invoiceDate": "2026-11-23",
+ "subtotal": "138150.00", "tax": "0.00", "receiptIds": ["{{receiptId}}"]}
+
+> {% client.global.set("invoiceId", response.body.id); %}
+
+### Post the invoice: the receipt is marked invoiced
+POST {{baseUrl}}/api/v1/supplier-invoices/{{invoiceId}}/post
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
+
+### Draft orders from the reorder list (PRO-06)
+POST {{baseUrl}}/api/v1/purchase-orders:from-reorder-list
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{}
+
+### Receipts not invoiced yet
+GET {{baseUrl}}/api/v1/goods-receipts?status=POSTED&invoiced=false
+Authorization: Bearer {{ownerToken}}

@@ -1,0 +1,964 @@
+openapi: 3.1.0
+info:
+  title: BMP Party API
+  version: 1.0.0
+  description: 'Customers and suppliers of a tenant (phase 02, rules PTY-01..PTY-04).
+
+
+    A party is a CUSTOMER, a SUPPLIER or BOTH. Phones are stored in E.164 form, read in the tenant''s default country
+
+    (LK) when given without a country code (PTY-01); a second party with the same phone needs `force=true` and the
+
+    `party:write` permission (PTY-02). Credit terms change only with `party:credit` (PTY-03). Names, phone, e-mail, tax
+    id
+
+    and address are personal data: `anonymise` replaces them and keeps the party''s id for its documents (PTY-04).
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Parties
+  description: Customers and suppliers (PTY-01..PTY-04).
+- name: CustomerGroups
+  description: Groups of customers, used by price lists and rules.
+paths:
+  /api/v1/parties:
+    get:
+      tags:
+      - Parties
+      operationId: listParties
+      summary: Parties, newest first
+      x-permission: party:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PartyType'
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/Status'
+      - name: customerGroupId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartyPage'
+              example:
+                items:
+                - id: 0193d000-0000-7000-8000-000000000101
+                  type: SUPPLIER
+                  displayName: Kegalle Poultry Farm
+                  phone: '+94771234567'
+                  email: orders@kegallepoultry.lk
+                  taxId: 134567890-7000
+                  address:
+                    line1: 12 Main Street
+                    city: Kegalle
+                    country: LK
+                  status: ACTIVE
+                  anonymised: false
+                  creditPolicy:
+                    creditAllowed: false
+                    creditLimit: '0.00'
+                    paymentTermsDays: 30
+                  version: 0
+                  createdAt: '2026-11-23T08:15:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Parties
+      operationId: createParty
+      summary: Add a customer or supplier (PTY-01, PTY-02)
+      description: '`party:create-customer` creates customers; suppliers, BOTH and `force=true` need `party:write` (`PARTY_PERMISSION_REQUIRED`).'
+      x-permission: party:create-customer
+      x-error-codes:
+      - VALIDATION_FAILED
+      - INVALID_PHONE
+      - DUPLICATE_PARTY_PHONE
+      - UNKNOWN_CUSTOMER_GROUP
+      - PARTY_PERMISSION_REQUIRED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: force
+        in: query
+        required: false
+        description: Accept a phone another party already has (PTY-02); needs `party:write`.
+        schema:
+          type: boolean
+          default: false
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePartyRequest'
+            example:
+              type: SUPPLIER
+              displayName: Kegalle Poultry Farm
+              phone: 077 123 4567
+              email: orders@kegallepoultry.lk
+              address:
+                line1: 12 Main Street
+                city: Kegalle
+                country: LK
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+              examples:
+                default:
+                  $ref: '#/components/examples/Supplier'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/parties/{partyId}:
+    get:
+      tags:
+      - Parties
+      operationId: getParty
+      summary: Get a party
+      x-permission: party:read
+      x-error-codes:
+      - PARTY_NOT_FOUND
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+              examples:
+                default:
+                  $ref: '#/components/examples/Customer'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - Parties
+      operationId: updateParty
+      summary: Change a party (PTY-01, PTY-02)
+      x-permission: party:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - PARTY_NOT_FOUND
+      - INVALID_PHONE
+      - DUPLICATE_PARTY_PHONE
+      - UNKNOWN_CUSTOMER_GROUP
+      - PARTY_ANONYMISED
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: force
+        in: query
+        required: false
+        description: Accept a phone another party already has (PTY-02); needs `party:write`.
+        schema:
+          type: boolean
+          default: false
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdatePartyRequest'
+            example:
+              type: BOTH
+              phone: '+94771234568'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+              examples:
+                default:
+                  $ref: '#/components/examples/Supplier'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/parties/{partyId}/credit-policy:
+    put:
+      tags:
+      - Parties
+      operationId: updateCreditPolicy
+      summary: Set a party's credit terms (PTY-03)
+      x-permission: party:credit
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - PARTY_NOT_FOUND
+      - PARTY_ANONYMISED
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCreditPolicyRequest'
+            example:
+              creditAllowed: true
+              creditLimit: '50000.00'
+              paymentTermsDays: 14
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+              examples:
+                default:
+                  $ref: '#/components/examples/Customer'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/parties/{partyId}/anonymise:
+    post:
+      tags:
+      - Parties
+      operationId: anonymiseParty
+      summary: Replace a party's personal data (PTY-04)
+      description: Name, phone, e-mail, tax id and address are replaced; the id, type, group and credit terms stay so documents
+        keep their party. Repeating it changes nothing.
+      x-permission: party:anonymise
+      x-error-codes:
+      - PARTY_NOT_FOUND
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: partyId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Party'
+              example:
+                id: 0193d000-0000-7000-8000-000000000102
+                type: CUSTOMER
+                displayName: Anonymised party
+                customerGroupId: 0193d000-0000-7000-8000-000000000201
+                status: INACTIVE
+                anonymised: true
+                creditPolicy:
+                  creditAllowed: true
+                  creditLimit: '50000.00'
+                  paymentTermsDays: 14
+                version: 3
+                createdAt: '2026-11-23T08:20:00Z'
+                updatedAt: '2026-11-23T09:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/parties:search:
+    get:
+      tags:
+      - Parties
+      operationId: searchParties
+      summary: Find parties by name or phone prefix
+      description: Fast prefix search for tills and purchasing; at most `limit` active parties, best matches first.
+      x-permission: party:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: q
+        in: query
+        required: true
+        schema:
+          type: string
+          minLength: 1
+          maxLength: 80
+        description: Start of a word of the name, or of the phone (digits, any format).
+      - name: type
+        in: query
+        required: false
+        description: CUSTOMER also matches BOTH, and so does SUPPLIER.
+        schema:
+          $ref: '#/components/schemas/PartyType'
+      - $ref: ./common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PartySearchResult'
+              example:
+                items:
+                - id: 0193d000-0000-7000-8000-000000000101
+                  type: SUPPLIER
+                  displayName: Kegalle Poultry Farm
+                  phone: '+94771234567'
+                  status: ACTIVE
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/customer-groups:
+    get:
+      tags:
+      - CustomerGroups
+      operationId: listCustomerGroups
+      summary: Customer groups, by code
+      x-permission: party:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerGroupPage'
+              example:
+                items:
+                - id: 0193d000-0000-7000-8000-000000000201
+                  code: HOTELS
+                  name: Hotels and restaurants
+                  status: ACTIVE
+                  version: 0
+                  createdAt: '2026-11-23T08:00:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - CustomerGroups
+      operationId: createCustomerGroup
+      summary: Add a customer group
+      x-permission: party:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - CUSTOMER_GROUP_CODE_TAKEN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateCustomerGroupRequest'
+            example:
+              code: HOTELS
+              name: Hotels and restaurants
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerGroup'
+              examples:
+                default:
+                  $ref: '#/components/examples/CustomerGroup'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/customer-groups/{groupId}:
+    get:
+      tags:
+      - CustomerGroups
+      operationId: getCustomerGroup
+      summary: Get a customer group
+      x-permission: party:read
+      x-error-codes:
+      - CUSTOMER_GROUP_NOT_FOUND
+      parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerGroup'
+              examples:
+                default:
+                  $ref: '#/components/examples/CustomerGroup'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - CustomerGroups
+      operationId: updateCustomerGroup
+      summary: Rename or deactivate a customer group
+      x-permission: party:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - CUSTOMER_GROUP_NOT_FOUND
+      parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerGroupRequest'
+            example:
+              name: Hotels
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerGroup'
+              examples:
+                default:
+                  $ref: '#/components/examples/CustomerGroup'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    Address:
+      type: object
+      description: A postal address (personal data).
+      additionalProperties: false
+      properties:
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 120
+        line2:
+          type: string
+          minLength: 1
+          maxLength: 120
+        city:
+          type: string
+          minLength: 1
+          maxLength: 60
+        district:
+          type: string
+          minLength: 1
+          maxLength: 60
+        postalCode:
+          type: string
+          minLength: 1
+          maxLength: 12
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          example: LK
+    PartyType:
+      type: string
+      enum:
+      - CUSTOMER
+      - SUPPLIER
+      - BOTH
+    CreditPolicy:
+      type: object
+      description: 'Credit terms (PTY-03): whether the party may buy on credit, up to which balance, and payment terms.'
+      additionalProperties: false
+      required:
+      - creditAllowed
+      - creditLimit
+      - paymentTermsDays
+      properties:
+        creditAllowed:
+          type: boolean
+        creditLimit:
+          $ref: '#/components/schemas/Amount'
+        paymentTermsDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 365
+    Party:
+      type: object
+      required:
+      - id
+      - type
+      - displayName
+      - status
+      - anonymised
+      - creditPolicy
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/PartyType'
+        displayName:
+          type: string
+        phone:
+          type: string
+          pattern: ^\+[1-9][0-9]{6,14}$
+          description: E.164.
+          example: '+94771234567'
+        email:
+          type: string
+          format: email
+        taxId:
+          type: string
+        address:
+          $ref: '#/components/schemas/Address'
+        customerGroupId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/Status'
+        anonymised:
+          type: boolean
+        creditPolicy:
+          $ref: '#/components/schemas/CreditPolicy'
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    PartyPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Party'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreatePartyRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - displayName
+      properties:
+        type:
+          $ref: '#/components/schemas/PartyType'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^.*\S.*$
+        phone:
+          type: string
+          pattern: ^[+0-9 ()\-]{6,24}$
+          description: Normalised to E.164; without a country code the tenant's default country (LK) applies.
+          example: 077 123 4567
+        email:
+          type: string
+          format: email
+          maxLength: 120
+        taxId:
+          type: string
+          minLength: 1
+          maxLength: 40
+        address:
+          $ref: '#/components/schemas/Address'
+        customerGroupId:
+          type: string
+          format: uuid
+    UpdatePartyRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        type:
+          $ref: '#/components/schemas/PartyType'
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 120
+          pattern: ^.*\S.*$
+        phone:
+          type: string
+          pattern: ^[+0-9 ()\-]{6,24}$
+          description: Normalised to E.164; without a country code the tenant's default country (LK) applies.
+          example: 077 123 4567
+        email:
+          type: string
+          format: email
+          maxLength: 120
+        taxId:
+          type: string
+          minLength: 1
+          maxLength: 40
+        address:
+          $ref: '#/components/schemas/Address'
+        customerGroupId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/Status'
+    UpdateCreditPolicyRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - creditAllowed
+      - creditLimit
+      - paymentTermsDays
+      properties:
+        creditAllowed:
+          type: boolean
+        creditLimit:
+          $ref: '#/components/schemas/Amount'
+        paymentTermsDays:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 365
+    PartySummary:
+      type: object
+      required:
+      - id
+      - type
+      - displayName
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/PartyType'
+        displayName:
+          type: string
+        phone:
+          type: string
+          pattern: ^\+[1-9][0-9]{6,14}$
+          description: E.164.
+          example: '+94771234567'
+        customerGroupId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/Status'
+    PartySearchResult:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PartySummary'
+    CustomerGroup:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - status
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: '#/components/schemas/Status'
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    CustomerGroupPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CustomerGroup'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreateCustomerGroupRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - name
+      properties:
+        code:
+          $ref: '#/components/schemas/Code'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+    UpdateCustomerGroupRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        status:
+          $ref: '#/components/schemas/Status'
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'
+  examples:
+    Supplier:
+      value:
+        id: 0193d000-0000-7000-8000-000000000101
+        type: SUPPLIER
+        displayName: Kegalle Poultry Farm
+        phone: '+94771234567'
+        email: orders@kegallepoultry.lk
+        taxId: 134567890-7000
+        address:
+          line1: 12 Main Street
+          city: Kegalle
+          country: LK
+        status: ACTIVE
+        anonymised: false
+        creditPolicy:
+          creditAllowed: false
+          creditLimit: '0.00'
+          paymentTermsDays: 30
+        version: 0
+        createdAt: '2026-11-23T08:15:00Z'
+    Customer:
+      value:
+        id: 0193d000-0000-7000-8000-000000000102
+        type: CUSTOMER
+        displayName: Hotel Lake View
+        phone: '+94812345678'
+        customerGroupId: 0193d000-0000-7000-8000-000000000201
+        status: ACTIVE
+        anonymised: false
+        creditPolicy:
+          creditAllowed: true
+          creditLimit: '50000.00'
+          paymentTermsDays: 14
+        version: 2
+        createdAt: '2026-11-23T08:20:00Z'
+        updatedAt: '2026-11-23T09:00:00Z'
+    CustomerGroup:
+      value:
+        id: 0193d000-0000-7000-8000-000000000201
+        code: HOTELS
+        name: Hotels and restaurants
+        status: ACTIVE
+        version: 0
+        createdAt: '2026-11-23T08:00:00Z'

@@ -57,6 +57,43 @@ channels:
       PriceListChanged:
         $ref: "#/components/messages/PriceListChanged"
 
+  partyParty:
+    address: bmp.party.party
+    messages:
+      PartyCreated:
+        $ref: '#/components/messages/PartyCreated'
+      PartyUpdated:
+        $ref: '#/components/messages/PartyUpdated'
+  procurementGoodsReceipt:
+    address: bmp.procurement.goods-receipt
+    messages:
+      GoodsReceived:
+        $ref: '#/components/messages/GoodsReceived'
+  procurementSupplierInvoice:
+    address: bmp.procurement.supplier-invoice
+    messages:
+      SupplierInvoicePosted:
+        $ref: '#/components/messages/SupplierInvoicePosted'
+  inventoryStock:
+    address: bmp.inventory.stock
+    messages:
+      StockReceived:
+        $ref: '#/components/messages/StockReceived'
+      StockAdjusted:
+        $ref: '#/components/messages/StockAdjusted'
+      StockLevelLow:
+        $ref: '#/components/messages/StockLevelLow'
+  inventoryTransformation:
+    address: bmp.inventory.transformation
+    messages:
+      StockTransformed:
+        $ref: '#/components/messages/StockTransformed'
+  inventoryStockCount:
+    address: bmp.inventory.stock-count
+    messages:
+      StockCountPosted:
+        $ref: '#/components/messages/StockCountPosted'
+
 operations:
   publishTenantEvents:
     action: send
@@ -87,6 +124,31 @@ operations:
     action: send
     channel:
       $ref: "#/channels/pricingPriceList"
+
+  publishPartyEvents:
+    action: send
+    channel:
+      $ref: '#/channels/partyParty'
+  publishGoodsReceiptEvents:
+    action: send
+    channel:
+      $ref: '#/channels/procurementGoodsReceipt'
+  publishSupplierInvoiceEvents:
+    action: send
+    channel:
+      $ref: '#/channels/procurementSupplierInvoice'
+  publishStockEvents:
+    action: send
+    channel:
+      $ref: '#/channels/inventoryStock'
+  publishTransformationEvents:
+    action: send
+    channel:
+      $ref: '#/channels/inventoryTransformation'
+  publishStockCountEvents:
+    action: send
+    channel:
+      $ref: '#/channels/inventoryStockCount'
 
 components:
   messages:
@@ -422,6 +484,261 @@ components:
                 minQty: "1"
                 amount: "48.00"
                 validFrom: "2026-11-21T09:42:13Z"
+
+    PartyCreated:
+      name: bmp.party.party-created.v1
+      title: Party created
+      summary: A customer or supplier was added (PTY-01); no contact details, only the name, group and credit terms.
+      payload:
+        $ref: '#/components/schemas/PartyCreated'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193d000-0000-7000-8000-000000000101
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          partyId: 0193d000-0000-7000-8000-000000000101
+          type: SUPPLIER
+          displayName: Kegalle Poultry Farm
+          status: ACTIVE
+          anonymised: false
+          currency: LKR
+          creditPolicy:
+            creditAllowed: false
+            creditLimit: '0.00'
+            paymentTermsDays: 30
+    PartyUpdated:
+      name: bmp.party.party-updated.v1
+      title: Party updated
+      summary: A party changed, its credit terms (PTY-03) or its anonymisation (PTY-04) included.
+      payload:
+        $ref: '#/components/schemas/PartyUpdated'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193d000-0000-7000-8000-000000000101
+          aggregateVersion: 2
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          partyId: 0193d000-0000-7000-8000-000000000101
+          type: SUPPLIER
+          displayName: Kegalle Poultry Farm
+          status: ACTIVE
+          anonymised: false
+          currency: LKR
+          creditPolicy:
+            creditAllowed: false
+            creditLimit: '0.00'
+            paymentTermsDays: 30
+    GoodsReceived:
+      name: bmp.procurement.goods-received.v1
+      title: Goods received
+      summary: A goods receipt was posted (PRO-04); inventory books its lines as stock.
+      payload:
+        $ref: '#/components/schemas/GoodsReceived'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193f000-0000-7000-8000-000000000201
+          aggregateVersion: 2
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          receiptId: 0193f000-0000-7000-8000-000000000201
+          number: GRN-000001
+          supplierId: 0193d000-0000-7000-8000-000000000101
+          locationId: 0193b000-0000-7000-8000-000000000401
+          receivedAt: '2026-11-23T09:00:00Z'
+          currency: LKR
+          total: '12750.00'
+          lines:
+          - lineId: 0193f000-0000-7000-8000-000000000211
+            variantId: 0193c000-0000-7000-8000-000000000202
+            packagingUnitId: 0193c000-0000-7000-8000-000000000302
+            qty: '10'
+            qtyBase: '300'
+            stockState: DEFAULT
+            unitCost: '1275.00'
+            unitCostBase: '42.500000'
+            lineTotal: '12750.00'
+    SupplierInvoicePosted:
+      name: bmp.procurement.supplier-invoice-posted.v1
+      title: Supplier invoice posted
+      summary: An invoice matched to posted receipts; carries the price variance (PRO-05).
+      payload:
+        $ref: '#/components/schemas/SupplierInvoicePosted'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193f000-0000-7000-8000-000000000301
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          invoiceId: 0193f000-0000-7000-8000-000000000301
+          supplierId: 0193d000-0000-7000-8000-000000000101
+          supplierRef: KPF/2026/1187
+          invoiceDate: '2026-11-23'
+          dueDate: '2026-12-23'
+          currency: LKR
+          subtotal: '12900.00'
+          tax: '0.00'
+          total: '12900.00'
+          receiptValue: '12750.00'
+          priceVariance: '150.00'
+          receiptIds:
+          - 0193f000-0000-7000-8000-000000000201
+    StockReceived:
+      name: bmp.inventory.stock-received.v1
+      title: Stock received
+      summary: Stock came in from a goods receipt, an opening balance or a transfer. A transfer's lines only move stock
+        between locations (the tenant's stock value does not change); `corrections` carry cost true-ups of negative stock
+        (INV-03, INV-04) and do change it.
+      payload:
+        $ref: '#/components/schemas/StockReceived'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193f000-0000-7000-8000-000000000201
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          sourceType: GOODS_RECEIPT
+          sourceId: 0193f000-0000-7000-8000-000000000201
+          locationId: 0193b000-0000-7000-8000-000000000401
+          currency: LKR
+          lines:
+          - movementId: 0193e000-0000-7000-8000-000000000511
+            sourceLineId: 0193f000-0000-7000-8000-000000000211
+            variantId: 0193c000-0000-7000-8000-000000000202
+            stockState: DEFAULT
+            qtyBase: '300'
+            unitCost: '42.500000'
+            costAmount: '12750.00'
+          corrections: []
+    StockAdjusted:
+      name: bmp.inventory.stock-adjusted.v1
+      title: Stock adjusted
+      summary: 'Stock was lost (INV-11): wastage movements with their cost.'
+      payload:
+        $ref: '#/components/schemas/StockAdjusted'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193e000-0000-7000-8000-000000000701
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          adjustmentId: 0193e000-0000-7000-8000-000000000701
+          reason: BREAKAGE
+          locationId: 0193b000-0000-7000-8000-000000000401
+          currency: LKR
+          lines:
+          - movementId: 0193e000-0000-7000-8000-000000000511
+            sourceLineId: 0193f000-0000-7000-8000-000000000211
+            variantId: 0193c000-0000-7000-8000-000000000202
+            stockState: DEFAULT
+            qtyBase: '-6'
+            unitCost: '42.500000'
+            costAmount: '-255.00'
+    StockTransformed:
+      name: bmp.inventory.stock-transformed.v1
+      title: Stock transformed
+      summary: 'A transformation ran (INV-09): Σ input cost = Σ output cost. `corrections` carry cost true-ups of outputs
+        that went into negative stock; they change the stock value.'
+      payload:
+        $ref: '#/components/schemas/StockTransformed'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193e000-0000-7000-8000-000000000601
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          runId: 0193e000-0000-7000-8000-000000000601
+          definitionId: 0193c000-0000-7000-8000-000000000331
+          defVersion: 1
+          kind: OPEN
+          locationId: 0193b000-0000-7000-8000-000000000401
+          currency: LKR
+          inputs:
+          - movementId: 0193e000-0000-7000-8000-000000000501
+            variantId: 0193c000-0000-7000-8000-000000000301
+            stockState: SEALED
+            qtyBase: '-19565.28'
+            unitCost: '0.705322'
+            costAmount: '-13800.00'
+          outputs:
+          - movementId: 0193e000-0000-7000-8000-000000000502
+            variantId: 0193c000-0000-7000-8000-000000000301
+            stockState: OPEN
+            qtyBase: '19400'
+            unitCost: '0.711340'
+            costAmount: '13800.00'
+          yieldVarianceQty: '-165.28'
+          totalCost: '13800.00'
+          corrections: []
+    StockLevelLow:
+      name: bmp.inventory.stock-level-low.v1
+      title: Stock level low
+      summary: Available stock fell to or below the reorder level; once per crossing (INV-13).
+      payload:
+        $ref: '#/components/schemas/StockLevelLow'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193c000-0000-7000-8000-000000000202
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          variantId: 0193c000-0000-7000-8000-000000000202
+          locationId: 0193b000-0000-7000-8000-000000000401
+          available: '84'
+          reorderLevel: '120'
+          reorderQty: '600'
+          preferredSupplierId: 0193d000-0000-7000-8000-000000000101
+    StockCountPosted:
+      name: bmp.inventory.stock-count-posted.v1
+      title: Stock count posted
+      summary: A count's variances were booked (INV-12).
+      payload:
+        $ref: '#/components/schemas/StockCountPosted'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e001
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-23T09:05:00Z'
+          aggregateId: 0193e000-0000-7000-8000-000000000801
+          aggregateVersion: 3
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          countId: 0193e000-0000-7000-8000-000000000801
+          locationId: 0193b000-0000-7000-8000-000000000401
+          currency: LKR
+          lines:
+          - movementId: 0193e000-0000-7000-8000-000000000511
+            sourceLineId: 0193f000-0000-7000-8000-000000000211
+            variantId: 0193c000-0000-7000-8000-000000000202
+            stockState: DEFAULT
+            qtyBase: '-50'
+            unitCost: '2.200000'
+            costAmount: '-110.00'
+          totalVarianceCost: '-110.00'
 
   schemas:
     Uuid:
@@ -978,3 +1295,580 @@ components:
           minItems: 1
           items:
             $ref: "#/components/schemas/PriceChangeSnapshot"
+    CreditPolicySnapshot:
+      type: object
+      additionalProperties: false
+      required:
+      - creditAllowed
+      - creditLimit
+      - paymentTermsDays
+      properties:
+        creditAllowed:
+          type: boolean
+        creditLimit:
+          $ref: '#/components/schemas/Decimal'
+        paymentTermsDays:
+          type: integer
+          minimum: 0
+    PartyCreated:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - partyId
+      - type
+      - displayName
+      - status
+      - anonymised
+      - currency
+      - creditPolicy
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        partyId:
+          $ref: '#/components/schemas/Uuid'
+        type:
+          type: string
+          enum:
+          - CUSTOMER
+          - SUPPLIER
+          - BOTH
+        displayName:
+          type: string
+        customerGroupId:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+        anonymised:
+          type: boolean
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        creditPolicy:
+          $ref: '#/components/schemas/CreditPolicySnapshot'
+    PartyUpdated:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - partyId
+      - type
+      - displayName
+      - status
+      - anonymised
+      - currency
+      - creditPolicy
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        partyId:
+          $ref: '#/components/schemas/Uuid'
+        type:
+          type: string
+          enum:
+          - CUSTOMER
+          - SUPPLIER
+          - BOTH
+        displayName:
+          type: string
+        customerGroupId:
+          $ref: '#/components/schemas/Uuid'
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+        anonymised:
+          type: boolean
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        creditPolicy:
+          $ref: '#/components/schemas/CreditPolicySnapshot'
+    GoodsReceivedLine:
+      type: object
+      additionalProperties: false
+      required:
+      - lineId
+      - variantId
+      - packagingUnitId
+      - qty
+      - qtyBase
+      - stockState
+      - unitCost
+      - unitCostBase
+      - lineTotal
+      properties:
+        lineId:
+          $ref: '#/components/schemas/Uuid'
+        purchaseOrderLineId:
+          $ref: '#/components/schemas/Uuid'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        packagingUnitId:
+          $ref: '#/components/schemas/Uuid'
+        qty:
+          $ref: '#/components/schemas/Decimal'
+        qtyBase:
+          $ref: '#/components/schemas/Decimal'
+        stockState:
+          type: string
+        unitCost:
+          $ref: '#/components/schemas/Decimal'
+        unitCostBase:
+          $ref: '#/components/schemas/Decimal'
+        lineTotal:
+          $ref: '#/components/schemas/Decimal'
+        batchCode:
+          type: string
+        expiresOn:
+          type: string
+          format: date
+    GoodsReceived:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - receiptId
+      - number
+      - supplierId
+      - locationId
+      - receivedAt
+      - currency
+      - total
+      - lines
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        receiptId:
+          $ref: '#/components/schemas/Uuid'
+        number:
+          type: string
+        supplierId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        purchaseOrderId:
+          $ref: '#/components/schemas/Uuid'
+        correctsReceiptId:
+          $ref: '#/components/schemas/Uuid'
+        receivedAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        total:
+          $ref: '#/components/schemas/Decimal'
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/GoodsReceivedLine'
+    SupplierInvoicePosted:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - invoiceId
+      - supplierId
+      - supplierRef
+      - invoiceDate
+      - dueDate
+      - currency
+      - subtotal
+      - tax
+      - total
+      - receiptValue
+      - priceVariance
+      - receiptIds
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        invoiceId:
+          $ref: '#/components/schemas/Uuid'
+        supplierId:
+          $ref: '#/components/schemas/Uuid'
+        supplierRef:
+          type: string
+        invoiceDate:
+          type: string
+          format: date
+        dueDate:
+          type: string
+          format: date
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        subtotal:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        total:
+          $ref: '#/components/schemas/Decimal'
+        receiptValue:
+          $ref: '#/components/schemas/Decimal'
+        priceVariance:
+          $ref: '#/components/schemas/Decimal'
+        receiptIds:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/Uuid'
+    StockMovementLine:
+      type: object
+      additionalProperties: false
+      required:
+      - movementId
+      - variantId
+      - stockState
+      - qtyBase
+      - unitCost
+      - costAmount
+      properties:
+        movementId:
+          $ref: '#/components/schemas/Uuid'
+        sourceLineId:
+          $ref: '#/components/schemas/Uuid'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        stockState:
+          type: string
+        batchId:
+          $ref: '#/components/schemas/Uuid'
+        qtyBase:
+          $ref: '#/components/schemas/Decimal'
+        unitCost:
+          $ref: '#/components/schemas/Decimal'
+        costAmount:
+          $ref: '#/components/schemas/Decimal'
+    StockReceived:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - sourceType
+      - sourceId
+      - locationId
+      - currency
+      - lines
+      - corrections
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        sourceType:
+          type: string
+          enum:
+          - GOODS_RECEIPT
+          - OPENING_BALANCE
+          - TRANSFER
+        sourceId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+    StockAdjusted:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - adjustmentId
+      - reason
+      - locationId
+      - currency
+      - lines
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        adjustmentId:
+          $ref: '#/components/schemas/Uuid'
+        reason:
+          type: string
+          enum:
+          - BREAKAGE
+          - SPOILAGE
+          - SPILLAGE
+          - EXPIRED
+          - THEFT
+          - DAMAGED
+          - OTHER
+        note:
+          type: string
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+    StockTransformed:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - runId
+      - definitionId
+      - defVersion
+      - kind
+      - locationId
+      - currency
+      - inputs
+      - outputs
+      - yieldVarianceQty
+      - totalCost
+      - corrections
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        runId:
+          $ref: '#/components/schemas/Uuid'
+        definitionId:
+          $ref: '#/components/schemas/Uuid'
+        defVersion:
+          type: integer
+          minimum: 1
+        kind:
+          type: string
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        inputs:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+        outputs:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+        yieldVarianceQty:
+          $ref: '#/components/schemas/Decimal'
+        totalCost:
+          $ref: '#/components/schemas/Decimal'
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+    StockLevelLow:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - variantId
+      - locationId
+      - available
+      - reorderLevel
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        available:
+          $ref: '#/components/schemas/Decimal'
+        reorderLevel:
+          $ref: '#/components/schemas/Decimal'
+        reorderQty:
+          $ref: '#/components/schemas/Decimal'
+        preferredSupplierId:
+          $ref: '#/components/schemas/Uuid'
+    StockCountPosted:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - countId
+      - locationId
+      - currency
+      - lines
+      - totalVarianceCost
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        countId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
+        totalVarianceCost:
+          $ref: '#/components/schemas/Decimal'

@@ -34,10 +34,8 @@ jobs:
       # runner), ArchUnit and Spring Modulith verification, JaCoCo thresholds.
       - name: Build
         run: ./gradlew spotlessCheck build --continue
-      # PIT is a gate from phase 02 (09 §5); until then its report is published without failing the run.
-      - name: Mutation tests (report only before phase 02)
-        if: always()
-        continue-on-error: true
+      # PIT is a gate from phase 02 (09 §5): at least 70 % of the mutants of every module's domain package killed.
+      - name: Mutation tests
         run: ./gradlew pitest
       - name: Publish reports
         if: always()

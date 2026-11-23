@@ -23,6 +23,8 @@ import org.jspecify.annotations.Nullable;
  * @param taxCategoryId its product's tax category, if any
  * @param catalogRevision the catalog version of its last change
  * @param packagingUnits its packaging units, base unit first
+ * @param trackBatches receipts need a batch (its product's tracking)
+ * @param trackExpiry receipts need an expiry date
  */
 public record VariantInfo(
         VariantId id,
@@ -37,7 +39,9 @@ public record VariantInfo(
         boolean purchasable,
         @Nullable UUID taxCategoryId,
         long catalogRevision,
-        List<PackagingUnitInfo> packagingUnits) {
+        List<PackagingUnitInfo> packagingUnits,
+        boolean trackBatches,
+        boolean trackExpiry) {
 
     public VariantInfo {
         Objects.requireNonNull(id, "id");

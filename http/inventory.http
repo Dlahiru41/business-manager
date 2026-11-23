@@ -1,0 +1,58 @@
+# Inventory module (contracts/openapi/inventory.yaml). Get tokens with auth.http first, then run tenant.http
+# (locationId) and catalog.http (oilVariantId, canId) so the variables below are set.
+
+### Opening balance: 10 cans of oil at 13,800.00 (INV-17)
+POST {{baseUrl}}/api/v1/stock/opening-balances
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"locationId": "{{locationId}}",
+ "lines": [{"variantId": "{{oilVariantId}}", "packagingUnitId": "{{canId}}", "qty": "10", "unitCost": "13800.00"}]}
+
+### A dented can is written off (INV-11)
+POST {{baseUrl}}/api/v1/stock/adjustments
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"locationId": "{{locationId}}", "reason": "DAMAGED",
+ "lines": [{"variantId": "{{oilVariantId}}", "packagingUnitId": "{{canId}}", "qty": "1"}]}
+
+### Reorder below 2 cans, order 5 (INV-13)
+PUT {{baseUrl}}/api/v1/variants/{{oilVariantId}}/reorder-policy
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+
+{"locationId": "{{locationId}}", "reorderLevel": "39130.56", "reorderQty": "97826.4"}
+
+### Balances of the oil
+GET {{baseUrl}}/api/v1/stock/balances?variantId={{oilVariantId}}
+Authorization: Bearer {{ownerToken}}
+
+### The ledger, newest first
+GET {{baseUrl}}/api/v1/stock/movements?variantId={{oilVariantId}}&limit=20
+Authorization: Bearer {{ownerToken}}
+
+### What the stock is worth now, by product
+GET {{baseUrl}}/api/v1/stock/valuation?groupBy=product
+Authorization: Bearer {{ownerToken}}
+
+### What to reorder
+GET {{baseUrl}}/api/v1/stock/reorder-list
+Authorization: Bearer {{ownerToken}}
+
+### Open a stock count
+POST {{baseUrl}}/api/v1/stock/counts
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"locationId": "{{locationId}}"}
+
+> {% client.global.set("countId", response.body.id); %}
+
+### Rebuild the balances from the ledger (INV-16)
+POST {{baseUrl}}/api/v1/admin/stock/rebuild-balances
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}

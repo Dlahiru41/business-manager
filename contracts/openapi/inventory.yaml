@@ -1,0 +1,2029 @@
+openapi: 3.1.0
+info:
+  title: BMP Inventory API
+  version: 1.0.0
+  description: 'Stock as an append-only ledger with live balances (phase 02, rules INV-01..INV-17).
+
+
+    Every change is a stock movement in the variant''s base unit: in > 0, out < 0, its cost signed like its quantity
+
+    (INV-01, INV-02). Balances per variant, location, stock state and batch are updated in the same transaction and can
+    be
+
+    rebuilt from the ledger (INV-16). Costs follow the tenant''s costing method: moving average (default) or FIFO
+
+    (INV-03, INV-04). Sales are never blocked by missing stock (INV-07); adjustments and transformations follow the
+
+    tenant''s negative stock policy (INV-08). Quantities in requests may name a packaging unit; they are converted with
+    its
+
+    `qtyInBase`, and the unit decides the stock state (INV-05).
+
+
+    Examples use the pilot shop: cooking oil bought in 18 kg cans (19,565.28 ml, placeholder density) kept SEALED and
+
+    sold OPEN by the ml; eggs by the piece; Karola repacked from loose grams into 250 g packets.
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Stock
+  description: Balances, movements and valuation (INV-01..INV-07, INV-16).
+- name: StockOperations
+  description: Opening balances, wastage, transfers (INV-08, INV-11, INV-15, INV-17).
+- name: Transformations
+  description: Opening cans, repacking loose goods, recipes (INV-09, INV-10).
+- name: StockCounts
+  description: Counting stock and posting variances (INV-12).
+- name: Reorder
+  description: Reorder levels and the reorder list (INV-13).
+paths:
+  /api/v1/stock/balances:
+    get:
+      tags:
+      - Stock
+      operationId: listStockBalances
+      summary: Stock balances
+      x-permission: inventory:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: variantId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: state
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/StockState'
+      - name: belowReorder
+        in: query
+        required: false
+        description: Only balances at or below their reorder level (INV-13).
+        schema:
+          type: boolean
+      - name: negative
+        in: query
+        required: false
+        description: Only negative balances (INV-07).
+        schema:
+          type: boolean
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockBalancePage'
+              example:
+                items:
+                - variantId: 0193c000-0000-7000-8000-000000000301
+                  sku: OIL
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: SEALED
+                  onHand: '176087.52'
+                  reserved: '0'
+                  available: '176087.52'
+                  avgUnitCost: '0.705322'
+                  stockValue:
+                    amount: '124200.00'
+                    currency: LKR
+                  reorderLevel: '39130.56'
+                  belowReorder: false
+                  negative: false
+                  lastMovementAt: '2026-11-23T10:05:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/stock/movements:
+    get:
+      tags:
+      - Stock
+      operationId: listStockMovements
+      summary: The stock ledger, newest first
+      x-permission: inventory:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: variantId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: type
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/MovementType'
+      - name: from
+        in: query
+        required: false
+        description: Inclusive.
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        description: Exclusive.
+        schema:
+          type: string
+          format: date-time
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockMovementPage'
+              example:
+                items:
+                - id: 0193e000-0000-7000-8000-000000000502
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: OPEN
+                  qtyBase: '19400'
+                  unitCost: '0.711340'
+                  costAmount:
+                    amount: '13800.00'
+                    currency: LKR
+                  type: TRANSFORM_IN
+                  sourceType: TRANSFORMATION
+                  sourceId: 0193e000-0000-7000-8000-000000000601
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+                - id: 0193e000-0000-7000-8000-000000000501
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: SEALED
+                  qtyBase: '-19565.28'
+                  unitCost: '0.705322'
+                  costAmount:
+                    amount: '-13800.00'
+                    currency: LKR
+                  type: TRANSFORM_OUT
+                  sourceType: TRANSFORMATION
+                  sourceId: 0193e000-0000-7000-8000-000000000601
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/stock/opening-balances:
+    post:
+      tags:
+      - StockOperations
+      operationId: postOpeningBalances
+      summary: Record opening stock (INV-17)
+      description: 'Once per variant, location and state: an OPENING movement with the given cost (`OPENING_BALANCE_EXISTS`).'
+      x-permission: inventory:adjust
+      x-error-codes:
+      - VALIDATION_FAILED
+      - OPENING_BALANCE_EXISTS
+      - EXPIRY_REQUIRED
+      - UNKNOWN_VARIANT
+      - STOCK_ITEM_INACTIVE
+      - UNKNOWN_LOCATION
+      - UNKNOWN_PACKAGING_UNIT
+      - INVALID_STOCK_STATE
+      - UNKNOWN_BATCH
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpeningBalanceRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000301
+                packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                qty: '2'
+                unitCost: '13800.00'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostedMovements'
+              example:
+                movements:
+                - id: 0193e000-0000-7000-8000-000000000501
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: SEALED
+                  qtyBase: '39130.56'
+                  unitCost: '0.705322'
+                  costAmount:
+                    amount: '27600.00'
+                    currency: LKR
+                  type: OPENING
+                  sourceType: OPENING_BALANCE
+                  sourceId: 0193e000-0000-7000-8000-000000000601
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/stock/transformations:
+    post:
+      tags:
+      - Transformations
+      operationId: runTransformation
+      summary: Run a transformation (INV-09, INV-10)
+      description: Consumes the definition's IN lines × runs at current cost and books the outputs actually obtained; the
+        input cost is shared by `costSharePct` (largest remainder) and the yield variance is recorded. Follows the negative
+        stock policy (INV-08).
+      x-permission: inventory:transform
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_TRANSFORMATION_DEFINITION
+      - TRANSFORMATION_DEFINITION_INACTIVE
+      - INVALID_OUTPUTS
+      - INSUFFICIENT_STOCK
+      - UNKNOWN_LOCATION
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransformationRequest'
+            example:
+              definitionId: 0193c000-0000-7000-8000-000000000331
+              locationId: 0193b000-0000-7000-8000-000000000401
+              runs: '1'
+              outputs:
+              - variantId: 0193c000-0000-7000-8000-000000000301
+                stockState: OPEN
+                qtyBase: '19400'
+              note: Can opened at the counter
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformationRun'
+              examples:
+                default:
+                  $ref: '#/components/examples/OpenCanRun'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+    get:
+      tags:
+      - Transformations
+      operationId: listTransformationRuns
+      summary: Transformation runs, newest first
+      x-permission: inventory:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: definitionId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformationRunPage'
+              example:
+                items:
+                - id: 0193e000-0000-7000-8000-000000000601
+                  definitionId: 0193c000-0000-7000-8000-000000000331
+                  defVersion: 1
+                  kind: OPEN
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  runs: '1'
+                  inputs:
+                  - variantId: 0193c000-0000-7000-8000-000000000301
+                    stockState: SEALED
+                    qtyBase: '19565.28'
+                    costAmount:
+                      amount: '13800.00'
+                      currency: LKR
+                  outputs:
+                  - variantId: 0193c000-0000-7000-8000-000000000301
+                    stockState: OPEN
+                    expectedQtyBase: '19565.28'
+                    actualQtyBase: '19400'
+                    costSharePct: '100'
+                    costAmount:
+                      amount: '13800.00'
+                      currency: LKR
+                    unitCost: '0.711340'
+                  yieldVarianceQty: '-165.28'
+                  totalCost:
+                    amount: '13800.00'
+                    currency: LKR
+                  note: Can opened at the counter
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  flags: []
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/stock/transformations/{runId}:
+    get:
+      tags:
+      - Transformations
+      operationId: getTransformationRun
+      summary: Get a transformation run
+      x-permission: inventory:read
+      x-error-codes:
+      - TRANSFORMATION_RUN_NOT_FOUND
+      parameters:
+      - name: runId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransformationRun'
+              examples:
+                default:
+                  $ref: '#/components/examples/OpenCanRun'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/stock/adjustments:
+    post:
+      tags:
+      - StockOperations
+      operationId: postAdjustment
+      summary: Record lost stock (INV-11)
+      description: WASTAGE movements at current cost, publishing `StockAdjusted`; follows the negative stock policy (INV-08).
+      x-permission: inventory:adjust
+      x-error-codes:
+      - VALIDATION_FAILED
+      - INSUFFICIENT_STOCK
+      - UNKNOWN_VARIANT
+      - STOCK_ITEM_INACTIVE
+      - UNKNOWN_LOCATION
+      - UNKNOWN_PACKAGING_UNIT
+      - INVALID_STOCK_STATE
+      - UNKNOWN_BATCH
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdjustmentRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+              reason: BREAKAGE
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000204
+                qty: '6'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostedMovements'
+              example:
+                movements:
+                - id: 0193e000-0000-7000-8000-000000000503
+                  variantId: 0193c000-0000-7000-8000-000000000204
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: DEFAULT
+                  qtyBase: '-6'
+                  unitCost: '42.500000'
+                  costAmount:
+                    amount: '-255.00'
+                    currency: LKR
+                  type: WASTAGE
+                  sourceType: ADJUSTMENT
+                  sourceId: 0193e000-0000-7000-8000-000000000701
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+                  reasonCode: BREAKAGE
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/stock/transfers:
+    post:
+      tags:
+      - StockOperations
+      operationId: postTransfer
+      summary: Move stock between locations (INV-15)
+      description: A TRANSFER_OUT and a TRANSFER_IN per line, at current cost, in one transaction.
+      x-permission: inventory:transfer
+      x-error-codes:
+      - VALIDATION_FAILED
+      - TRANSFER_SAME_LOCATION
+      - INSUFFICIENT_STOCK
+      - UNKNOWN_VARIANT
+      - STOCK_ITEM_INACTIVE
+      - UNKNOWN_LOCATION
+      - UNKNOWN_PACKAGING_UNIT
+      - INVALID_STOCK_STATE
+      - UNKNOWN_BATCH
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferRequest'
+            example:
+              fromLocationId: 0193b000-0000-7000-8000-000000000402
+              toLocationId: 0193b000-0000-7000-8000-000000000401
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000301
+                packagingUnitId: 0193c000-0000-7000-8000-000000000321
+                qty: '1'
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PostedMovements'
+              example:
+                movements:
+                - id: 0193e000-0000-7000-8000-000000000501
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  locationId: 0193b000-0000-7000-8000-000000000402
+                  stockState: SEALED
+                  qtyBase: '-19565.28'
+                  unitCost: '0.705322'
+                  costAmount:
+                    amount: '-13800.00'
+                    currency: LKR
+                  type: TRANSFER_OUT
+                  sourceType: TRANSFER
+                  sourceId: 0193e000-0000-7000-8000-000000000601
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+                - id: 0193e000-0000-7000-8000-000000000504
+                  variantId: 0193c000-0000-7000-8000-000000000301
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  stockState: SEALED
+                  qtyBase: '19565.28'
+                  unitCost: '0.705322'
+                  costAmount:
+                    amount: '13800.00'
+                    currency: LKR
+                  type: TRANSFER_IN
+                  sourceType: TRANSFER
+                  sourceId: 0193e000-0000-7000-8000-000000000601
+                  occurredAt: '2026-11-23T10:05:00Z'
+                  recordedAt: '2026-11-23T10:05:00Z'
+                  flags: []
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/stock/counts:
+    get:
+      tags:
+      - StockCounts
+      operationId: listStockCounts
+      summary: Stock counts, newest first
+      x-permission: inventory:count
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/CountStatus'
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCountPage'
+              example:
+                items:
+                - id: 0193e000-0000-7000-8000-000000000801
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  status: OPEN
+                  lines:
+                  - id: 0193e000-0000-7000-8000-000000000811
+                    variantId: 0193c000-0000-7000-8000-000000000311
+                    stockState: DEFAULT
+                    systemQty: '4000'
+                    countedQty: '3950'
+                    snapshotAt: '2026-11-23T18:00:00Z'
+                  startedAt: '2026-11-23T18:00:00Z'
+                  version: 1
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - StockCounts
+      operationId: createStockCount
+      summary: Start a stock count (INV-12)
+      x-permission: inventory:count
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_LOCATION
+      - UNKNOWN_VARIANT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateStockCountRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+              note: Month-end count
+              variantIds:
+              - 0193c000-0000-7000-8000-000000000311
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              example:
+                id: 0193e000-0000-7000-8000-000000000801
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: OPEN
+                lines: []
+                startedAt: '2026-11-23T18:00:00Z'
+                version: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/stock/counts/{countId}:
+    get:
+      tags:
+      - StockCounts
+      operationId: getStockCount
+      summary: Get a stock count
+      x-permission: inventory:count
+      x-error-codes:
+      - STOCK_COUNT_NOT_FOUND
+      parameters:
+      - name: countId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              examples:
+                default:
+                  $ref: '#/components/examples/OpenCount'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/stock/counts/{countId}/lines:
+    put:
+      tags:
+      - StockCounts
+      operationId: recordCountLines
+      summary: Record counted quantities (INV-12)
+      description: Adds or replaces lines of an OPEN count; each time a line is counted it takes the system quantity at
+        that moment, so a recount is compared with the stock then. Batch-tracked variants are counted per batch.
+      x-permission: inventory:count
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - STOCK_COUNT_NOT_FOUND
+      - COUNT_STATE_INVALID
+      - UNKNOWN_VARIANT
+      - INVALID_STOCK_STATE
+      - UNKNOWN_BATCH
+      - BATCH_REQUIRED
+      parameters:
+      - name: countId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountLinesRequest'
+            example:
+              lines:
+              - variantId: 0193c000-0000-7000-8000-000000000311
+                countedQty: '3950'
+                varianceReason: Spilt while weighing
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              examples:
+                default:
+                  $ref: '#/components/examples/OpenCount'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/stock/counts/{countId}/submit:
+    post:
+      tags:
+      - StockCounts
+      operationId: submitStockCount
+      summary: Submit a count for posting
+      x-permission: inventory:count
+      x-error-codes:
+      - STOCK_COUNT_NOT_FOUND
+      - COUNT_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: countId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              example:
+                id: 0193e000-0000-7000-8000-000000000801
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: SUBMITTED
+                lines:
+                - id: 0193e000-0000-7000-8000-000000000811
+                  variantId: 0193c000-0000-7000-8000-000000000311
+                  stockState: DEFAULT
+                  systemQty: '4000'
+                  countedQty: '3950'
+                  snapshotAt: '2026-11-23T18:00:00Z'
+                startedAt: '2026-11-23T18:00:00Z'
+                version: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/stock/counts/{countId}/post:
+    post:
+      tags:
+      - StockCounts
+      operationId: postStockCount
+      summary: Post a count's variances (INV-12)
+      description: Posting books a COUNT_ADJ movement for every line whose counted quantity differs from the system quantity
+        at its snapshot plus the movements since, at current cost; posted counts never change.
+      x-permission: inventory:count
+      x-error-codes:
+      - STOCK_COUNT_NOT_FOUND
+      - COUNT_STATE_INVALID
+      - COUNT_ALREADY_POSTED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: countId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              example:
+                id: 0193e000-0000-7000-8000-000000000801
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: POSTED
+                lines:
+                - id: 0193e000-0000-7000-8000-000000000811
+                  variantId: 0193c000-0000-7000-8000-000000000311
+                  stockState: DEFAULT
+                  systemQty: '4000'
+                  countedQty: '3950'
+                  snapshotAt: '2026-11-23T18:00:00Z'
+                startedAt: '2026-11-23T18:00:00Z'
+                version: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/stock/counts/{countId}/cancel:
+    post:
+      tags:
+      - StockCounts
+      operationId: cancelStockCount
+      summary: Cancel a count
+      x-permission: inventory:count
+      x-error-codes:
+      - STOCK_COUNT_NOT_FOUND
+      - COUNT_STATE_INVALID
+      - COUNT_ALREADY_POSTED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: countId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockCount'
+              example:
+                id: 0193e000-0000-7000-8000-000000000801
+                locationId: 0193b000-0000-7000-8000-000000000401
+                status: CANCELLED
+                lines:
+                - id: 0193e000-0000-7000-8000-000000000811
+                  variantId: 0193c000-0000-7000-8000-000000000311
+                  stockState: DEFAULT
+                  systemQty: '4000'
+                  countedQty: '3950'
+                  snapshotAt: '2026-11-23T18:00:00Z'
+                startedAt: '2026-11-23T18:00:00Z'
+                version: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+  /api/v1/stock/reorder-list:
+    get:
+      tags:
+      - Reorder
+      operationId: getReorderList
+      summary: What to reorder (INV-13)
+      x-permission: inventory:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderList'
+              example:
+                items:
+                - variantId: 0193c000-0000-7000-8000-000000000204
+                  sku: EGG-RED-L
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  available: '84'
+                  reorderLevel: '120'
+                  reorderQty: '600'
+                  preferredSupplierId: 0193d000-0000-7000-8000-000000000101
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/variants/{variantId}/reorder-policy:
+    put:
+      tags:
+      - Reorder
+      operationId: setReorderPolicy
+      summary: Set a variant's reorder level at a location (INV-13)
+      description: Creates or replaces the policy; `If-Match` is checked when the policy exists.
+      x-permission: inventory:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - STOCK_ITEM_NOT_FOUND
+      - UNKNOWN_LOCATION
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - name: variantId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReorderPolicyRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+              reorderLevel: '120'
+              reorderQty: '600'
+              preferredSupplierId: 0193d000-0000-7000-8000-000000000101
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReorderPolicy'
+              examples:
+                default:
+                  $ref: '#/components/examples/ReorderPolicy'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/stock/valuation:
+    get:
+      tags:
+      - Stock
+      operationId: getValuation
+      summary: The value of the stock
+      x-permission: inventory:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: asOf
+        in: query
+        required: false
+        description: Default now.
+        schema:
+          type: string
+          format: date-time
+      - name: groupBy
+        in: query
+        required: false
+        description: Default variant.
+        schema:
+          $ref: '#/components/schemas/ValuationGroup'
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Valuation'
+              example:
+                asOf: '2026-11-23T20:00:00Z'
+                groupBy: location
+                rows:
+                - key: 0193b000-0000-7000-8000-000000000401
+                  label: Main shop
+                  qtyBase: '195652.80'
+                  value:
+                    amount: '138000.00'
+                    currency: LKR
+                total:
+                  amount: '138000.00'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/admin/stock/rebuild-balances:
+    post:
+      tags:
+      - Stock
+      operationId: rebuildStockBalances
+      summary: Recompute balances from the ledger (INV-16)
+      description: For the caller's tenant; platform administrators act for a tenant with `X-Tenant-Id`.
+      x-permission: inventory:admin
+      x-error-codes:
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebuildResult'
+              example:
+                balances: 42
+                differences: 0
+                rebuiltAt: '2026-11-23T21:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    StockState:
+      type: string
+      pattern: ^[A-Z][A-Z0-9_]{0,29}$
+      example: OPEN
+    MovementType:
+      type: string
+      enum:
+      - OPENING
+      - RECEIPT
+      - SALE
+      - SALE_RETURN
+      - SALE_VOID
+      - TRANSFORM_IN
+      - TRANSFORM_OUT
+      - WASTAGE
+      - COUNT_ADJ
+      - CORRECTION
+      - TRANSFER_IN
+      - TRANSFER_OUT
+    WastageReason:
+      type: string
+      description: INV-11; OTHER needs a note.
+      enum:
+      - BREAKAGE
+      - SPOILAGE
+      - SPILLAGE
+      - EXPIRED
+      - THEFT
+      - DAMAGED
+      - OTHER
+    StockFlag:
+      type: string
+      enum:
+      - NEGATIVE_STOCK
+    StockBalance:
+      type: object
+      description: Stock of a variant in one location, state and batch, in base units.
+      required:
+      - variantId
+      - locationId
+      - stockState
+      - onHand
+      - reserved
+      - available
+      - avgUnitCost
+      - stockValue
+      - belowReorder
+      - negative
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        productId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        batchId:
+          type: string
+          format: uuid
+        batchCode:
+          type: string
+        expiresOn:
+          type: string
+          format: date
+        onHand:
+          $ref: '#/components/schemas/SignedQuantity'
+        reserved:
+          $ref: '#/components/schemas/SignedQuantity'
+        available:
+          $ref: '#/components/schemas/SignedQuantity'
+        avgUnitCost:
+          $ref: '#/components/schemas/UnitCost'
+        stockValue:
+          $ref: ./common.yaml#/components/schemas/Money
+        reorderLevel:
+          $ref: '#/components/schemas/Quantity'
+        belowReorder:
+          type: boolean
+        negative:
+          type: boolean
+        lastMovementAt:
+          type: string
+          format: date-time
+    StockBalancePage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockBalance'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    StockMovement:
+      type: object
+      description: One ledger row; never changed (INV-01, INV-02).
+      required:
+      - id
+      - variantId
+      - locationId
+      - stockState
+      - qtyBase
+      - unitCost
+      - costAmount
+      - type
+      - sourceType
+      - occurredAt
+      - recordedAt
+      - flags
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        batchId:
+          type: string
+          format: uuid
+        qtyBase:
+          $ref: '#/components/schemas/SignedQuantity'
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+        costAmount:
+          $ref: ./common.yaml#/components/schemas/Money
+        type:
+          $ref: '#/components/schemas/MovementType'
+        reasonCode:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+          format: uuid
+        sourceLineId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        recordedAt:
+          type: string
+          format: date-time
+        actorId:
+          type: string
+          format: uuid
+        flags:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockFlag'
+    StockMovementPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    PostedMovements:
+      type: object
+      required:
+      - movements
+      properties:
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovement'
+    OpeningBalanceLine:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - qty
+      - unitCost
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+          description: The unit `qty` is counted in; the base unit when absent (INV-05).
+        stockState:
+          $ref: '#/components/schemas/StockState'
+          description: Defaults to the packaging unit's state.
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+          description: Per packaging unit.
+        batchCode:
+          type: string
+          minLength: 1
+          maxLength: 40
+        expiresOn:
+          type: string
+          format: date
+    OpeningBalanceRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - locationId
+      - lines
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/OpeningBalanceLine'
+    AdjustmentLine:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - qty
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+          description: The unit `qty` is counted in; the base unit when absent (INV-05).
+        stockState:
+          $ref: '#/components/schemas/StockState'
+          description: Defaults to the packaging unit's state.
+        batchId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+    AdjustmentRequest:
+      type: object
+      description: 'Stock lost (INV-11): each line leaves the stock.'
+      additionalProperties: false
+      required:
+      - locationId
+      - reason
+      - lines
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        reason:
+          $ref: '#/components/schemas/WastageReason'
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+        occurredAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/AdjustmentLine'
+    TransferRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - fromLocationId
+      - toLocationId
+      - lines
+      properties:
+        fromLocationId:
+          type: string
+          format: uuid
+        toLocationId:
+          type: string
+          format: uuid
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+        occurredAt:
+          type: string
+          format: date-time
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/AdjustmentLine'
+    ActualOutput:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - stockState
+      - qtyBase
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        qtyBase:
+          $ref: '#/components/schemas/Quantity'
+    TransformationRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - definitionId
+      - locationId
+      properties:
+        definitionId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        runs:
+          $ref: '#/components/schemas/Quantity'
+          description: How many times the definition runs; default 1.
+        outputs:
+          type: array
+          description: Actual output quantities, one per OUT line; default the expected ones (INV-09).
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/ActualOutput'
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+        occurredAt:
+          type: string
+          format: date-time
+    RunInput:
+      type: object
+      required:
+      - variantId
+      - stockState
+      - qtyBase
+      - costAmount
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        qtyBase:
+          $ref: '#/components/schemas/Quantity'
+        costAmount:
+          $ref: ./common.yaml#/components/schemas/Money
+    RunOutput:
+      type: object
+      required:
+      - variantId
+      - stockState
+      - expectedQtyBase
+      - actualQtyBase
+      - costSharePct
+      - costAmount
+      - unitCost
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        expectedQtyBase:
+          $ref: '#/components/schemas/Quantity'
+        actualQtyBase:
+          $ref: '#/components/schemas/Quantity'
+        costSharePct:
+          type: string
+        costAmount:
+          $ref: ./common.yaml#/components/schemas/Money
+        unitCost:
+          $ref: '#/components/schemas/UnitCost'
+    TransformationRun:
+      type: object
+      description: Inputs consumed at current cost, outputs at their share of it; Σ in = Σ out (INV-09).
+      required:
+      - id
+      - definitionId
+      - defVersion
+      - kind
+      - locationId
+      - runs
+      - inputs
+      - outputs
+      - yieldVarianceQty
+      - totalCost
+      - occurredAt
+      - flags
+      properties:
+        id:
+          type: string
+          format: uuid
+        definitionId:
+          type: string
+          format: uuid
+        defVersion:
+          type: integer
+          format: int32
+        kind:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        runs:
+          $ref: '#/components/schemas/Quantity'
+        inputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunInput'
+        outputs:
+          type: array
+          items:
+            $ref: '#/components/schemas/RunOutput'
+        yieldVarianceQty:
+          $ref: '#/components/schemas/SignedQuantity'
+        totalCost:
+          $ref: ./common.yaml#/components/schemas/Money
+        note:
+          type: string
+        occurredAt:
+          type: string
+          format: date-time
+        actorId:
+          type: string
+          format: uuid
+        flags:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockFlag'
+    TransformationRunPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransformationRun'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CountStatus:
+      type: string
+      enum:
+      - OPEN
+      - SUBMITTED
+      - POSTED
+      - CANCELLED
+    StockCountLine:
+      type: object
+      required:
+      - id
+      - variantId
+      - stockState
+      - countedQty
+      - systemQty
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        batchId:
+          type: string
+          format: uuid
+        systemQty:
+          $ref: '#/components/schemas/SignedQuantity'
+          description: On hand when the line was first counted.
+        countedQty:
+          $ref: '#/components/schemas/Quantity'
+        varianceQty:
+          $ref: '#/components/schemas/SignedQuantity'
+          description: counted − (system at snapshot + movements since); set when posted (INV-12).
+        varianceCost:
+          $ref: ./common.yaml#/components/schemas/Money
+        varianceReason:
+          type: string
+        snapshotAt:
+          type: string
+          format: date-time
+    StockCount:
+      type: object
+      required:
+      - id
+      - locationId
+      - status
+      - lines
+      - startedAt
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/CountStatus'
+        note:
+          type: string
+        variantIds:
+          type: array
+          description: The variants the count covers; all when absent.
+          items:
+            type: string
+            format: uuid
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockCountLine'
+        startedAt:
+          type: string
+          format: date-time
+        submittedAt:
+          type: string
+          format: date-time
+        postedAt:
+          type: string
+          format: date-time
+        postedBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+    StockCountPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockCount'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreateStockCountRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - locationId
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+        variantIds:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          items:
+            type: string
+            format: uuid
+    CountLineInput:
+      type: object
+      additionalProperties: false
+      required:
+      - variantId
+      - countedQty
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        stockState:
+          $ref: '#/components/schemas/StockState'
+        batchId:
+          type: string
+          format: uuid
+        countedQty:
+          $ref: '#/components/schemas/Quantity'
+          description: In base units; 0 when none was found.
+        varianceReason:
+          type: string
+          minLength: 1
+          maxLength: 200
+    CountLinesRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - lines
+      properties:
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 2000
+          items:
+            $ref: '#/components/schemas/CountLineInput'
+    ReorderPolicy:
+      type: object
+      required:
+      - variantId
+      - locationId
+      - reorderLevel
+      - reorderQty
+      - version
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        reorderLevel:
+          $ref: '#/components/schemas/Quantity'
+        reorderQty:
+          $ref: '#/components/schemas/Quantity'
+        preferredSupplierId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+    ReorderPolicyRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - locationId
+      - reorderLevel
+      - reorderQty
+      properties:
+        locationId:
+          type: string
+          format: uuid
+        reorderLevel:
+          $ref: '#/components/schemas/Quantity'
+          description: In base units.
+        reorderQty:
+          $ref: '#/components/schemas/Quantity'
+          description: Suggested order quantity in base units.
+        preferredSupplierId:
+          type: string
+          format: uuid
+    ReorderItem:
+      type: object
+      required:
+      - variantId
+      - locationId
+      - available
+      - reorderLevel
+      - reorderQty
+      properties:
+        variantId:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        available:
+          $ref: '#/components/schemas/SignedQuantity'
+        reorderLevel:
+          $ref: '#/components/schemas/Quantity'
+        reorderQty:
+          $ref: '#/components/schemas/Quantity'
+        preferredSupplierId:
+          type: string
+          format: uuid
+    ReorderList:
+      type: object
+      required:
+      - items
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReorderItem'
+    ValuationGroup:
+      type: string
+      enum:
+      - variant
+      - product
+      - category
+      - location
+    ValuationRow:
+      type: object
+      required:
+      - key
+      - qtyBase
+      - value
+      properties:
+        key:
+          type: string
+          format: uuid
+          description: The variant, product, category or location. Stock of products without a category is grouped under
+            the nil UUID `00000000-0000-0000-0000-000000000000`.
+        label:
+          type: string
+          description: SKU, product name or location name; absent for categories.
+        qtyBase:
+          $ref: '#/components/schemas/SignedQuantity'
+          description: 'Σ of base quantities: meaningful by variant and product (one base unit), a count of mixed units
+            otherwise.'
+        value:
+          $ref: ./common.yaml#/components/schemas/Money
+    Valuation:
+      type: object
+      description: 'Σ of movement costs up to `asOf`: the value of the stock at that moment.'
+      required:
+      - asOf
+      - groupBy
+      - rows
+      - total
+      properties:
+        asOf:
+          type: string
+          format: date-time
+        groupBy:
+          $ref: '#/components/schemas/ValuationGroup'
+        locationId:
+          type: string
+          format: uuid
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValuationRow'
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
+    RebuildResult:
+      type: object
+      required:
+      - balances
+      - differences
+      - rebuiltAt
+      properties:
+        balances:
+          type: integer
+          format: int32
+        differences:
+          type: integer
+          format: int32
+          description: Balances whose stored values differed.
+        rebuiltAt:
+          type: string
+          format: date-time
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'
+  examples:
+    OilBalance:
+      value:
+        variantId: 0193c000-0000-7000-8000-000000000301
+        sku: OIL
+        locationId: 0193b000-0000-7000-8000-000000000401
+        stockState: SEALED
+        onHand: '176087.52'
+        reserved: '0'
+        available: '176087.52'
+        avgUnitCost: '0.705322'
+        stockValue:
+          amount: '124200.00'
+          currency: LKR
+        reorderLevel: '39130.56'
+        belowReorder: false
+        negative: false
+        lastMovementAt: '2026-11-23T10:05:00Z'
+    OpenCanRun:
+      value:
+        id: 0193e000-0000-7000-8000-000000000601
+        definitionId: 0193c000-0000-7000-8000-000000000331
+        defVersion: 1
+        kind: OPEN
+        locationId: 0193b000-0000-7000-8000-000000000401
+        runs: '1'
+        inputs:
+        - variantId: 0193c000-0000-7000-8000-000000000301
+          stockState: SEALED
+          qtyBase: '19565.28'
+          costAmount:
+            amount: '13800.00'
+            currency: LKR
+        outputs:
+        - variantId: 0193c000-0000-7000-8000-000000000301
+          stockState: OPEN
+          expectedQtyBase: '19565.28'
+          actualQtyBase: '19400'
+          costSharePct: '100'
+          costAmount:
+            amount: '13800.00'
+            currency: LKR
+          unitCost: '0.711340'
+        yieldVarianceQty: '-165.28'
+        totalCost:
+          amount: '13800.00'
+          currency: LKR
+        note: Can opened at the counter
+        occurredAt: '2026-11-23T10:05:00Z'
+        flags: []
+    OpenCount:
+      value:
+        id: 0193e000-0000-7000-8000-000000000801
+        locationId: 0193b000-0000-7000-8000-000000000401
+        status: OPEN
+        lines:
+        - id: 0193e000-0000-7000-8000-000000000811
+          variantId: 0193c000-0000-7000-8000-000000000311
+          stockState: DEFAULT
+          systemQty: '4000'
+          countedQty: '3950'
+          snapshotAt: '2026-11-23T18:00:00Z'
+        startedAt: '2026-11-23T18:00:00Z'
+        version: 1
+    ReorderPolicy:
+      value:
+        variantId: 0193c000-0000-7000-8000-000000000204
+        locationId: 0193b000-0000-7000-8000-000000000401
+        reorderLevel: '120'
+        reorderQty: '600'
+        preferredSupplierId: 0193d000-0000-7000-8000-000000000101
+        version: 0

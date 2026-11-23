@@ -138,12 +138,19 @@ public final class ContractSecurity {
         return operations;
     }
 
-    /** Fills path parameters with a UUID, the first enum value, the schema example, or a lower-case word. */
+    /**
+     * Fills path parameters, and required query parameters (so the request reaches the security check instead of
+     * failing as malformed), with a UUID, the first enum value, the schema example, or a lower-case word.
+     */
     private static String uri(JsonNode contract, String template, JsonNode operation) {
         String uri = template;
+        StringBuilder query = new StringBuilder();
         for (JsonNode parameter : operation.path("parameters")) {
             JsonNode resolved = resolve(contract, parameter);
-            if (!"path".equals(resolved.path("in").asText())) {
+            String in = resolved.path("in").asText();
+            boolean requiredQuery =
+                    "query".equals(in) && resolved.path("required").asBoolean();
+            if (!"path".equals(in) && !requiredQuery) {
                 continue;
             }
             JsonNode schema = resolved.path("schema");
@@ -157,9 +164,16 @@ public final class ContractSecurity {
             } else {
                 value = "sample";
             }
-            uri = uri.replace("{" + resolved.path("name").asText() + "}", value);
+            if (requiredQuery) {
+                query.append(query.isEmpty() ? '?' : '&')
+                        .append(resolved.path("name").asText())
+                        .append('=')
+                        .append(value);
+            } else {
+                uri = uri.replace("{" + resolved.path("name").asText() + "}", value);
+            }
         }
-        return uri;
+        return uri + query;
     }
 
     private static @Nullable String body(JsonNode contract, JsonNode operation) {
