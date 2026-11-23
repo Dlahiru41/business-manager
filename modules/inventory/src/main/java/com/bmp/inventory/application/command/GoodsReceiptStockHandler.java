@@ -8,6 +8,7 @@ import com.bmp.inventory.domain.model.MovementType;
 import com.bmp.inventory.domain.model.StockItem;
 import com.bmp.inventory.domain.service.PlannedMovement;
 import com.bmp.inventory.domain.service.StockLine;
+import com.bmp.persistence.event.OutOfOrderEventException;
 import io.micrometer.observation.annotation.Observed;
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -25,7 +26,8 @@ import org.springframework.transaction.annotation.Transactional;
  * Rules PRO-04, INV-03, INV-14: a posted goods receipt becomes one RECEIPT movement per line. Deliveries come in at
  * their line total, into the batch they name (or a generated one); returns to the supplier leave at current cost.
  * Stock that physically moved is always recorded: receipts may take a balance below zero and inactive variants still
- * receive.
+ * receive, and a missing expiry date is logged rather than refused. A variant inventory does not know yet makes the
+ * event retry later ({@link OutOfOrderEventException}), never park.
  */
 @Service
 public class GoodsReceiptStockHandler {
@@ -59,8 +61,9 @@ public class GoodsReceiptStockHandler {
             @Nullable String batchCode,
             @Nullable LocalDate expiresOn) {}
 
-    /** A posted goods receipt. */
+    /** A posted goods receipt, as the event that announced it. */
     public record Receipt(
+            UUID eventId,
             UUID receiptId,
             UUID supplierId,
             UUID locationId,
@@ -73,8 +76,17 @@ public class GoodsReceiptStockHandler {
     public List<PlannedMovement> receive(Receipt receipt) {
         List<StockLine> stock = new ArrayList<>();
         for (ReceivedLine line : receipt.lines()) {
-            StockItem item = references.knownItem(line.variantId());
+            // Not replicated yet: retried later instead of refused, the receipt is posted and final.
+            StockItem item = references
+                    .findItem(line.variantId())
+                    .orElseThrow(() -> new OutOfOrderEventException(receipt.eventId(), "variant " + line.variantId()));
             boolean delivered = line.qtyBase().signum() > 0;
+            if (delivered && item.trackExpiry() && line.expiresOn() == null) {
+                log.atWarn()
+                        .addKeyValue("receiptId", receipt.receiptId())
+                        .addKeyValue("variantId", item.variantId())
+                        .log("Expiry-tracked stock received without an expiry date");
+            }
             UUID batch = delivered
                     ? references.incomingBatch(
                             item,
@@ -82,7 +94,8 @@ public class GoodsReceiptStockHandler {
                             line.expiresOn(),
                             receipt.receivedAt(),
                             receipt.supplierId(),
-                            line.lineId())
+                            line.lineId(),
+                            false)
                     : null;
             stock.add(new StockLine(
                     new BalanceKey(

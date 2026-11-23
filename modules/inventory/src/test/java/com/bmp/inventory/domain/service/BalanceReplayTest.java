@@ -57,7 +57,7 @@ class BalanceReplayTest {
                 costing,
                 states);
 
-        BalanceState replayed = BalanceReplay.replay(rows, costing);
+        BalanceState replayed = BalanceReplay.rebuild(rows, costing);
         BalanceState posted = states.get(EGGS);
 
         assertThat(rows)

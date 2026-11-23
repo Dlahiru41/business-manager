@@ -26,11 +26,13 @@ public record StockTransformed(
         List<StockMovementLine> inputs,
         List<StockMovementLine> outputs,
         BigDecimal yieldVarianceQty,
-        BigDecimal totalCost)
+        BigDecimal totalCost,
+        List<StockMovementLine> corrections)
         implements DomainEvent {
 
     public StockTransformed {
         inputs = List.copyOf(inputs);
         outputs = List.copyOf(outputs);
+        corrections = List.copyOf(corrections);
     }
 }

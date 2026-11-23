@@ -95,21 +95,32 @@ public class StockOperationHandlers {
         UUID source = ids.newUuid();
         List<StockLine> stock = new ArrayList<>();
         Set<List<Object>> seen = new HashSet<>();
+        List<BalanceKey> keys = new ArrayList<>();
+        List<ResolvedQuantity> quantities = new ArrayList<>();
+        List<UUID> lineIds = new ArrayList<>();
         for (OpeningLine line : lines) {
             StockItem item = references.item(line.variantId());
             ResolvedQuantity resolved = item.resolve(line.packagingUnitId(), line.stockState(), line.qty());
             UUID lineId = ids.newUuid();
             UUID batch = references.incomingBatch(item, line.batchCode(), line.expiresOn(), at, null, lineId);
-            BalanceKey key = new BalanceKey(
-                    item.variantId(), locationId, resolved.stockState(), batch != null ? batch : BalanceKey.NO_BATCH);
-            ledger.lock(List.of(key));
-            // Rule INV-17: once per variant, location and state (under the balance lock).
-            if (!seen.add(List.of(item.variantId(), resolved.stockState()))
-                    || movements.hasOpening(item.variantId(), locationId, resolved.stockState())) {
+            keys.add(new BalanceKey(
+                    item.variantId(), locationId, resolved.stockState(), batch != null ? batch : BalanceKey.NO_BATCH));
+            quantities.add(resolved);
+            lineIds.add(lineId);
+        }
+        ledger.lock(keys);
+        for (int i = 0; i < lines.size(); i++) {
+            OpeningLine line = lines.get(i);
+            BalanceKey key = keys.get(i);
+            // Rule INV-17: once per variant, location and state (under the balance locks).
+            if (!seen.add(List.of(key.variantId(), key.stockState()))
+                    || movements.hasOpening(key.variantId(), locationId, key.stockState())) {
                 throw new BusinessRuleViolation(
                         InventoryErrorCode.OPENING_BALANCE_EXISTS,
-                        Map.of("variantId", item.variantId(), "stockState", resolved.stockState()));
+                        Map.of("variantId", key.variantId(), "stockState", key.stockState()));
             }
+            ResolvedQuantity resolved = quantities.get(i);
+            UUID lineId = lineIds.get(i);
             BigDecimal cost = settings.rounding().round(line.qty().multiply(line.unitCost()));
             stock.add(new StockLine(
                     key,
@@ -174,7 +185,10 @@ public class StockOperationHandlers {
         return views(posted, currency);
     }
 
-    /** Rule INV-15: a TRANSFER_OUT and a TRANSFER_IN per line at current cost, in one transaction. */
+    /**
+     * Rule INV-15: a TRANSFER_OUT and a TRANSFER_IN per line at current cost, in one transaction; publishes
+     * {@code StockReceived} (TRANSFER) with the incoming lines and any true-up of a negative destination.
+     */
     @Transactional
     @Observed(name = "bmp.inventory.transfer")
     public List<MovementView> transfer(
@@ -228,6 +242,8 @@ public class StockOperationHandlers {
         List<PlannedMovement> in = ledger.post(ins);
         List<PlannedMovement> all = new ArrayList<>(out);
         all.addAll(in);
+        // The lines only move stock between locations; corrections of a negative destination change its value.
+        events.received("TRANSFER", source, toLocationId, settings.tenant().currency(), in);
         log.atInfo()
                 .addKeyValue("transferId", source)
                 .addKeyValue("lines", lines.size())

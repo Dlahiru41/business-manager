@@ -294,13 +294,12 @@ class InventoryOperationsApiIT {
         String line = "{\"lines\": [{\"variantId\": \"" + id + "\", \"countedQty\": \"950\"}]}";
 
         MvcTestResult counted = api.put(path + "/lines", line, ApiClient.etag(created));
+        assertThat(json(counted).path("lines").get(0).path("systemQty").asString())
+                .as("the snapshot of the count")
+                .isEqualTo("1000");
         api.post("/api/v1/stock/adjustments", """
                 {"locationId": "%s", "reason": "SPILLAGE", "lines": [{"variantId": "%s", "qty": "100"}]}
                 """.formatted(api.location, id));
-        MvcTestResult recounted = api.put(path + "/lines", line, ApiClient.etag(counted));
-        assertThat(json(recounted).path("lines").get(0).path("systemQty").asString())
-                .as("the snapshot of the first count")
-                .isEqualTo("1000");
         assertThatProblem(api.post(path + "/post", "")).hasStatus(409).hasCode("COUNT_STATE_INVALID");
         assertThat(api.post(path + "/submit", "")).hasStatusOk();
         assertThatProblem(api.put(path + "/lines", line, ApiClient.etag(api.get(path))))

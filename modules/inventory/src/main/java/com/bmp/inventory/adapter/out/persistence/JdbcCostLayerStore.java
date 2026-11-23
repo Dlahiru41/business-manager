@@ -37,7 +37,7 @@ class JdbcCostLayerStore implements CostLayerStore {
                             SELECT id, qty_remaining, value_remaining, unit_cost, received_at FROM inventory.cost_layer
                              WHERE tenant_id = :tenantId AND variant_id = :variantId AND location_id = :locationId
                                AND stock_state = :state AND batch_id = :batchId AND qty_remaining > 0
-                             ORDER BY received_at, id
+                             ORDER BY id
                             """)
                             .param("tenantId", TenantContext.require().value())
                             .param("variantId", key.variantId())

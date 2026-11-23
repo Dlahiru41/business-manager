@@ -38,6 +38,13 @@ public class ProcurementReferences {
                         ProcurementErrorCode.UNKNOWN_SUPPLIER, Map.of("supplierId", supplierId)));
     }
 
+    /** Whether the variant (active or not) tracks expiry dates, as the catalog says now. */
+    public boolean tracksExpiry(UUID variantId) {
+        return catalog.findVariant(VariantId.of(variantId))
+                .map(VariantInfo::trackExpiry)
+                .orElse(false);
+    }
+
     /** Whether the party is an active supplier (SUPPLIER or BOTH). */
     public boolean isActiveSupplier(UUID partyId) {
         return parties.findParty(PartyId.of(partyId))

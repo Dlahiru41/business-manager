@@ -3,6 +3,7 @@ package com.bmp.party.domain.model;
 import com.bmp.party.domain.error.PartyErrorCode;
 import com.bmp.shared.audit.Auditable;
 import com.bmp.shared.error.BusinessRuleViolation;
+import com.bmp.shared.error.PlatformErrorCode;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
 import com.bmp.shared.security.Sensitive;
@@ -196,7 +197,8 @@ public class Party implements Auditable {
     private static String name(String name) {
         String trimmed = name.strip();
         if (trimmed.isEmpty()) {
-            throw new IllegalArgumentException("A display name is required");
+            throw new BusinessRuleViolation(
+                    PlatformErrorCode.VALIDATION_FAILED, "A display name is required", Map.of("field", "displayName"));
         }
         return trimmed;
     }

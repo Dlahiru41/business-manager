@@ -55,9 +55,14 @@ public class StockReferences {
      * either way. Unknown until its {@code VariantCreated} has been replicated.
      */
     public StockItem knownItem(UUID variantId) {
-        return items.find(variantId)
+        return findItem(variantId)
                 .orElseThrow(() ->
                         new BusinessRuleViolation(InventoryErrorCode.UNKNOWN_VARIANT, Map.of("variantId", variantId)));
+    }
+
+    /** A variant inventory knows, active or not; empty until its {@code VariantCreated} has been replicated. */
+    public java.util.Optional<StockItem> findItem(UUID variantId) {
+        return items.find(variantId);
     }
 
     /** A named batch of the variant ({@code UNKNOWN_BATCH} otherwise). */
@@ -82,7 +87,23 @@ public class StockReferences {
             Instant receivedAt,
             @Nullable UUID supplierId,
             UUID sourceLineId) {
-        if (item.trackExpiry() && expiresOn == null) {
+        return incomingBatch(item, code, expiresOn, receivedAt, supplierId, sourceLineId, true);
+    }
+
+    /**
+     * As {@link #incomingBatch(StockItem, String, LocalDate, Instant, UUID, UUID)}; stock that already arrived (a
+     * posted goods receipt) passes {@code expiryRequired = false} and is booked without an expiry rather than refused.
+     */
+    @SuppressWarnings("TooManyParameters") // the batch's attributes and how strict to be
+    public @Nullable UUID incomingBatch(
+            StockItem item,
+            @Nullable String code,
+            @Nullable LocalDate expiresOn,
+            Instant receivedAt,
+            @Nullable UUID supplierId,
+            UUID sourceLineId,
+            boolean expiryRequired) {
+        if (expiryRequired && item.trackExpiry() && expiresOn == null) {
             throw new BusinessRuleViolation(InventoryErrorCode.EXPIRY_REQUIRED, Map.of("variantId", item.variantId()));
         }
         if (!item.trackBatches()) {

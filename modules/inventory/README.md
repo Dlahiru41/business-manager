@@ -29,7 +29,8 @@ corrections), `CostingPolicy` (`MovingAverageCosting`, `FifoCosting`), `Transfor
 - **INV-09, INV-10** transformations issue inputs at current cost and share it over the outputs by `costSharePct`
   (largest remainder).
 - **INV-11** wastage reasons; OTHER needs a note.
-- **INV-12** counts post COUNT_ADJ movements for `counted − snapshot`.
+- **INV-12** counts post COUNT_ADJ movements for `counted − snapshot`; every (re)count takes a new snapshot;
+  batch-tracked variants are counted per batch.
 - **INV-13** `PUT /variants/{id}/reorder-policy`, `GET /stock/reorder-list`, `StockLevelLow`.
 - **INV-14** receipts and openings of batch-tracked variants get a batch (named or generated) and need the expiry when
   it is tracked.
@@ -41,12 +42,13 @@ Decisions: [ADR-024](../../docs/decisions/ADR-024-inventory-modelling-choices.md
 
 ## Events
 
-Out (`contracts/asyncapi/events.yaml`): `StockReceived` (goods receipts and openings, with cost corrections),
-`StockAdjusted`, `StockTransformed`, `StockCountPosted`, `StockLevelLow`. Transfers publish nothing.
+Out (`contracts/asyncapi/events.yaml`): `StockReceived` (goods receipts, openings and transfers),
+`StockAdjusted`, `StockTransformed`, `StockCountPosted`, `StockLevelLow`. True-ups of negative stock travel as
+`corrections` on the event of the movement that caused them.
 
 In: catalog `ProductCreated/Updated`, `VariantCreated/Updated/Deactivated`, `TransformationDefinitionPublished/Retired`;
 tenant `LocationCreated/Updated`; procurement `GoodsReceived` (one RECEIPT movement per line; returns leave at current
-cost). Every listener is inbox-guarded.
+cost; a variant not replicated yet makes the event retry later). Every listener is inbox-guarded.
 
 ## Public API for other modules
 

@@ -9,9 +9,10 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Rule INV-16: a balance recomputed from its ledger rows. The rows are replayed in posting order through the costing
- * policy, so the average cost (moving average) and the cost layers (FIFO) come out as the postings left them; CORRECTION
- * rows are skipped because the receipt before them already trues up the value.
+ * Rule INV-16: a balance recomputed from its ledger rows. On hand and value are the sums of the rows (CORRECTION rows
+ * included), exactly what the ledger says. Only the average cost (moving average) and the cost layers (FIFO), which are
+ * not sums, come from replaying the rows in posting order through the costing policy; there CORRECTION rows are skipped
+ * because the receipt before them already trues up the value.
  */
 public final class BalanceReplay {
 
@@ -19,6 +20,14 @@ public final class BalanceReplay {
 
     /** A ledger row as recorded, in posting order. */
     public record Recorded(UUID id, MovementType type, BigDecimal qtyBase, BigDecimal costAmount, Instant occurredAt) {}
+
+    /** The balance the rows make: their sums, with the replayed average cost and layers. */
+    public static BalanceState rebuild(List<Recorded> rows, CostingPolicy costing) {
+        BalanceState replayed = replay(rows, costing);
+        BigDecimal onHand = rows.stream().map(Recorded::qtyBase).reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal value = rows.stream().map(Recorded::costAmount).reduce(BigDecimal.ZERO, BigDecimal::add);
+        return new BalanceState(onHand, value, replayed.avgUnitCost(), replayed.layers());
+    }
 
     public static BalanceState replay(List<Recorded> rows, CostingPolicy costing) {
         BalanceState state = BalanceState.empty();

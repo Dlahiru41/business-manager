@@ -197,5 +197,22 @@ class GoodsReceiptTest {
         assertViolation(
                 () -> delivered.requireReturnableFrom(delivered, List.of()),
                 ProcurementErrorCode.CORRECTION_TARGET_INVALID);
+        GoodsReceipt elsewhere = GoodsReceipt.draft(
+                UUID.randomUUID(),
+                ProcurementFixtures.TENANT,
+                "GRN-000010",
+                ProcurementFixtures.SUPPLIER,
+                UUID.randomUUID(),
+                null,
+                delivered.id(),
+                AT,
+                "LKR",
+                null,
+                List.of(line(piece(SMALL), "-1", "38.00")),
+                ROUNDING,
+                IDS);
+        assertViolation(
+                () -> elsewhere.requireReturnableFrom(delivered, List.of()),
+                ProcurementErrorCode.CORRECTION_TARGET_INVALID);
     }
 }

@@ -66,7 +66,10 @@ class PartyTest {
                 .isNull();
         assertThatThrownBy(() ->
                         Party.create(UUID.randomUUID(), TENANT, PartyType.CUSTOMER, "  ", null, null, null, null, null))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOfSatisfying(
+                        BusinessRuleViolation.class,
+                        e -> assertThat(e.errorCode())
+                                .isEqualTo(com.bmp.shared.error.PlatformErrorCode.VALIDATION_FAILED));
     }
 
     @Test

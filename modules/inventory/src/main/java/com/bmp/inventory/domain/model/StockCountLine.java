@@ -31,7 +31,7 @@ public class StockCountLine {
     @Column(name = "batch_id", nullable = false, updatable = false)
     private UUID batchId;
 
-    @Column(name = "system_qty", nullable = false, updatable = false)
+    @Column(name = "system_qty", nullable = false)
     private BigDecimal systemQty;
 
     @Column(name = "counted_qty", nullable = false)
@@ -46,7 +46,7 @@ public class StockCountLine {
     @Column(name = "variance_reason")
     private @Nullable String varianceReason;
 
-    @Column(name = "snapshot_at", nullable = false, updatable = false)
+    @Column(name = "snapshot_at", nullable = false)
     private Instant snapshotAt;
 
     @SuppressWarnings("NullAway.Init") // JPA
@@ -75,16 +75,19 @@ public class StockCountLine {
         return variantId.equals(variant) && stockState.equals(state) && batchId.equals(batch);
     }
 
-    void recount(BigDecimal counted, @Nullable String reason) {
+    /** A physical recount: compared with what the system holds now, not at the first count. */
+    void recount(BigDecimal counted, @Nullable String reason, BigDecimal systemNow, Instant at) {
         this.countedQty = counted;
+        this.systemQty = systemNow;
+        this.snapshotAt = at;
         if (reason != null) {
             this.varianceReason = reason;
         }
     }
 
     /**
-     * Rule INV-12: what was counted against what the system held when the line was first counted. Movements since then
-     * are in both the physical stock and the balance, so they cancel out.
+     * Rule INV-12: what was counted against what the system held when it was (last) counted. Movements since then are
+     * in both the physical stock and the balance, so they cancel out.
      */
     public BigDecimal variance() {
         return countedQty.subtract(systemQty);

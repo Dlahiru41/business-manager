@@ -104,8 +104,16 @@ class StockPlannerTest {
 
     @Test
     void linesMoveStockAndCostIsNeverNegative() {
-        assertThatThrownBy(() -> in(EGGS, "0", "1")).isInstanceOf(IllegalArgumentException.class);
-        assertThatThrownBy(() -> in(EGGS, "1", "-1")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> in(EGGS, "0", "1"))
+                .isInstanceOfSatisfying(
+                        com.bmp.shared.error.BusinessRuleViolation.class,
+                        e -> assertThat(e.errorCode())
+                                .isEqualTo(com.bmp.shared.error.PlatformErrorCode.VALIDATION_FAILED));
+        assertThatThrownBy(() -> in(EGGS, "1", "-1"))
+                .isInstanceOfSatisfying(
+                        com.bmp.shared.error.BusinessRuleViolation.class,
+                        e -> assertThat(e.errorCode())
+                                .isEqualTo(com.bmp.shared.error.PlatformErrorCode.VALIDATION_FAILED));
         assertThat(in(EGGS, "1", null).isInbound()).isTrue();
         assertThat(out(EGGS, "1", true).isInbound()).isFalse();
     }

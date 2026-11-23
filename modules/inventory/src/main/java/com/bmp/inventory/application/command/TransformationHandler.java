@@ -194,7 +194,7 @@ public class TransformationHandler {
                 user == null ? null : user.value(),
                 consumed.stream().anyMatch(m -> m.flags().contains(StockFlag.NEGATIVE_STOCK)));
         runs.insert(run);
-        events.transformed(run, consumed, made);
+        events.transformed(run, consumed, produced);
         log.atInfo()
                 .addKeyValue("runId", run.id())
                 .addKeyValue("kind", run.kind())

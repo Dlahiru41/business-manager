@@ -5,6 +5,7 @@ import com.bmp.inventory.application.InventoryLoader;
 import com.bmp.inventory.application.InventorySettings;
 import com.bmp.inventory.application.StockLedger;
 import com.bmp.inventory.application.StockReferences;
+import com.bmp.inventory.domain.error.InventoryErrorCode;
 import com.bmp.inventory.domain.model.BalanceKey;
 import com.bmp.inventory.domain.model.BalanceState;
 import com.bmp.inventory.domain.model.MovementType;
@@ -16,6 +17,8 @@ import com.bmp.inventory.domain.service.PlannedMovement;
 import com.bmp.inventory.domain.service.StockLine;
 import com.bmp.shared.context.ActorContext;
 import com.bmp.shared.context.TenantContext;
+import com.bmp.shared.error.BusinessRuleViolation;
+import com.bmp.shared.error.NotFoundException;
 import com.bmp.shared.id.IdGenerator;
 import com.bmp.web.etag.IfMatch;
 import io.micrometer.observation.annotation.Observed;
@@ -94,6 +97,11 @@ public class StockCountHandlers {
         for (Counted line : lines) {
             StockItem item = references.item(line.variantId());
             String state = item.resolve(null, line.stockState(), BigDecimal.ONE).stockState();
+            // A batch-tracked variant is held in batch balances only: a line without one would count nothing there.
+            if (line.batchId() == null && item.trackBatches()) {
+                throw new BusinessRuleViolation(
+                        InventoryErrorCode.BATCH_REQUIRED, Map.of("variantId", item.variantId()));
+            }
             UUID batch =
                     line.batchId() == null ? BalanceKey.NO_BATCH : references.batch(item.variantId(), line.batchId());
             BalanceKey key = new BalanceKey(item.variantId(), count.locationId(), state, batch);
@@ -124,7 +132,10 @@ public class StockCountHandlers {
     @Transactional
     @Observed(name = "bmp.inventory.post-count")
     public StockCount post(UUID countId) {
-        StockCount count = loader.count(countId);
+        StockCount count = counts.lock(countId)
+                .orElseThrow(() ->
+                        new NotFoundException(InventoryErrorCode.STOCK_COUNT_NOT_FOUND, Map.of("countId", countId)));
+        count.requirePostable();
         Instant now = clock.instant();
         List<StockLine> stock = new ArrayList<>();
         Map<UUID, UUID> lineOf = new HashMap<>();

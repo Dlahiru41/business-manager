@@ -149,10 +149,22 @@ public class GoodsReceiptHandlers {
         GoodsReceipt receipt = loader.receipt(receiptId);
         requireCorrectionPermission(receipt);
         requireReturnable(receipt, true);
+        // Rule INV-14: tracking may have changed since the draft; inventory books what is posted as it is.
+        for (ReceiptLine line : receipt.lines()) {
+            if (line.qty().signum() > 0 && line.expiresOn() == null && references.tracksExpiry(line.variantId())) {
+                throw new BusinessRuleViolation(
+                        ProcurementErrorCode.EXPIRY_REQUIRED, Map.of("variantId", line.variantId()));
+            }
+        }
         var user = ActorContext.currentOrSystem().userId();
         receipt.post(clock.instant(), user == null ? null : user.value());
-        if (receipt.purchaseOrderId() != null && !receipt.isReturn()) {
-            PurchaseOrder order = loader.order(receipt.purchaseOrderId());
+        UUID orderId = receipt.purchaseOrderId();
+        if (orderId != null && !receipt.isReturn()) {
+            // Locked: concurrent receipts against one order add up instead of failing on its version.
+            PurchaseOrder order = orders.lock(orderId)
+                    .orElseThrow(() -> new BusinessRuleViolation(
+                            ProcurementErrorCode.PURCHASE_ORDER_MISMATCH, Map.of("purchaseOrderId", orderId)));
+            order.lines();
             Map<UUID, BigDecimal> received = new LinkedHashMap<>();
             for (ReceiptLine line : receipt.lines()) {
                 if (line.purchaseOrderLineId() != null) {

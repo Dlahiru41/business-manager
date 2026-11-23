@@ -74,7 +74,7 @@ public class RebuildBalancesHandler {
         Map<BalanceKey, BalanceState> rebuilt = new HashMap<>();
         int differences = 0;
         for (BalanceKey key : keys) {
-            BalanceState replayed = BalanceReplay.replay(movements.getOrDefault(key, List.of()), costing);
+            BalanceState replayed = BalanceReplay.rebuild(movements.getOrDefault(key, List.of()), costing);
             BalanceState now = current.getOrDefault(key, BalanceState.empty());
             List<CostLayer> nowLayers = currentLayers.getOrDefault(key, List.of());
             boolean layersDiffer = fifo && !sameLayers(nowLayers, replayed.layers());

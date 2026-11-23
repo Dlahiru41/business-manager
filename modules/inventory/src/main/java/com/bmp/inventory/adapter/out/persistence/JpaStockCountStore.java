@@ -29,6 +29,11 @@ class JpaStockCountStore implements StockCountRepository {
     }
 
     @Override
+    public Optional<StockCount> lock(UUID id) {
+        return Optional.ofNullable(em.find(StockCount.class, id, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE));
+    }
+
+    @Override
     public List<StockCount> findPage(
             @Nullable CountStatus status, @Nullable UUID locationId, @Nullable UUID beforeId, int limit) {
         StringBuilder jpql = new StringBuilder("select c from StockCount c where 1 = 1");

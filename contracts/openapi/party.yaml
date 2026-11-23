@@ -726,6 +726,7 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          pattern: ^.*\S.*$
         phone:
           type: string
           pattern: ^[+0-9 ()\-]{6,24}$
@@ -755,6 +756,7 @@ components:
           type: string
           minLength: 1
           maxLength: 120
+          pattern: ^.*\S.*$
         phone:
           type: string
           pattern: ^[+0-9 ()\-]{6,24}$

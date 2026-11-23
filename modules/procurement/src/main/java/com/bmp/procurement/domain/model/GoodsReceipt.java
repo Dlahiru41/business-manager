@@ -206,14 +206,15 @@ public class GoodsReceipt implements Auditable {
     }
 
     /**
-     * Rule PRO-02: a return sends back only what the corrected receipt brought in, less what earlier returns sent
-     * back, per variant in base units.
+     * Rule PRO-02: a return sends back, from the location it came into, only what the corrected receipt brought in,
+     * less what earlier returns sent back, per variant in base units.
      */
     public void requireReturnableFrom(GoodsReceipt corrected, List<GoodsReceipt> earlierReturns) {
         if (!isReturn()
                 || corrected.status != ReceiptStatus.POSTED
                 || corrected.isReturn()
                 || !corrected.supplierId.equals(supplierId)
+                || !corrected.locationId.equals(locationId)
                 || !corrected.id.equals(correctsReceiptId)) {
             throw new BusinessRuleViolation(
                     ProcurementErrorCode.CORRECTION_TARGET_INVALID, Map.of("correctsReceiptId", corrected.id));

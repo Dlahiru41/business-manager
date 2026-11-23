@@ -598,8 +598,9 @@ components:
     StockReceived:
       name: bmp.inventory.stock-received.v1
       title: Stock received
-      summary: Stock came in from a receipt, an opening balance or a transfer; `corrections` carry cost true-ups of negative
-        stock (INV-03, INV-04).
+      summary: Stock came in from a goods receipt, an opening balance or a transfer. A transfer's lines only move stock
+        between locations (the tenant's stock value does not change); `corrections` carry cost true-ups of negative stock
+        (INV-03, INV-04) and do change it.
       payload:
         $ref: '#/components/schemas/StockReceived'
       examples:
@@ -654,7 +655,8 @@ components:
     StockTransformed:
       name: bmp.inventory.stock-transformed.v1
       title: Stock transformed
-      summary: 'A transformation ran (INV-09): Σ input cost = Σ output cost.'
+      summary: 'A transformation ran (INV-09): Σ input cost = Σ output cost. `corrections` carry cost true-ups of outputs
+        that went into negative stock; they change the stock value.'
       payload:
         $ref: '#/components/schemas/StockTransformed'
       examples:
@@ -688,6 +690,7 @@ components:
             costAmount: '13800.00'
           yieldVarianceQty: '-165.28'
           totalCost: '13800.00'
+          corrections: []
     StockLevelLow:
       name: bmp.inventory.stock-level-low.v1
       title: Stock level low
@@ -1737,6 +1740,7 @@ components:
       - outputs
       - yieldVarianceQty
       - totalCost
+      - corrections
       properties:
         eventId:
           $ref: '#/components/schemas/Uuid'
@@ -1780,6 +1784,10 @@ components:
           $ref: '#/components/schemas/Decimal'
         totalCost:
           $ref: '#/components/schemas/Decimal'
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/StockMovementLine'
     StockLevelLow:
       type: object
       additionalProperties: false

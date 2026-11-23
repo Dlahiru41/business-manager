@@ -100,9 +100,10 @@ public class StockCount {
     }
 
     /**
-     * Records a counted quantity; the first time a line is counted it takes the system quantity as its snapshot.
+     * Records a counted quantity with the system quantity at that moment as its snapshot; counting a line again is a
+     * physical recount and takes a new snapshot (INV-12).
      *
-     * @param systemQty the balance now, asked only for a new line
+     * @param systemQty the balance now
      */
     public void record(
             BalanceKey key,
@@ -120,11 +121,16 @@ public class StockCount {
         }
         for (StockCountLine line : lines) {
             if (line.counts(key.variantId(), key.stockState(), key.batchId())) {
-                line.recount(counted, reason);
+                line.recount(counted, reason, systemQty.get(), at);
                 return;
             }
         }
         lines.add(new StockCountLine(ids.get(), tenantId, key, systemQty.get(), counted, reason, at));
+    }
+
+    /** Whether {@link #post} may be called: checked before any stock is moved for the count. */
+    public void requirePostable() {
+        require(CountStatus.SUBMITTED);
     }
 
     public void submit(Instant at) {

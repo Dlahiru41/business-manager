@@ -12,6 +12,9 @@ public interface PurchaseOrderRepository {
 
     Optional<PurchaseOrder> findById(UUID id);
 
+    /** The order, locked until the transaction ends (posting a receipt against it). */
+    Optional<PurchaseOrder> lock(UUID id);
+
     List<PurchaseOrder> findPage(
             @Nullable OrderStatus status, @Nullable UUID supplierId, @Nullable UUID beforeId, int limit);
 

@@ -744,7 +744,8 @@ paths:
       - StockCounts
       operationId: recordCountLines
       summary: Record counted quantities (INV-12)
-      description: Adds or replaces lines of an OPEN count; a line takes the system quantity the first time it is counted.
+      description: Adds or replaces lines of an OPEN count; each time a line is counted it takes the system quantity at
+        that moment, so a recount is compared with the stock then. Batch-tracked variants are counted per batch.
       x-permission: inventory:count
       x-error-codes:
       - VALIDATION_FAILED
@@ -755,6 +756,7 @@ paths:
       - UNKNOWN_VARIANT
       - INVALID_STOCK_STATE
       - UNKNOWN_BATCH
+      - BATCH_REQUIRED
       parameters:
       - name: countId
         in: path

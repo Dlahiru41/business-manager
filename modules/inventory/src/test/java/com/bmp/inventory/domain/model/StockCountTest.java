@@ -32,7 +32,7 @@ class StockCountTest {
     }
 
     @Test
-    void inv12ALineTakesItsSystemQuantityTheFirstTimeItIsCounted() {
+    void inv12ARecountTakesTheSystemQuantityAtTheRecount() {
         StockCount count = count(List.of());
         AtomicInteger asked = new AtomicInteger();
 
@@ -57,13 +57,13 @@ class StockCountTest {
                 ids(),
                 NOW.plusSeconds(600));
 
-        assertThat(asked).as("the snapshot is taken once").hasValue(1);
+        assertThat(asked).as("each count takes a snapshot").hasValue(2);
         StockCountLine line = count.lines().getFirst();
-        assertThat(line.systemQty()).isEqualByComparingTo("300");
+        assertThat(line.systemQty()).as("the stock at the recount").isEqualByComparingTo("250");
         assertThat(line.countedQty()).isEqualByComparingTo("288");
-        assertThat(line.variance()).as("counted − system at the snapshot").isEqualByComparingTo("-12");
+        assertThat(line.variance()).as("counted − system at the recount").isEqualByComparingTo("38");
         assertThat(line.varianceReason()).isEqualTo("Two more broken");
-        assertThat(line.snapshotAt()).isEqualTo(NOW);
+        assertThat(line.snapshotAt()).isEqualTo(NOW.plusSeconds(600));
         assertThat(line.key(SHOP)).isEqualTo(EGGS);
         assertThat(line.variantId()).isEqualTo(EGG);
         assertThat(line.stockState()).isEqualTo("DEFAULT");

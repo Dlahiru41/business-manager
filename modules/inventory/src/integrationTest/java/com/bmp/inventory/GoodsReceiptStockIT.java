@@ -92,6 +92,11 @@ class GoodsReceiptStockIT {
     }
 
     static GoodsReceived receipt(InventoryApi api, @Nullable UUID corrects, List<GoodsReceivedLine> lines) {
+        return receipt(api, corrects, RECEIVED, lines);
+    }
+
+    static GoodsReceived receipt(
+            InventoryApi api, @Nullable UUID corrects, Instant receivedAt, List<GoodsReceivedLine> lines) {
         UUID receiptId = UUID.randomUUID();
         return new GoodsReceived(
                 UUID.randomUUID(),
@@ -106,7 +111,7 @@ class GoodsReceiptStockIT {
                 LocationId.of(api.location),
                 null,
                 corrects,
-                RECEIVED,
+                receivedAt,
                 "LKR",
                 lines.stream().map(GoodsReceivedLine::lineTotal).reduce(BigDecimal.ZERO, BigDecimal::add),
                 lines);
@@ -266,5 +271,86 @@ class GoodsReceiptStockIT {
                         .single()))
                 .startsWith("B20261123-");
         assertThat(onHand(api, milk)).isEqualByComparingTo("36");
+    }
+
+    @Test
+    void inv16FifoLayersFollowPostingOrderSoARebuildChangesNothing() {
+        InventoryApi api = new InventoryApi(mvc, jdbc, transactions, "FIFO out of order");
+        var settings = api.client.get("/api/v1/settings/inventory", api.owner);
+        assertThat(api.client.patch(
+                        "/api/v1/settings/inventory",
+                        api.owner,
+                        "{\"values\": {\"costingMethod\": \"FIFO\"}}",
+                        com.bmp.test.web.ApiClient.etag(settings)))
+                .hasStatusOk();
+        JsonNode small = variant(api.product(EGGS), "EGG-RED-S");
+        GoodsReceived later = receipt(
+                api,
+                null,
+                Instant.parse("2026-11-23T08:30:00Z"),
+                List.of(line(small, "piece", "100", "1", "36.00", null, null)));
+        GoodsReceived earlier = receipt(
+                api,
+                null,
+                Instant.parse("2026-11-23T08:00:00Z"),
+                List.of(line(small, "piece", "100", "1", "40.00", null, null)));
+        publish(api, later);
+        movements(api, later.receiptId(), 1);
+        publish(api, earlier);
+        movements(api, earlier.receiptId(), 1);
+
+        api.post("/api/v1/stock/adjustments", """
+                {"locationId": "%s", "reason": "BREAKAGE", "lines": [{"variantId": "%s", "qty": "150"}]}
+                """.formatted(api.location, id(small)));
+
+        assertThat(value(api, small))
+                .as("the layer posted first went first: 100 at 36, then 50 at 40")
+                .isEqualByComparingTo("2000.00");
+        assertThat(InventoryApi.json(api.post("/api/v1/admin/stock/rebuild-balances", ""))
+                        .path("differences")
+                        .asInt())
+                .isZero();
+    }
+
+    @Test
+    void aReceiptOfAVariantNotReplicatedYetIsRetriedLaterNotParked() {
+        InventoryApi api = new InventoryApi(mvc, jdbc, transactions, "Receipt before variant");
+        JsonNode small = variant(api.product(EGGS), "EGG-RED-S");
+        GoodsReceivedLine known = line(small, "piece", "10", "1", "38.00", null, null);
+        GoodsReceivedLine unknown = new GoodsReceivedLine(
+                UUID.randomUUID(),
+                null,
+                VariantId.of(UUID.randomUUID()),
+                known.packagingUnitId(),
+                known.qty(),
+                known.qtyBase(),
+                "DEFAULT",
+                known.unitCost(),
+                known.unitCostBase(),
+                known.lineTotal(),
+                null,
+                null);
+        GoodsReceived early = receipt(api, null, List.of(known, unknown));
+
+        publish(api, early);
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> assertThat(jdbc.sql("""
+                                        SELECT count(*) FROM platform.event_publication
+                                         WHERE completion_date IS NULL AND listener_id LIKE '%ProcurementListener%'
+                                           AND serialized_event LIKE :receipt AND status = 'FAILED'""")
+                                .param("receipt", "%" + early.receiptId() + "%")
+                                .query(Long.class)
+                                .single())
+                        .as("delivery failed and waits to be resubmitted")
+                        .isEqualTo(1L));
+        assertThat(api.<Long>sql(j -> j.sql("SELECT count(*) FROM platform.failed_event WHERE event_id = :e")
+                        .param("e", early.eventId())
+                        .query(Long.class)
+                        .single()))
+                .as("not parked: a missing variant is not a reason to refuse posted stock")
+                .isZero();
+        assertThat(movements(api, early.receiptId()))
+                .as("nothing booked yet, the inbox rolled back")
+                .isEmpty();
     }
 }

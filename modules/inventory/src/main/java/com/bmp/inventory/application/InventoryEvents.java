@@ -74,6 +74,7 @@ public class InventoryEvents {
                 lines(posted)));
     }
 
+    /** The outputs include the CORRECTION movements of outputs that went into negative stock. */
     public void transformed(TransformationRun run, List<PlannedMovement> inputs, List<PlannedMovement> outputs) {
         EventStamp stamp = stamps.next();
         publisher.publishEvent(new StockTransformed(
@@ -90,9 +91,10 @@ public class InventoryEvents {
                 LocationId.of(run.locationId()),
                 run.currency(),
                 lines(inputs),
-                lines(outputs),
+                lines(outputs.stream().filter(m -> !m.isCorrection()).toList()),
                 run.yieldVarianceQty(),
-                run.totalCost()));
+                run.totalCost(),
+                lines(outputs.stream().filter(PlannedMovement::isCorrection).toList())));
     }
 
     public void countPosted(StockCount count, String currency, List<PlannedMovement> posted) {

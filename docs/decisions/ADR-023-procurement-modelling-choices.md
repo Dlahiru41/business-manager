@@ -14,7 +14,7 @@ Each choice below is the most conservative option that keeps stock, money and th
 1. **A return is its own receipt with negative lines** that names the posted delivery it corrects
    (`correctsReceiptId`), as PRO-02 says. `correctsReceiptId` is required with negative lines and refused with
    positive ones (`CORRECTION_TARGET_INVALID`); lines of one receipt are all positive or all negative
-   (`MIXED_LINE_SIGNS`). Only a posted delivery of the same supplier can be corrected, never a return.
+   (`MIXED_LINE_SIGNS`). Only a posted delivery of the same supplier and location can be corrected, never a return.
 2. **A return sends back at most what the delivery brought in, less earlier posted returns**, per variant in base
    units (so trays may go back for eggs received by the piece). It is checked when the return is drafted and again
    when it is posted, under a row lock on the corrected receipt, so two returns cannot both take the last units.
@@ -28,7 +28,8 @@ Each choice below is the most conservative option that keeps stock, money and th
 5. **Order checks happen when the receipt is drafted and when it is posted.** A delivery may only name an open order
    (`SENT` or `PARTIALLY_RECEIVED`) of the same supplier and location, and only that order's lines with the same
    variant and packaging unit (`PURCHASE_ORDER_MISMATCH`). If the order is cancelled meanwhile, posting fails
-   (`PURCHASE_ORDER_STATE_INVALID`). Concurrent postings against one order are serialised by its version.
+   (`PURCHASE_ORDER_STATE_INVALID`). Posting locks the order, so concurrent receipts against it add up. Posting also
+   re-checks expiry dates against the catalog's current tracking (`EXPIRY_REQUIRED`).
 6. **Supplier invoices compare the subtotal (before tax) with the receipts' value.** `priceVariance = subtotal −
    Σ receipt totals`; tax is not price. A receipt is invoiced once: creating an invoice refuses an invoiced receipt,
    and posting re-checks under row locks so the second of two drafts naming the same receipt fails

@@ -33,6 +33,7 @@ class ProcurementListener {
             return;
         }
         receipts.receive(new Receipt(
+                event.eventId(),
                 event.receiptId(),
                 event.supplierId().value(),
                 event.locationId().value(),

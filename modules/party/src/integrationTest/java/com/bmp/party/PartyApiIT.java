@@ -86,6 +86,11 @@ class PartyApiIT {
                         "{\"type\": \"CUSTOMER\", \"displayName\": \"X\", \"phone\": \"12-ab\"}"))
                 .hasStatus(422)
                 .hasCode("VALIDATION_FAILED");
+        assertThatProblem(api.client.post(
+                        "/api/v1/parties", api.owner, "{\"type\": \"CUSTOMER\", \"displayName\": \"   \"}"))
+                .as("a name of spaces only")
+                .hasStatus(422)
+                .hasCode("VALIDATION_FAILED");
         assertThatProblem(api.post(
                         "/api/v1/parties",
                         "{\"type\": \"CUSTOMER\", \"displayName\": \"X\", \"phone\": \"+0771234567\"}"))

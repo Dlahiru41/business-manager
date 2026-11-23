@@ -69,6 +69,11 @@ final class JpaProcurementStores {
         }
 
         @Override
+        public Optional<PurchaseOrder> lock(UUID id) {
+            return Optional.ofNullable(em.find(PurchaseOrder.class, id, LockModeType.PESSIMISTIC_WRITE));
+        }
+
+        @Override
         public List<PurchaseOrder> findPage(
                 @Nullable OrderStatus status, @Nullable UUID supplierId, @Nullable UUID beforeId, int limit) {
             Map<String, @Nullable Object> filters = new LinkedHashMap<>();
