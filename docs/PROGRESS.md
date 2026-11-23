@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: T02-08 Procurement module (before T02-06)
-- Next step (exact, so a new session can resume): create `modules/procurement` (purchase orders, goods receipts, supplier invoices, numbering, `GoodsReceived`, the `ReorderSuggestionProvider` SPI), with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
+- Current task: T02-06 Inventory listeners for purchasing
+- Next step (exact, so a new session can resume): in `modules/inventory`, add `procurement::api` to the allowed dependencies and a `GoodsReceived` listener (inbox-guarded) that posts RECEIPT movements per line (cost = line total, batches from batch code/expiry, returns leave at current cost) and publishes `StockReceived`, with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
 
 ## Task checklist (current phase)
 
@@ -32,7 +32,7 @@ Phase 02:
 - [x] T02-05 Transformations, adjustments, transfers, opening balances, counts — transformations lock inputs and outputs first, issue inputs at current cost and share it by costSharePct (largest remainder); count variance = counted − system at the line's snapshot (movements since are in both); openings are once per variant/location/state, checked under the balance lock; transfers mirror the outgoing batches and costs
 - [ ] T02-06 Inventory listeners for purchasing
 - [ ] T02-07 Valuation, reorder list, rebuild
-- [ ] T02-08 Procurement module
+- [x] T02-08 Procurement module — done before T02-06 because inventory listens to `GoodsReceived`; returns are receipts with negative lines naming the delivery they correct, at most what arrived less earlier returns (checked again under lock when posting); over-receipt allowed; numbers taken at creation; invoice due date from the supplier's payment terms; the reorder SPI default is a `@Fallback` bean (ADR-023)
 - [ ] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`)
 - [ ] Definition of Done
   - [ ] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
@@ -56,6 +56,7 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
 - 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
 - 2026-11-23 — The seeded MANAGER role has no `party:` permission (08-security.md §3) although PTY-02 says "a manager" may force a duplicate phone. Assumption: kept as specified; tenants grant `party:write` through the iam role API (ADR-022).
+- 2026-11-23 — The seeded STOREKEEPER role has `procurement:receive` but not `procurement:read` (08-security.md §3): storekeepers create and post receipts but cannot list or open them, and cannot send goods back (`procurement:correct`). Assumption: kept as specified; tenants grant more through the iam role API (ADR-023).
 - 2026-11-23 — Phones without a country code are read as Sri Lankan (+94) per PTY-01; the tenant module has no country setting. Assumption: a constant until a tenant setting is needed (ADR-022).
 - 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
 - 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).

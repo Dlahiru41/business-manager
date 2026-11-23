@@ -559,7 +559,8 @@ paths:
       - GoodsReceipts
       operationId: createGoodsReceipt
       summary: Record a delivery or a return (PRO-02, PRO-03)
-      description: A draft; `post` books it. Negative lines (a return) need `procurement:correct` and `correctsReceiptId`.
+      description: A draft; `post` books it. Negative lines (a return) need `procurement:correct` and `correctsReceiptId`,
+        and send back at most what that receipt brought in less earlier returns.
       x-permission: procurement:receive
       x-error-codes:
       - VALIDATION_FAILED
@@ -570,6 +571,7 @@ paths:
       - CORRECTION_PERMISSION_REQUIRED
       - CORRECTION_TARGET_INVALID
       - EXPIRY_REQUIRED
+      - PURCHASE_ORDER_STATE_INVALID
       - UNKNOWN_VARIANT
       - UNKNOWN_PACKAGING_UNIT
       - UNIT_NOT_PURCHASABLE
@@ -635,6 +637,8 @@ paths:
           $ref: ./common.yaml#/components/responses/Unauthorized
         '403':
           $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
         '422':
           $ref: ./common.yaml#/components/responses/UnprocessableContent
   /api/v1/goods-receipts/{receiptId}:
@@ -689,6 +693,7 @@ paths:
       - PURCHASE_ORDER_MISMATCH
       - MIXED_LINE_SIGNS
       - CORRECTION_PERMISSION_REQUIRED
+      - CORRECTION_TARGET_INVALID
       - EXPIRY_REQUIRED
       - UNKNOWN_VARIANT
       - UNKNOWN_PACKAGING_UNIT
@@ -766,13 +771,15 @@ paths:
       - GoodsReceipts
       operationId: postGoodsReceipt
       summary: Post a goods receipt (PRO-02, PRO-04)
-      description: Takes the next GRN number, updates the order's received quantities and publishes `GoodsReceived`; the
-        receipt never changes afterwards.
+      description: Updates the order's received quantities and publishes `GoodsReceived`; the receipt never changes afterwards.
+        Its GRN number was taken when it was created. A return is checked again against what is left to send back.
       x-permission: procurement:receive
       x-error-codes:
       - GOODS_RECEIPT_NOT_FOUND
       - GOODS_RECEIPT_STATE_INVALID
       - CORRECTION_PERMISSION_REQUIRED
+      - CORRECTION_TARGET_INVALID
+      - PURCHASE_ORDER_STATE_INVALID
       - IDEMPOTENCY_KEY_REQUIRED
       - IDEMPOTENCY_KEY_REUSED
       - REQUEST_IN_PROGRESS
@@ -807,6 +814,8 @@ paths:
           $ref: ./common.yaml#/components/responses/NotFound
         '409':
           $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
   /api/v1/goods-receipts/{receiptId}/cancel:
     post:
       tags:

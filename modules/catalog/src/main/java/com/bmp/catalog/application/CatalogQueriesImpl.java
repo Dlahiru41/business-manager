@@ -73,7 +73,9 @@ class CatalogQueriesImpl implements CatalogQueries {
                 variant.isPurchasable(),
                 product.taxCategoryId(),
                 variant.revision(),
-                variant.packagingUnits().stream().map(u -> unit(variant, u)).toList());
+                variant.packagingUnits().stream().map(u -> unit(variant, u)).toList(),
+                product.tracking().batches(),
+                product.tracking().expiry());
     }
 
     private static PackagingUnitInfo unit(Variant variant, PackagingUnit unit) {
