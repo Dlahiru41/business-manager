@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: T02-09 Flow test with the pilot shop
-- Next step (exact, so a new session can resume): add `app/src/integrationTest/java/com/bmp/ReceiveAndTransformFlowIT.java` (pilot shop: egg, oil and karola receipts through procurement, open a can, pack karola, broken eggs, one reorder alert, valuation = Σ balances), then the Definition of Done (PIT on party/inventory/procurement, code review), with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
+- Current task: Definition of Done
+- Next step (exact, so a new session can resume): run the Definition of Done checks (PIT on every module, full build), the `code-reviewer` subagent on `git diff main...HEAD`, fix BLOCKER/MAJOR findings and write the phase summary, with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
 
 ## Task checklist (current phase)
 
@@ -33,7 +33,7 @@ Phase 02:
 - [x] T02-06 Inventory listeners for purchasing — `GoodsReceived` (inbox-guarded) becomes one RECEIPT movement per line: deliveries at their line total into the named or a generated batch, returns to the supplier at current cost (reason `RETURN_TO_SUPPLIER`); receipts always post (may go negative, inactive variants included) and publish `StockReceived` with signed lines
 - [x] T02-07 Valuation, reorder list, rebuild — balances, movements, valuation (Σ movement costs up to `asOf`, by variant/product/category/location; no category = nil UUID) and the reorder list read with `JdbcClient`; reorder levels under If-Match; inventory implements procurement's `ReorderSuggestionProvider` (procurement skips inactive suppliers/locations); `rebuild-balances` locks the tenant's balances, then replays the ledger through the costing policy (moving-average cost and FIFO layers are not sums) and rewrites what differs; RLS coverage now includes partitions and their grants (ADR-024)
 - [x] T02-08 Procurement module — done before T02-06 because inventory listens to `GoodsReceived`; returns are receipts with negative lines naming the delivery they correct, at most what arrived less earlier returns (checked again under lock when posting); over-receipt allowed; numbers taken at creation; invoice due date from the supplier's payment terms; the reorder SPI default is a `@Fallback` bean (ADR-023)
-- [ ] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`)
+- [x] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`) — eggs 300/300/260, ten oil cans (195,652.8 ml with the placeholder density), a can opened at 19,400 ml (−165.28 ml variance, 0.71134 per open ml), 1 kg karola into four 250 g packets, six broken eggs at 252.00, one `StockLevelLow`, valuation 177,494.00 = Σ balance values, rebuild without differences
 - [ ] Definition of Done
   - [ ] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
   - [ ] Ledger tables have no UPDATE/DELETE grants (RLS coverage test extended to check grants)
