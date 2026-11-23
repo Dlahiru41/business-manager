@@ -10,6 +10,7 @@ dependencies {
     implementation(project(":modules:catalog"))
     implementation(project(":modules:pricing"))
     implementation(project(":modules:party"))
+    implementation(project(":modules:inventory"))
     implementation(project(":modules:audit"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")
