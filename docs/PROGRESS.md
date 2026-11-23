@@ -8,7 +8,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | --- | --- | --- | --- | --- |
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
-| 02 | Inventory and procurement | not started | | |
+| 02 | Inventory and procurement | in progress | phase/02-inventory-and-procurement | |
 | 03 | Sales, payments, sync and printing | not started | | |
 | 04 | Finance and reporting | not started | | |
 | 05 | Multi-business onboarding | not started | | |
@@ -18,28 +18,28 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 01 — Catalog and pricing (started and closed 2026-11-22, branch `phase/01-catalog-and-pricing`)
-- Current task: none (phase 01 merged into `main` and pushed on 2026-11-22; CI on `main` green, image built and signed: https://github.com/Dlahiru41/business-manager/actions/runs/45055301963)
-- Next step (exact, so a new session can resume): close the "Phase 01 started" issue (#1) on GitHub if still open, then start phase 02 with `/run-phase 02`.
+- Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
+- Current task: T02-01 Contracts
+- Next step (exact, so a new session can resume): write `party.yaml`, `inventory.yaml`, `procurement.yaml` and the phase 02 events in AsyncAPI, with `/run-phase 02`.
 
 ## Task checklist (current phase)
 
-Phase 01:
-- [x] T01-01 Contracts (`catalog.yaml`, `pricing.yaml`, catalog/pricing events in AsyncAPI; `common.yaml` gains `Money`, `If-None-Match`, `304`) — additions beyond the endpoint table: product/variant `reactivate`, definition `retire` (CAT-11), event `TransformationDefinitionRetired`
-- [x] T01-02 Catalog domain model (TDD) — LOOSE_REPACK keeps own packets in a state `PACKED_<CODE>` per packet unit (counted apart from loose stock); BULK_BREAK/LOOSE_REPACK definition lines are sized by the packaging unit so a conversion change resizes them (CAT-14)
-- [x] T01-03 Catalog persistence and migrations — category path is a text path of ids (no `ltree` extension needed); tracking flags are columns (filtered on); `catalog_revision` per tenant orders sync deltas; published definition versions frozen in `transformation_definition_version` (append-only); standard units seeded before RLS is forced
-- [x] T01-04 Catalog application layer and API — snapshot events built after flush and per-tenant catalog revisions (ADR-019); modelling choices in ADR-020; `include` is a comma-separated string (the contract validator cannot parse form arrays); catalog wired into `app`
-- [x] T01-05 Pricing module: replicas and domain — pure `PriceResolver`/`TaxCalculator`/`PriceSchedule`; `variant_price_ref` replica keeps the highest `aggregateVersion`, early deactivations leave a tombstone; Retail/Wholesale seeded on `TenantCreated`; pricing implements the catalog's `TaxCategoryLookup` SPI (ADR-021)
-- [x] T01-06 Pricing persistence, API, snapshot — prices never edited once in force (upsert ends the open price), list row lock per upsert, append-only `price_list_version` with change summary; rule conditions as typed columns; lists/rules paged in memory; PRC-08 via tenant setting `pricing.priceChangesRequireOwner` (ADR-021); pricing wired into `app`
-- [x] T01-07 Pilot shop fixture (catalog + pricing) and `CatalogPricingFlowIT` — `PilotShopFixture` in `libs/test-support` (public API only, contract-checked, placeholder prices/VAT/density documented); kilogram prices of loose goods start at `minQty` 0.001 so 0.75 kg is priced (ADR-021 item 10)
-- [x] Definition of Done
-  - [x] Every CAT-xx and PRC-xx rule has a named test (`cat01…`–`cat14…`, `prc01…`–`prc10…`)
-  - [x] Pilot shop fixture and flow IT pass; oil conversion change via the API updates the can's `qtyInBase` in later conversions (CAT-14) — `CatalogPricingFlowIT.cat14AMeasuredOilYieldResizesTheCanForLaterConversions`
-  - [x] OpenAPI conformance validated in all API tests; Spectral clean (6.15.0, 0 errors)
-  - [x] Tenant isolation ITs for catalog and pricing (`CatalogIsolationIT`, `PricingIsolationIT`)
-  - [x] Module READMEs, `.http` files, AsyncAPI updated (AsyncAPI CLI: valid)
-  - [x] PIT ≥ 70% on `catalog.domain` and `pricing.domain` (aim) — 85% and 92%
-  - [x] PROGRESS summary written
+Phase 02:
+- [ ] T02-01 Contracts (`party.yaml`, `inventory.yaml`, `procurement.yaml`, events in AsyncAPI)
+- [ ] T02-02 Party module
+- [ ] T02-03 Inventory replicas
+- [ ] T02-04 Inventory ledger core
+- [ ] T02-05 Transformations, adjustments, transfers, opening balances, counts
+- [ ] T02-06 Inventory listeners for purchasing
+- [ ] T02-07 Valuation, reorder list, rebuild
+- [ ] T02-08 Procurement module
+- [ ] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`)
+- [ ] Definition of Done
+  - [ ] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
+  - [ ] Ledger tables have no UPDATE/DELETE grants (RLS coverage test extended to check grants)
+  - [ ] Concurrency IT and rebuild-equality IT pass
+  - [ ] PIT ≥ 70% on `party.domain`, `inventory.domain`, `procurement.domain`
+  - [ ] Contracts, READMEs, `.http` files updated; PROGRESS summary written
 
 ## Open questions
 
