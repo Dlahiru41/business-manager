@@ -8,7 +8,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | --- | --- | --- | --- | --- |
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
-| 02 | Inventory and procurement | in progress | phase/02-inventory-and-procurement | |
+| 02 | Inventory and procurement | done | phase/02-inventory-and-procurement | 2026-11-23 |
 | 03 | Sales, payments, sync and printing | not started | | |
 | 04 | Finance and reporting | not started | | |
 | 05 | Multi-business onboarding | not started | | |
@@ -19,8 +19,8 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: Definition of Done
-- Next step (exact, so a new session can resume): run the Definition of Done checks (PIT on every module, full build), the `code-reviewer` subagent on `git diff main...HEAD`, fix BLOCKER/MAJOR findings and write the phase summary, with `/run-phase 02`. Task order: T02-05, then T02-08 (procurement) before T02-06 (its GoodsReceived listener needs procurement's events), then T02-07 (the reorder SPI is procurement's), then T02-09.
+- Current task: none — phase 02 closed; merge to `main` awaits approval
+- Next step (exact, so a new session can resume): merge `phase/02-inventory-and-procurement` into `main`, push, close the "Phase 02 started" issue, then start phase 03 with `/run-phase 03`.
 
 ## Task checklist (current phase)
 
@@ -34,12 +34,12 @@ Phase 02:
 - [x] T02-07 Valuation, reorder list, rebuild — balances, movements, valuation (Σ movement costs up to `asOf`, by variant/product/category/location; no category = nil UUID) and the reorder list read with `JdbcClient`; reorder levels under If-Match; inventory implements procurement's `ReorderSuggestionProvider` (procurement skips inactive suppliers/locations); `rebuild-balances` locks the tenant's balances, then replays the ledger through the costing policy (moving-average cost and FIFO layers are not sums) and rewrites what differs; RLS coverage now includes partitions and their grants (ADR-024)
 - [x] T02-08 Procurement module — done before T02-06 because inventory listens to `GoodsReceived`; returns are receipts with negative lines naming the delivery they correct, at most what arrived less earlier returns (checked again under lock when posting); over-receipt allowed; numbers taken at creation; invoice due date from the supplier's payment terms; the reorder SPI default is a `@Fallback` bean (ADR-023)
 - [x] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`) — eggs 300/300/260, ten oil cans (195,652.8 ml with the placeholder density), a can opened at 19,400 ml (−165.28 ml variance, 0.71134 per open ml), 1 kg karola into four 250 g packets, six broken eggs at 252.00, one `StockLevelLow`, valuation 177,494.00 = Σ balance values, rebuild without differences
-- [ ] Definition of Done
-  - [ ] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
-  - [ ] Ledger tables have no UPDATE/DELETE grants (RLS coverage test extended to check grants)
-  - [ ] Concurrency IT and rebuild-equality IT pass
-  - [ ] PIT ≥ 70% on `party.domain`, `inventory.domain`, `procurement.domain`
-  - [ ] Contracts, READMEs, `.http` files updated; PROGRESS summary written
+- [x] Definition of Done
+  - [x] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
+  - [x] Ledger tables have no UPDATE/DELETE grants (RLS coverage test extended to check grants, partitions included)
+  - [x] Concurrency IT and rebuild-equality IT pass
+  - [x] PIT ≥ 70% on `party.domain` (94 %), `inventory.domain` (88 %), `procurement.domain` (74 %); PIT is now a CI gate for every module
+  - [x] Contracts, READMEs, `.http` files updated; PROGRESS summary written
 
 ## Open questions
 
@@ -57,6 +57,16 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
 - 2026-11-23 — The seeded MANAGER role has no `party:` permission (08-security.md §3) although PTY-02 says "a manager" may force a duplicate phone. Assumption: kept as specified; tenants grant `party:write` through the iam role API (ADR-022).
 - 2026-11-23 — The seeded STOREKEEPER role has `procurement:receive` but not `procurement:read` (08-security.md §3): storekeepers create and post receipts but cannot list or open them, and cannot send goods back (`procurement:correct`). Assumption: kept as specified; tenants grant more through the iam role API (ADR-023).
+- 2026-11-23 — INV-12 states variance = counted − (system at snapshot + movements since); with the counted quantity taken at the snapshot that would book later movements twice, so variance = counted − system at the (re)count, and every recount takes a new snapshot (ADR-024 §6). Confirm with the client.
+- 2026-11-23 — True-ups of negative stock (`corrections` on `StockReceived` and `StockTransformed`) change the stock value; posting-rules.md has no line for them. Assumption: finance (phase 04) books them against COGS; to be decided there (ADR-024 §8).
+- 2026-11-23 — Phase 02 review items deferred (no rule broken for the pilot; each needs design or volume first):
+  - Costing: changing `costingMethod` with stock on hand is not blocked; FIFO `avgUnitCost` is the last receipt cost after a receipt and the average after an issue.
+  - Locks: transfers lock new destination batch keys in a second round and reorder rows are locked per posting, not once per use case; batch-tracked openings of one variant/location/state for different batches can race past INV-17. Deadlocks surface as errors and are retried by clients.
+  - Batches: transformation outputs of batch- or expiry-tracked variants go to the no-batch balance; reusing a batch code keeps its first expiry; supplier returns leave by FEFO, not from the delivered batch.
+  - Persistence: ledger inserts are row by row (not batched); ledger partitions exist for 2026–2028 only and need a job creating the next ones before 2029 (phase 06); `fk_party_customer_group` leaves out `tenant_id`.
+  - API: supplier invoice drafts cannot be cancelled or edited yet but hold their supplier reference; openings, adjustments and transfers return 201 without a Location header; query services return aggregates to controllers in places; the wastage note travels only in `StockAdjusted`.
+  - Observability: the negative-stock metric is `bmp.inventory.negative_stock` (05 §6 names `bmp.stock.negative.items`) and, like the business-event INFO logs, is emitted before commit.
+  - Party: search applies its limit before ranking prefix matches first; a cashier (`party:create-customer`) may put a new customer into a customer group, which chooses its price list.
 - 2026-11-23 — Phones without a country code are read as Sri Lankan (+94) per PTY-01; the tenant module has no country setting. Assumption: a constant until a tenant setting is needed (ADR-022).
 - 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
 - 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
@@ -170,3 +180,49 @@ tenant predicates on JDBC reads, seeded lists follow `pricesTaxInclusive`. The r
 - Weighed units need a price `minQty` below 1 to sell fractions (ADR-021 item 10); MANAGER lacks `pricing:read`.
 - Till caching of list status/priority and of rules, rule history, and query-count/concurrency tests are deferred
   (open questions above).
+
+### Phase 02 — Inventory, procurement and parties (2026-11-23)
+
+**Built.**
+- `party`: customers, suppliers and BOTH with E.164 phones (read in LK), customer groups, credit terms, the
+  duplicate-phone rule with `force`, prefix search on name words and phones, anonymisation; events without contact
+  details (PTY-01..PTY-04).
+- `inventory`: catalog and tenant replicas; an append-only ledger partitioned by month with live balances
+  (`stock_value = Σ cost_amount`), moving-average and FIFO costing with CORRECTION true-ups of negative stock, FEFO
+  batches, opening balances, wastage, transfers, transformations (oil can opening, karola repack), stock counts with
+  recount snapshots, reorder alerts once per crossing, balance/movement/valuation/reorder-list queries, reorder levels
+  under If-Match and a ledger-based balance rebuild; books posted goods receipts into stock and provides procurement's
+  reorder suggestions (INV-01..INV-17).
+- `procurement`: purchase orders, goods receipts (walk-in or against an order, returns as negative receipts that send
+  back at most what arrived), supplier invoices with the price variance, per-tenant numbering, orders from the reorder
+  list through the `ReorderSuggestionProvider` SPI (PRO-01..PRO-07).
+- Contracts `party.yaml`, `inventory.yaml`, `procurement.yaml` and the phase's AsyncAPI events; READMEs and
+  `http/party.http`, `http/inventory.http`, `http/procurement.http`.
+- `app`: `ReceiveAndTransformFlowIT` runs the pilot shop through procurement and inventory with exact numbers.
+- Platform: `OutOfOrderEventException` (retry instead of park), RLS coverage of partitions and their grants, PIT as a
+  CI gate for every module (audit raised from 51 % to 97 %).
+
+**Verified.** `./gradlew build` green with every gate; a named test per PTY/INV/PRO rule; isolation and contract ITs
+for the three modules; the 50-thread concurrency IT and rebuild-equality ITs (moving average and FIFO); PIT tenant 71,
+iam 78, audit 97, catalog 85, pricing 92, party 94, inventory 88, procurement 74 %; Spectral 6.15.0 clean on the
+three new OpenAPI contracts and no errors under its AsyncAPI rules for `events.yaml`.
+
+**ADRs.** 022 party modelling choices · 023 procurement modelling choices · 024 inventory modelling choices.
+
+**Review.** The `code-reviewer` agent found no BLOCKER and 6 MAJOR issues, all fixed: a recount booked movements made
+after the first count twice (every count now takes a new snapshot); counting a batch-tracked variant without its batch
+inflated stock (`BATCH_REQUIRED`); true-ups from transformations and transfers into negative stock were not published
+(`corrections` on `StockTransformed`, transfers publish `StockReceived`); the rebuild re-costed issues and FIFO
+consumed layers in a different order live and in the replay (on hand and value are now ledger sums, layers follow
+creation order); a posted receipt arriving before its variant was parked (now retried); zero quantities and blank
+names answered 500 (now validation errors). Fixed minors: count posting checks its state under lock before moving
+stock, receipts lock their order when posting, returns only from the delivery's location, procurement re-checks
+expiry on post, openings lock all their balances once in key order, indexes on receipt and match lookups. The rest is
+listed under open questions.
+
+**Limitations / carried forward.**
+- A balance rebuild reads a tenant's whole ledger into memory and orders postings by the app's clock; ledger
+  partitions run to 2028.
+- Finance must decide how to book `corrections` (phase 04); seeded roles follow 08-security.md §3 literally (MANAGER
+  without `party:`, STOREKEEPER without `procurement:read`).
+- Deferred review items (locks, batches, metrics, invoice drafts, party search) are listed under open questions.
