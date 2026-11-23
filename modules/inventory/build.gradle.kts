@@ -7,5 +7,6 @@ description = "Stock ledger, balances, costing, transformations, counts and reor
 dependencies {
     implementation(project(":modules:tenant"))
     implementation(project(":modules:catalog"))
+    implementation(project(":modules:procurement"))
     implementation("io.micrometer:micrometer-core")
 }

@@ -43,13 +43,21 @@ public class StockReferences {
 
     /** An active variant inventory knows. */
     public StockItem item(UUID variantId) {
-        StockItem item = items.find(variantId)
-                .orElseThrow(() ->
-                        new BusinessRuleViolation(InventoryErrorCode.UNKNOWN_VARIANT, Map.of("variantId", variantId)));
+        StockItem item = knownItem(variantId);
         if (!item.active()) {
             throw new BusinessRuleViolation(InventoryErrorCode.STOCK_ITEM_INACTIVE, Map.of("variantId", variantId));
         }
         return item;
+    }
+
+    /**
+     * A variant inventory knows, active or not: stock that physically moved (a posted goods receipt) is recorded
+     * either way. Unknown until its {@code VariantCreated} has been replicated.
+     */
+    public StockItem knownItem(UUID variantId) {
+        return items.find(variantId)
+                .orElseThrow(() ->
+                        new BusinessRuleViolation(InventoryErrorCode.UNKNOWN_VARIANT, Map.of("variantId", variantId)));
     }
 
     /** A named batch of the variant ({@code UNKNOWN_BATCH} otherwise). */
