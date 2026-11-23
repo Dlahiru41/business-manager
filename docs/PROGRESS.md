@@ -19,13 +19,13 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: T02-01 Contracts
-- Next step (exact, so a new session can resume): write `party.yaml`, `inventory.yaml`, `procurement.yaml` and the phase 02 events in AsyncAPI, with `/run-phase 02`.
+- Current task: T02-02 Party module
+- Next step (exact, so a new session can resume): build `modules/party` (domain, migration, API, events) against `contracts/openapi/party.yaml`, with `/run-phase 02`.
 
 ## Task checklist (current phase)
 
 Phase 02:
-- [ ] T02-01 Contracts (`party.yaml`, `inventory.yaml`, `procurement.yaml`, events in AsyncAPI)
+- [x] T02-01 Contracts (`party.yaml`, `inventory.yaml`, `procurement.yaml`, events in AsyncAPI) — additions beyond the endpoint lists: `POST /goods-receipts/{id}/cancel` for drafts; stock events carry one source with its lines (`StockReceived` also for openings and transfers, with cost `corrections`); `StockIssued` is defined with its sales listener in phase 03
 - [ ] T02-02 Party module
 - [ ] T02-03 Inventory replicas
 - [ ] T02-04 Inventory ledger core
