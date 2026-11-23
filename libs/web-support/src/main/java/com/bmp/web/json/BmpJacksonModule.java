@@ -3,6 +3,7 @@ package com.bmp.web.json;
 import com.bmp.shared.id.DeviceId;
 import com.bmp.shared.id.LocationId;
 import com.bmp.shared.id.PackagingUnitId;
+import com.bmp.shared.id.PartyId;
 import com.bmp.shared.id.PriceListId;
 import com.bmp.shared.id.ProductId;
 import com.bmp.shared.id.RegisterId;
@@ -53,6 +54,7 @@ public final class BmpJacksonModule extends SimpleModule {
         typedId(VariantId.class, VariantId::new);
         typedId(PackagingUnitId.class, PackagingUnitId::new);
         typedId(PriceListId.class, PriceListId::new);
+        typedId(PartyId.class, PartyId::new);
         addSerializer(BigDecimal.class, new DecimalSerializer());
         addDeserializer(BigDecimal.class, new DecimalDeserializer());
     }

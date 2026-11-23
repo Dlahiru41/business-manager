@@ -19,14 +19,14 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: T02-02 Party module
-- Next step (exact, so a new session can resume): build `modules/party` (domain, migration, API, events) against `contracts/openapi/party.yaml`, with `/run-phase 02`.
+- Current task: T02-03 Inventory replicas
+- Next step (exact, so a new session can resume): create `modules/inventory` with the `stock_item`, `transformation_def_ref` and `location_ref` replicas fed by catalog and tenant events, with `/run-phase 02`.
 
 ## Task checklist (current phase)
 
 Phase 02:
 - [x] T02-01 Contracts (`party.yaml`, `inventory.yaml`, `procurement.yaml`, events in AsyncAPI) — additions beyond the endpoint lists: `POST /goods-receipts/{id}/cancel` for drafts; stock events carry one source with its lines (`StockReceived` also for openings and transfers, with cost `corrections`); `StockIssued` is defined with its sales listener in phase 03
-- [ ] T02-02 Party module
+- [x] T02-02 Party module — address and credit terms are columns of `party`; phones E.164 read in LK; one create endpoint (`party:create-customer`) with `party:write` checked for suppliers and `force`; events without contact details; trigram name search (ADR-022)
 - [ ] T02-03 Inventory replicas
 - [ ] T02-04 Inventory ledger core
 - [ ] T02-05 Transformations, adjustments, transfers, opening balances, counts
@@ -55,6 +55,8 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-22 — Currencies without two decimals (JPY, KWD, ...) are refused at tenant creation and in settings until money rounds to each currency's minor units.
 - 2026-11-22 — Production migrations run as a separate job with `bmp.persistence.migrate-on-startup=true` and the migrator credentials; the app itself defaults to false (06 §1). The job itself arrives with the Helm charts (phase 06).
 - 2026-11-22 — The seeded MANAGER role has `pricing:write` but not `pricing:read` (08-security.md §3), so managers may change prices but not list price lists or resolve baskets. Assumption: kept as specified; tenants grant `pricing:read` through the iam role API (ADR-021). Confirm with the client.
+- 2026-11-23 — The seeded MANAGER role has no `party:` permission (08-security.md §3) although PTY-02 says "a manager" may force a duplicate phone. Assumption: kept as specified; tenants grant `party:write` through the iam role API (ADR-022).
+- 2026-11-23 — Phones without a country code are read as Sri Lankan (+94) per PTY-01; the tenant module has no country setting. Assumption: a constant until a tenant setting is needed (ADR-022).
 - 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
 - 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
 - 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).

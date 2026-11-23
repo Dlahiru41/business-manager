@@ -1,0 +1,79 @@
+# Party module (contracts/openapi/party.yaml). Get tokens with auth.http first.
+
+### A customer group for hotels and restaurants
+POST {{baseUrl}}/api/v1/customer-groups
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"code": "HOTELS{{$randomInt}}", "name": "Hotels and restaurants"}
+
+> {% client.global.set("groupId", response.body.id); %}
+
+### The egg supplier: the phone is stored as +94771234567
+POST {{baseUrl}}/api/v1/parties
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"type": "SUPPLIER", "displayName": "Kegalle Poultry Farm", "phone": "077 123 4567",
+ "email": "orders@kegallepoultry.lk", "address": {"line1": "12 Main Street", "city": "Kegalle", "country": "LK"}}
+
+> {%
+client.global.set("supplierId", response.body.id);
+client.global.set("supplierEtag", response.headers.valueOf("ETag"));
+%}
+
+### A hotel customer in the group
+POST {{baseUrl}}/api/v1/parties
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"type": "CUSTOMER", "displayName": "Hotel Lake View", "phone": "081 234 5678", "customerGroupId": "{{groupId}}"}
+
+> {%
+client.global.set("customerId", response.body.id);
+client.global.set("customerEtag", response.headers.valueOf("ETag"));
+%}
+
+### The same phone again needs force=true (PTY-02)
+POST {{baseUrl}}/api/v1/parties?force=true
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"type": "CUSTOMER", "displayName": "Nimal (farm owner)", "phone": "+94 77 123 4567"}
+
+### Credit terms for the hotel (PTY-03)
+PUT {{baseUrl}}/api/v1/parties/{{customerId}}/credit-policy
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{customerEtag}}
+
+{"creditAllowed": true, "creditLimit": "50000.00", "paymentTermsDays": 14}
+
+### Find parties by the start of a name word or phone
+GET {{baseUrl}}/api/v1/parties:search?q=poul&type=SUPPLIER
+Authorization: Bearer {{ownerToken}}
+
+###
+GET {{baseUrl}}/api/v1/parties:search?q=0771
+Authorization: Bearer {{ownerToken}}
+
+### Suppliers, newest first
+GET {{baseUrl}}/api/v1/parties?type=SUPPLIER&status=ACTIVE
+Authorization: Bearer {{ownerToken}}
+
+### Make the supplier a customer too
+PATCH {{baseUrl}}/api/v1/parties/{{supplierId}}
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+If-Match: {{supplierEtag}}
+
+{"type": "BOTH"}
+
+### Erase a party's personal data (PTY-04)
+POST {{baseUrl}}/api/v1/parties/{{customerId}}/anonymise
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}
