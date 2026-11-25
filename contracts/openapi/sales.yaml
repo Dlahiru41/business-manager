@@ -1,0 +1,2048 @@
+openapi: 3.1.0
+info:
+  title: BMP Sales API
+  version: 1.0.0
+  description: 'Registers, shifts, bills, voids, returns and credit notes (phase 03, rules SAL-01..SAL-15).
+
+
+    A bill''s id is a UUIDv7 generated on the till and its number `<registerPrefix>-<6-digit sequence>` is allocated on
+    the
+
+    till per register (SAL-01): resubmitting the same id replays, the same number with another id is
+
+    `BILL_NUMBER_CONFLICT`. Bills enter as a draft that is edited and completed, or as an already completed bill (SAL-02);
+
+    this API is the online path, where prices are re-resolved through pricing (SAL-03) and totals recomputed (SAL-04) and
+
+    any difference is refused. Offline bills arrive through `POST /sync/uploads` and are accepted with flags instead.
+
+    Completed bills never change (SAL-08); a void (same business date, SAL-09) or a return with a credit note (SAL-10)
+
+    corrects them. Sales stores no cost: cost per line is on inventory''s `StockIssued` (SAL-11).
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Registers
+  description: Billing counters and their bill number prefixes (SAL-01, SAL-12).
+- name: Shifts
+  description: A cashier's shift on a register (SAL-12).
+- name: Bills
+  description: 'Sale documents: draft, complete, void, return (SAL-01..SAL-15).'
+- name: CreditNotes
+  description: Return documents (SAL-10).
+paths:
+  /api/v1/registers:
+    get:
+      tags:
+      - Registers
+      operationId: listRegisters
+      summary: Registers, by code
+      x-permission: sales:admin
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterPage'
+              example:
+                items:
+                - id: 0193d100-0000-7000-8000-000000000001
+                  code: R1
+                  name: Front counter
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  billPrefix: R1
+                  status: ACTIVE
+                  lastNumber: 41
+                  version: 0
+                  createdAt: '2026-11-25T08:00:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Registers
+      operationId: createRegister
+      summary: Create a register
+      x-permission: sales:admin
+      x-error-codes:
+      - VALIDATION_FAILED
+      - REGISTER_CODE_TAKEN
+      - BILL_PREFIX_TAKEN
+      - UNKNOWN_LOCATION
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRegisterRequest'
+            example:
+              code: R1
+              name: Front counter
+              locationId: 0193b000-0000-7000-8000-000000000401
+              billPrefix: R1
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+              example:
+                id: 0193d100-0000-7000-8000-000000000001
+                code: R1
+                name: Front counter
+                locationId: 0193b000-0000-7000-8000-000000000401
+                billPrefix: R1
+                status: ACTIVE
+                lastNumber: 41
+                version: 0
+                createdAt: '2026-11-25T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/registers/{registerId}:
+    get:
+      tags:
+      - Registers
+      operationId: getRegister
+      summary: Get a register
+      x-permission: sales:admin
+      x-error-codes:
+      - REGISTER_NOT_FOUND
+      parameters:
+      - name: registerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+              example:
+                id: 0193d100-0000-7000-8000-000000000001
+                code: R1
+                name: Front counter
+                locationId: 0193b000-0000-7000-8000-000000000401
+                billPrefix: R1
+                status: ACTIVE
+                lastNumber: 41
+                version: 0
+                createdAt: '2026-11-25T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - Registers
+      operationId: updateRegister
+      summary: Change a register
+      x-permission: sales:admin
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - REGISTER_NOT_FOUND
+      - BILL_PREFIX_TAKEN
+      parameters:
+      - name: registerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRegisterRequest'
+            example:
+              name: Counter 1
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Register'
+              example:
+                id: 0193d100-0000-7000-8000-000000000001
+                code: R1
+                name: Front counter
+                locationId: 0193b000-0000-7000-8000-000000000401
+                billPrefix: R1
+                status: ACTIVE
+                lastNumber: 41
+                version: 0
+                createdAt: '2026-11-25T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/shifts:
+    post:
+      tags:
+      - Shifts
+      operationId: openShift
+      summary: Open a shift on a register (SAL-12)
+      description: The cashier is the caller; one OPEN shift per register.
+      x-permission: sales:create
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_REGISTER
+      - SHIFT_ALREADY_OPEN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenShiftRequest'
+            example:
+              registerId: 0193d100-0000-7000-8000-000000000001
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shift'
+              example:
+                id: 0193d200-0000-7000-8000-000000000001
+                registerId: 0193d100-0000-7000-8000-000000000001
+                cashierId: 0193a6f1-0000-7000-8000-00000000f001
+                status: OPEN
+                openedAt: '2026-11-25T08:00:00Z'
+                offline: false
+                version: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/shifts/{shiftId}/close:
+    post:
+      tags:
+      - Shifts
+      operationId: closeShift
+      summary: Close a shift
+      x-permission: sales:create
+      x-error-codes:
+      - SHIFT_NOT_FOUND
+      - SHIFT_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: shiftId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CloseShiftRequest'
+            example: {}
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Shift'
+              example:
+                id: 0193d200-0000-7000-8000-000000000001
+                registerId: 0193d100-0000-7000-8000-000000000001
+                cashierId: 0193a6f1-0000-7000-8000-00000000f001
+                status: CLOSED
+                openedAt: '2026-11-25T08:00:00Z'
+                offline: false
+                version: 0
+                closedAt: '2026-11-25T18:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/bills:
+    get:
+      tags:
+      - Bills
+      operationId: listBills
+      summary: Bills, newest first
+      x-permission: sales:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/BillStatus'
+      - name: registerId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: businessDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - name: flagged
+        in: query
+        required: false
+        description: Only bills with flags.
+        schema:
+          type: boolean
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillPage'
+              example:
+                items:
+                - id: 0193f100-0000-7000-8000-000000000001
+                  number: R1-000042
+                  registerId: 0193d100-0000-7000-8000-000000000001
+                  shiftId: 0193d200-0000-7000-8000-000000000001
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  channel: RETAIL
+                  priceListVersion: 3
+                  status: COMPLETED
+                  lines:
+                  - id: 0193f100-0000-7000-8000-000000000011
+                    variantId: 0193c000-0000-7000-8000-000000000204
+                    packagingUnitId: 0193c000-0000-7000-8000-000000000301
+                    description: Eggs Red L
+                    qty: '10'
+                    qtyBase: '10'
+                    stockState: DEFAULT
+                    weighed: false
+                    unitPrice:
+                      amount: '55.00'
+                      currency: LKR
+                    lineDiscount:
+                      amount: '0.00'
+                      currency: LKR
+                    allocatedBillDiscount:
+                      amount: '0.00'
+                      currency: LKR
+                    taxAmount:
+                      amount: '0.00'
+                      currency: LKR
+                    lineTotal:
+                      amount: '550.00'
+                      currency: LKR
+                    priceSource: LIST
+                    returnedQty: '0'
+                  totals:
+                    subtotal:
+                      amount: '550.00'
+                      currency: LKR
+                    discountTotal:
+                      amount: '0.00'
+                      currency: LKR
+                    taxTotal:
+                      amount: '0.00'
+                      currency: LKR
+                    grandTotal:
+                      amount: '550.00'
+                      currency: LKR
+                  tenders:
+                  - id: 0193f100-0000-7000-8000-000000000021
+                    method: CASH
+                    amount:
+                      amount: '550.00'
+                      currency: LKR
+                    tendered:
+                      amount: '1000.00'
+                      currency: LKR
+                    change:
+                      amount: '450.00'
+                      currency: LKR
+                  businessDate: '2026-11-25'
+                  completedAt: '2026-11-25T09:15:00Z'
+                  cashierId: 0193a6f1-0000-7000-8000-00000000f001
+                  offline: false
+                  flags: []
+                  currency: LKR
+                  version: 1
+                  createdAt: '2026-11-25T09:14:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Bills
+      operationId: createBill
+      summary: Start a bill or submit a completed one (SAL-01, SAL-02)
+      description: 'Online: prices are re-resolved and totals recomputed, any difference is refused (SAL-03, SAL-04). The
+        bill id is also its idempotency key: the same id again replays the stored bill.'
+      x-permission: sales:create
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_REGISTER
+      - BILL_NUMBER_CONFLICT
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_SELLABLE
+      - WEIGHED_QTY_INVALID
+      - UNKNOWN_CUSTOMER
+      - CUSTOMER_REQUIRED
+      - PRICE_NOT_FOUND
+      - PRICE_MISMATCH
+      - PRICE_OVERRIDE_NOT_ALLOWED
+      - DISCOUNT_LIMIT_EXCEEDED
+      - TOTALS_MISMATCH
+      - TENDER_MISMATCH
+      - TENDER_INVALID
+      - CREDIT_NOT_ALLOWED
+      - CREDIT_LIMIT_EXCEEDED
+      - SHIFT_NOT_OPEN
+      - APPROVER_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateBillRequest'
+            example:
+              id: 0193f100-0000-7000-8000-000000000001
+              number: R1-000042
+              registerId: 0193d100-0000-7000-8000-000000000001
+              shiftId: 0193d200-0000-7000-8000-000000000001
+              channel: RETAIL
+              lines:
+              - id: 0193f100-0000-7000-8000-000000000011
+                variantId: 0193c000-0000-7000-8000-000000000204
+                packagingUnitId: 0193c000-0000-7000-8000-000000000301
+                qty: '10'
+                unitPrice: '55.00'
+              complete: true
+              tenders:
+              - id: 0193f100-0000-7000-8000-000000000021
+                method: CASH
+                amount: '550.00'
+                tendered: '1000.00'
+              totals:
+                subtotal: '550.00'
+                discountTotal: '0.00'
+                taxTotal: '0.00'
+                grandTotal: '550.00'
+              priceListVersion: 3
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+              examples:
+                default:
+                  $ref: '#/components/examples/Bill'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/bills/{billId}:
+    get:
+      tags:
+      - Bills
+      operationId: getBill
+      summary: Get a bill
+      x-permission: sales:read
+      x-error-codes:
+      - BILL_NOT_FOUND
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+              examples:
+                default:
+                  $ref: '#/components/examples/Bill'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - Bills
+      operationId: updateBill
+      summary: Change a draft bill
+      x-permission: sales:create
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      - BILL_NOT_FOUND
+      - BILL_STATE_INVALID
+      - UNKNOWN_VARIANT
+      - UNKNOWN_PACKAGING_UNIT
+      - UNIT_NOT_SELLABLE
+      - WEIGHED_QTY_INVALID
+      - UNKNOWN_CUSTOMER
+      - CUSTOMER_REQUIRED
+      - PRICE_NOT_FOUND
+      - PRICE_MISMATCH
+      - PRICE_OVERRIDE_NOT_ALLOWED
+      - DISCOUNT_LIMIT_EXCEEDED
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBillRequest'
+            example:
+              customerId: 0193d000-0000-7000-8000-000000000102
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+              example:
+                id: 0193f100-0000-7000-8000-000000000001
+                number: R1-000042
+                registerId: 0193d100-0000-7000-8000-000000000001
+                shiftId: 0193d200-0000-7000-8000-000000000001
+                locationId: 0193b000-0000-7000-8000-000000000401
+                channel: RETAIL
+                priceListVersion: 3
+                status: DRAFT
+                lines:
+                - id: 0193f100-0000-7000-8000-000000000011
+                  variantId: 0193c000-0000-7000-8000-000000000204
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000301
+                  description: Eggs Red L
+                  qty: '10'
+                  qtyBase: '10'
+                  stockState: DEFAULT
+                  weighed: false
+                  unitPrice:
+                    amount: '55.00'
+                    currency: LKR
+                  lineDiscount:
+                    amount: '0.00'
+                    currency: LKR
+                  allocatedBillDiscount:
+                    amount: '0.00'
+                    currency: LKR
+                  taxAmount:
+                    amount: '0.00'
+                    currency: LKR
+                  lineTotal:
+                    amount: '550.00'
+                    currency: LKR
+                  priceSource: LIST
+                  returnedQty: '0'
+                totals:
+                  subtotal:
+                    amount: '550.00'
+                    currency: LKR
+                  discountTotal:
+                    amount: '0.00'
+                    currency: LKR
+                  taxTotal:
+                    amount: '0.00'
+                    currency: LKR
+                  grandTotal:
+                    amount: '550.00'
+                    currency: LKR
+                tenders: []
+                cashierId: 0193a6f1-0000-7000-8000-00000000f001
+                offline: false
+                flags: []
+                currency: LKR
+                version: 0
+                createdAt: '2026-11-25T09:14:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/bills/{billId}/complete:
+    post:
+      tags:
+      - Bills
+      operationId: completeBill
+      summary: Complete a draft bill (SAL-02..SAL-07)
+      description: Publishes `SaleCompleted`.
+      x-permission: sales:create
+      x-error-codes:
+      - VALIDATION_FAILED
+      - BILL_NOT_FOUND
+      - BILL_STATE_INVALID
+      - TOTALS_MISMATCH
+      - TENDER_MISMATCH
+      - TENDER_INVALID
+      - CREDIT_NOT_ALLOWED
+      - CREDIT_LIMIT_EXCEEDED
+      - SHIFT_NOT_OPEN
+      - APPROVER_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompleteBillRequest'
+            example:
+              tenders:
+              - id: 0193f100-0000-7000-8000-000000000021
+                method: CASH
+                amount: '550.00'
+                tendered: '1000.00'
+              totals:
+                subtotal: '550.00'
+                discountTotal: '0.00'
+                taxTotal: '0.00'
+                grandTotal: '550.00'
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+              examples:
+                default:
+                  $ref: '#/components/examples/Bill'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/bills/{billId}/void:
+    post:
+      tags:
+      - Bills
+      operationId: voidBill
+      summary: Void a bill on its business date (SAL-09)
+      description: Publishes `SaleVoided`; payments and inventory reverse the bill.
+      x-permission: sales:void
+      x-error-codes:
+      - VALIDATION_FAILED
+      - BILL_NOT_FOUND
+      - BILL_STATE_INVALID
+      - VOID_WINDOW_PASSED
+      - APPROVAL_REQUIRED
+      - APPROVER_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoidBillRequest'
+            example:
+              reason: Wrong customer
+              approvedBy: 0193a6f1-0000-7000-8000-00000000f001
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bill'
+              example:
+                id: 0193f100-0000-7000-8000-000000000001
+                number: R1-000042
+                registerId: 0193d100-0000-7000-8000-000000000001
+                shiftId: 0193d200-0000-7000-8000-000000000001
+                locationId: 0193b000-0000-7000-8000-000000000401
+                channel: RETAIL
+                priceListVersion: 3
+                status: VOIDED
+                lines:
+                - id: 0193f100-0000-7000-8000-000000000011
+                  variantId: 0193c000-0000-7000-8000-000000000204
+                  packagingUnitId: 0193c000-0000-7000-8000-000000000301
+                  description: Eggs Red L
+                  qty: '10'
+                  qtyBase: '10'
+                  stockState: DEFAULT
+                  weighed: false
+                  unitPrice:
+                    amount: '55.00'
+                    currency: LKR
+                  lineDiscount:
+                    amount: '0.00'
+                    currency: LKR
+                  allocatedBillDiscount:
+                    amount: '0.00'
+                    currency: LKR
+                  taxAmount:
+                    amount: '0.00'
+                    currency: LKR
+                  lineTotal:
+                    amount: '550.00'
+                    currency: LKR
+                  priceSource: LIST
+                  returnedQty: '0'
+                totals:
+                  subtotal:
+                    amount: '550.00'
+                    currency: LKR
+                  discountTotal:
+                    amount: '0.00'
+                    currency: LKR
+                  taxTotal:
+                    amount: '0.00'
+                    currency: LKR
+                  grandTotal:
+                    amount: '550.00'
+                    currency: LKR
+                tenders:
+                - id: 0193f100-0000-7000-8000-000000000021
+                  method: CASH
+                  amount:
+                    amount: '550.00'
+                    currency: LKR
+                  tendered:
+                    amount: '1000.00'
+                    currency: LKR
+                  change:
+                    amount: '450.00'
+                    currency: LKR
+                businessDate: '2026-11-25'
+                completedAt: '2026-11-25T09:15:00Z'
+                cashierId: 0193a6f1-0000-7000-8000-00000000f001
+                offline: false
+                flags: []
+                currency: LKR
+                version: 2
+                createdAt: '2026-11-25T09:14:00Z'
+                voidReason: Wrong customer
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/bills/{billId}/returns:
+    post:
+      tags:
+      - Bills
+      operationId: returnBill
+      summary: Return lines of a bill (SAL-10)
+      description: Creates credit note `CN-000001` and publishes `SaleReturned`; payments refunds and inventory restocks.
+      x-permission: sales:return
+      x-error-codes:
+      - VALIDATION_FAILED
+      - BILL_NOT_FOUND
+      - BILL_STATE_INVALID
+      - RETURN_WINDOW_PASSED
+      - RETURN_QTY_EXCEEDED
+      - UNKNOWN_BILL_LINE
+      - REFUND_TENDER_MISMATCH
+      - APPROVER_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReturnRequest'
+            example:
+              id: 0193f200-0000-7000-8000-000000000001
+              reason: Cracked
+              lines:
+              - billLineId: 0193f100-0000-7000-8000-000000000011
+                qty: '2'
+                restock: true
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+              example:
+                id: 0193f200-0000-7000-8000-000000000001
+                number: CN-000001
+                billId: 0193f100-0000-7000-8000-000000000001
+                reason: Cracked
+                total:
+                  amount: '110.00'
+                  currency: LKR
+                taxTotal:
+                  amount: '0.00'
+                  currency: LKR
+                lines:
+                - billLineId: 0193f100-0000-7000-8000-000000000011
+                  variantId: 0193c000-0000-7000-8000-000000000204
+                  qty: '2'
+                  qtyBase: '2'
+                  amount:
+                    amount: '110.00'
+                    currency: LKR
+                  taxAmount:
+                    amount: '0.00'
+                    currency: LKR
+                  restock: true
+                refundTenders:
+                - method: CASH
+                  amount:
+                    amount: '110.00'
+                    currency: LKR
+                createdBy: 0193a6f1-0000-7000-8000-00000000f001
+                createdAt: '2026-11-25T10:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/credit-notes:
+    get:
+      tags:
+      - CreditNotes
+      operationId: listCreditNotes
+      summary: Credit notes, newest first
+      x-permission: sales:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: billId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNotePage'
+              example:
+                items:
+                - id: 0193f200-0000-7000-8000-000000000001
+                  number: CN-000001
+                  billId: 0193f100-0000-7000-8000-000000000001
+                  reason: Cracked
+                  total:
+                    amount: '110.00'
+                    currency: LKR
+                  taxTotal:
+                    amount: '0.00'
+                    currency: LKR
+                  lines:
+                  - billLineId: 0193f100-0000-7000-8000-000000000011
+                    variantId: 0193c000-0000-7000-8000-000000000204
+                    qty: '2'
+                    qtyBase: '2'
+                    amount:
+                      amount: '110.00'
+                      currency: LKR
+                    taxAmount:
+                      amount: '0.00'
+                      currency: LKR
+                    restock: true
+                  refundTenders:
+                  - method: CASH
+                    amount:
+                      amount: '110.00'
+                      currency: LKR
+                  createdBy: 0193a6f1-0000-7000-8000-00000000f001
+                  createdAt: '2026-11-25T10:00:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/credit-notes/{creditNoteId}:
+    get:
+      tags:
+      - CreditNotes
+      operationId: getCreditNote
+      summary: Get a credit note
+      x-permission: sales:read
+      x-error-codes:
+      - CREDIT_NOTE_NOT_FOUND
+      parameters:
+      - name: creditNoteId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreditNote'
+              example:
+                id: 0193f200-0000-7000-8000-000000000001
+                number: CN-000001
+                billId: 0193f100-0000-7000-8000-000000000001
+                reason: Cracked
+                total:
+                  amount: '110.00'
+                  currency: LKR
+                taxTotal:
+                  amount: '0.00'
+                  currency: LKR
+                lines:
+                - billLineId: 0193f100-0000-7000-8000-000000000011
+                  variantId: 0193c000-0000-7000-8000-000000000204
+                  qty: '2'
+                  qtyBase: '2'
+                  amount:
+                    amount: '110.00'
+                    currency: LKR
+                  taxAmount:
+                    amount: '0.00'
+                    currency: LKR
+                  restock: true
+                refundTenders:
+                - method: CASH
+                  amount:
+                    amount: '110.00'
+                    currency: LKR
+                createdBy: 0193a6f1-0000-7000-8000-00000000f001
+                createdAt: '2026-11-25T10:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    SalesChannel:
+      type: string
+      enum:
+      - RETAIL
+      - WHOLESALE
+    RegisterStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Register:
+      type: object
+      required:
+      - id
+      - code
+      - locationId
+      - billPrefix
+      - status
+      - lastNumber
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          $ref: '#/components/schemas/Code'
+        name:
+          type: string
+        locationId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        billPrefix:
+          type: string
+          example: R1
+        status:
+          $ref: '#/components/schemas/RegisterStatus'
+        lastNumber:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Highest bill sequence accepted from the register; the till continues after it.
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    RegisterPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Register'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreateRegisterRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - code
+      - locationId
+      - billPrefix
+      properties:
+        code:
+          $ref: '#/components/schemas/Code'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        locationId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        billPrefix:
+          type: string
+          pattern: ^[A-Z0-9]{1,8}$
+    UpdateRegisterRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        deviceId:
+          type: string
+          format: uuid
+        billPrefix:
+          type: string
+          pattern: ^[A-Z0-9]{1,8}$
+        status:
+          $ref: '#/components/schemas/RegisterStatus'
+    ShiftStatus:
+      type: string
+      enum:
+      - OPEN
+      - CLOSED
+    Shift:
+      type: object
+      required:
+      - id
+      - registerId
+      - cashierId
+      - status
+      - openedAt
+      - offline
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        registerId:
+          type: string
+          format: uuid
+        cashierId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/ShiftStatus'
+        openedAt:
+          type: string
+          format: date-time
+        closedAt:
+          type: string
+          format: date-time
+        offline:
+          type: boolean
+          description: Created for offline bills without a known shift.
+        version:
+          type: integer
+          format: int64
+    OpenShiftRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - registerId
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated on the till; the server generates one when absent.
+        registerId:
+          type: string
+          format: uuid
+        openedAt:
+          type: string
+          format: date-time
+    CloseShiftRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        closedAt:
+          type: string
+          format: date-time
+    BillStatus:
+      type: string
+      enum:
+      - DRAFT
+      - COMPLETED
+      - VOIDED
+      - PARTIALLY_RETURNED
+      - RETURNED
+    BillFlag:
+      type: string
+      description: Why an offline bill was accepted although it breaks an online rule.
+      enum:
+      - PRICE_MISMATCH
+      - TOTALS_MISMATCH
+      - DISCOUNT_LIMIT_EXCEEDED
+      - CREDIT_LIMIT_EXCEEDED
+      - LATE_SYNC
+      - OFFLINE_SHIFT
+      - TENDER_MISMATCH
+    TenderMethod:
+      type: string
+      enum:
+      - CASH
+      - CARD
+      - BANK_TRANSFER
+      - MOBILE_WALLET
+      - CHEQUE
+      - CREDIT
+    Tender:
+      type: object
+      required:
+      - id
+      - method
+      - amount
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/TenderMethod'
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        tendered:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Cash handed over (CASH).
+        change:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Change given (CASH).
+        reference:
+          type: string
+          description: Card slip, transfer or cheque reference; never a card number.
+    TenderInput:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - method
+      - amount
+      properties:
+        id:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/TenderMethod'
+        amount:
+          $ref: '#/components/schemas/Amount'
+        tendered:
+          $ref: '#/components/schemas/Amount'
+          description: Cash handed over; at least the amount (SAL-06).
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 60
+          description: Required for CARD and BANK_TRANSFER unless the tenant relaxes it.
+    DiscountType:
+      type: string
+      enum:
+      - AMOUNT
+      - PERCENT
+    BillDiscount:
+      type: object
+      required:
+      - type
+      - value
+      properties:
+        type:
+          $ref: '#/components/schemas/DiscountType'
+        value:
+          type: string
+          description: An amount or a percentage.
+        reason:
+          type: string
+        approvedBy:
+          type: string
+          format: uuid
+    BillDiscountInput:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - value
+      properties:
+        type:
+          $ref: '#/components/schemas/DiscountType'
+        value:
+          $ref: '#/components/schemas/Amount'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        approvedBy:
+          type: string
+          format: uuid
+          description: A user with `sales:discount-unlimited` above `maxCashierDiscountPct`.
+    PriceOverride:
+      type: object
+      additionalProperties: false
+      required:
+      - unitPrice
+      - approvedBy
+      properties:
+        unitPrice:
+          $ref: '#/components/schemas/Amount'
+        approvedBy:
+          type: string
+          format: uuid
+          description: A user with `sales:price-override`.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+    BillLineInput:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - variantId
+      - packagingUnitId
+      - qty
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+          description: In the packaging unit; weighed kilograms with up to 3 decimals (SAL-15).
+        weighed:
+          type: boolean
+        unitPrice:
+          $ref: '#/components/schemas/Amount'
+          description: The price the till shows; checked against pricing (SAL-03).
+        lineDiscount:
+          $ref: '#/components/schemas/Amount'
+        discountApprovedBy:
+          type: string
+          format: uuid
+        priceOverride:
+          $ref: '#/components/schemas/PriceOverride'
+    BillLine:
+      type: object
+      required:
+      - id
+      - variantId
+      - packagingUnitId
+      - description
+      - qty
+      - qtyBase
+      - stockState
+      - weighed
+      - unitPrice
+      - lineDiscount
+      - allocatedBillDiscount
+      - taxAmount
+      - lineTotal
+      - returnedQty
+      properties:
+        id:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        packagingUnitId:
+          type: string
+          format: uuid
+        description:
+          type: string
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        qtyBase:
+          $ref: '#/components/schemas/Quantity'
+        stockState:
+          type: string
+        weighed:
+          type: boolean
+        unitPrice:
+          $ref: ./common.yaml#/components/schemas/Money
+        lineDiscount:
+          $ref: ./common.yaml#/components/schemas/Money
+        allocatedBillDiscount:
+          $ref: ./common.yaml#/components/schemas/Money
+        taxAmount:
+          $ref: ./common.yaml#/components/schemas/Money
+        lineTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        priceSource:
+          type: string
+        returnedQty:
+          $ref: '#/components/schemas/Quantity'
+    BillTotals:
+      type: object
+      required:
+      - subtotal
+      - discountTotal
+      - taxTotal
+      - grandTotal
+      properties:
+        subtotal:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Σ round(qty × unit price).
+        discountTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Line and bill discounts.
+        taxTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        grandTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: 'Σ line totals: what the customer pays.'
+    TotalsInput:
+      type: object
+      description: The totals the till computed (SAL-04).
+      additionalProperties: false
+      required:
+      - subtotal
+      - discountTotal
+      - taxTotal
+      - grandTotal
+      properties:
+        subtotal:
+          $ref: '#/components/schemas/Amount'
+        discountTotal:
+          $ref: '#/components/schemas/Amount'
+        taxTotal:
+          $ref: '#/components/schemas/Amount'
+        grandTotal:
+          $ref: '#/components/schemas/Amount'
+    Bill:
+      type: object
+      required:
+      - id
+      - number
+      - registerId
+      - locationId
+      - channel
+      - status
+      - lines
+      - totals
+      - tenders
+      - offline
+      - flags
+      - currency
+      - version
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: R1-000042
+        registerId:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        customerId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        priceListVersion:
+          type: integer
+        status:
+          $ref: '#/components/schemas/BillStatus'
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillLine'
+        billDiscount:
+          $ref: '#/components/schemas/BillDiscount'
+        totals:
+          $ref: '#/components/schemas/BillTotals'
+        deviceTotals:
+          $ref: '#/components/schemas/BillTotals'
+        tenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tender'
+        businessDate:
+          type: string
+          format: date
+        completedAt:
+          type: string
+          format: date-time
+        cashierId:
+          type: string
+          format: uuid
+        offline:
+          type: boolean
+        flags:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillFlag'
+        currency:
+          type: string
+        voidReason:
+          type: string
+        voidedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+          format: int64
+        createdAt:
+          type: string
+          format: date-time
+    BillPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bill'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CreateBillRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - number
+      - registerId
+      - channel
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: UUIDv7 generated on the till (SAL-01).
+        number:
+          type: string
+          pattern: ^[A-Z0-9]{1,8}-[0-9]{6}$
+        registerId:
+          type: string
+          format: uuid
+        shiftId:
+          type: string
+          format: uuid
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        customerId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BillLineInput'
+        billDiscount:
+          $ref: '#/components/schemas/BillDiscountInput'
+        complete:
+          type: boolean
+          description: Submit an already completed bill (SAL-02); then `tenders` and `totals` are required.
+        tenders:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/TenderInput'
+        totals:
+          $ref: '#/components/schemas/TotalsInput'
+        priceListVersion:
+          type: integer
+          minimum: 1
+        completedAt:
+          type: string
+          format: date-time
+    UpdateBillRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        channel:
+          $ref: '#/components/schemas/SalesChannel'
+        customerId:
+          type: string
+          format: uuid
+        lines:
+          type: array
+          description: Replaces all lines.
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/BillLineInput'
+        billDiscount:
+          $ref: '#/components/schemas/BillDiscountInput'
+    CompleteBillRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - tenders
+      - totals
+      properties:
+        tenders:
+          type: array
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/TenderInput'
+        totals:
+          $ref: '#/components/schemas/TotalsInput'
+        completedAt:
+          type: string
+          format: date-time
+        creditApprovedBy:
+          type: string
+          format: uuid
+          description: A user with `sales:credit-override` above the credit limit.
+    VoidBillRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        approvedBy:
+          type: string
+          format: uuid
+          description: A manager when `voidRequiresManager` (SAL-09).
+    ReturnLineInput:
+      type: object
+      additionalProperties: false
+      required:
+      - billLineId
+      - qty
+      - restock
+      properties:
+        billLineId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        restock:
+          type: boolean
+    RefundTenderInput:
+      type: object
+      additionalProperties: false
+      required:
+      - method
+      - amount
+      properties:
+        method:
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - BANK_TRANSFER
+          - MOBILE_WALLET
+          - CHEQUE
+          - CREDIT
+        amount:
+          $ref: '#/components/schemas/Amount'
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 60
+    ReturnRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - reason
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The credit note's id, generated by the caller.
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/ReturnLineInput'
+        refundTenders:
+          type: array
+          description: Defaults to the original methods (cash when the bill had several).
+          minItems: 1
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/RefundTenderInput'
+        approvedBy:
+          type: string
+          format: uuid
+          description: A user with `sales:return-override` after `returnWindowDays`.
+    CreditNoteLine:
+      type: object
+      required:
+      - billLineId
+      - variantId
+      - qty
+      - qtyBase
+      - amount
+      - taxAmount
+      - restock
+      properties:
+        billLineId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        qty:
+          $ref: '#/components/schemas/Quantity'
+        qtyBase:
+          $ref: '#/components/schemas/Quantity'
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        taxAmount:
+          $ref: ./common.yaml#/components/schemas/Money
+        restock:
+          type: boolean
+    RefundTender:
+      type: object
+      required:
+      - method
+      - amount
+      properties:
+        method:
+          type: string
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        reference:
+          type: string
+    CreditNote:
+      type: object
+      required:
+      - id
+      - number
+      - billId
+      - reason
+      - total
+      - lines
+      - refundTenders
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        number:
+          type: string
+          example: CN-000001
+        billId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
+        taxTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNoteLine'
+        refundTenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/RefundTender'
+        approvedBy:
+          type: string
+          format: uuid
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    CreditNotePage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreditNote'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'
+  examples:
+    Bill:
+      value:
+        id: 0193f100-0000-7000-8000-000000000001
+        number: R1-000042
+        registerId: 0193d100-0000-7000-8000-000000000001
+        shiftId: 0193d200-0000-7000-8000-000000000001
+        locationId: 0193b000-0000-7000-8000-000000000401
+        channel: RETAIL
+        priceListVersion: 3
+        status: COMPLETED
+        lines:
+        - id: 0193f100-0000-7000-8000-000000000011
+          variantId: 0193c000-0000-7000-8000-000000000204
+          packagingUnitId: 0193c000-0000-7000-8000-000000000301
+          description: Eggs Red L
+          qty: '10'
+          qtyBase: '10'
+          stockState: DEFAULT
+          weighed: false
+          unitPrice:
+            amount: '55.00'
+            currency: LKR
+          lineDiscount:
+            amount: '0.00'
+            currency: LKR
+          allocatedBillDiscount:
+            amount: '0.00'
+            currency: LKR
+          taxAmount:
+            amount: '0.00'
+            currency: LKR
+          lineTotal:
+            amount: '550.00'
+            currency: LKR
+          priceSource: LIST
+          returnedQty: '0'
+        totals:
+          subtotal:
+            amount: '550.00'
+            currency: LKR
+          discountTotal:
+            amount: '0.00'
+            currency: LKR
+          taxTotal:
+            amount: '0.00'
+            currency: LKR
+          grandTotal:
+            amount: '550.00'
+            currency: LKR
+        tenders:
+        - id: 0193f100-0000-7000-8000-000000000021
+          method: CASH
+          amount:
+            amount: '550.00'
+            currency: LKR
+          tendered:
+            amount: '1000.00'
+            currency: LKR
+          change:
+            amount: '450.00'
+            currency: LKR
+        businessDate: '2026-11-25'
+        completedAt: '2026-11-25T09:15:00Z'
+        cashierId: 0193a6f1-0000-7000-8000-00000000f001
+        offline: false
+        flags: []
+        currency: LKR
+        version: 1
+        createdAt: '2026-11-25T09:14:00Z'

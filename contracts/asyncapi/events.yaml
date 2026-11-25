@@ -77,6 +77,8 @@ channels:
   inventoryStock:
     address: bmp.inventory.stock
     messages:
+      StockIssued:
+        $ref: '#/components/messages/StockIssued'
       StockReceived:
         $ref: '#/components/messages/StockReceived'
       StockAdjusted:
@@ -93,6 +95,33 @@ channels:
     messages:
       StockCountPosted:
         $ref: '#/components/messages/StockCountPosted'
+
+  salesBill:
+    address: bmp.sales.bill
+    messages:
+      SaleCompleted:
+        $ref: '#/components/messages/SaleCompleted'
+      SaleReturned:
+        $ref: '#/components/messages/SaleReturned'
+      SaleVoided:
+        $ref: '#/components/messages/SaleVoided'
+  paymentsPayment:
+    address: bmp.payments.payment
+    messages:
+      PaymentCaptured:
+        $ref: '#/components/messages/PaymentCaptured'
+      PaymentRefunded:
+        $ref: '#/components/messages/PaymentRefunded'
+  paymentsDrawer:
+    address: bmp.payments.drawer-session
+    messages:
+      DrawerReconciled:
+        $ref: '#/components/messages/DrawerReconciled'
+  syncRegister:
+    address: bmp.sync.register
+    messages:
+      BillNumberGapDetected:
+        $ref: '#/components/messages/BillNumberGapDetected'
 
 operations:
   publishTenantEvents:
@@ -149,6 +178,23 @@ operations:
     action: send
     channel:
       $ref: '#/channels/inventoryStockCount'
+
+  publishBillEvents:
+    action: send
+    channel:
+      $ref: '#/channels/salesBill'
+  publishPaymentEvents:
+    action: send
+    channel:
+      $ref: '#/channels/paymentsPayment'
+  publishDrawerEvents:
+    action: send
+    channel:
+      $ref: '#/channels/paymentsDrawer'
+  publishSyncEvents:
+    action: send
+    channel:
+      $ref: '#/channels/syncRegister'
 
 components:
   messages:
@@ -739,6 +785,262 @@ components:
             unitCost: '2.200000'
             costAmount: '-110.00'
           totalVarianceCost: '-110.00'
+
+    SaleCompleted:
+      name: bmp.sales.sale-completed.v1
+      title: Sale completed
+      summary: A bill was completed online or synced from a till (SAL-02, SAL-08); lines carry the base quantity and stock state,
+        so inventory needs no lookup. Offline bills carry their flags.
+      payload:
+        $ref: '#/components/schemas/SaleCompleted'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193f100-0000-7000-8000-000000000001
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          billId: 0193f100-0000-7000-8000-000000000001
+          number: R1-000042
+          channel: RETAIL
+          locationId: 0193b000-0000-7000-8000-000000000401
+          registerId: 0193d100-0000-7000-8000-000000000001
+          shiftId: 0193d200-0000-7000-8000-000000000001
+          priceListVersion: 3
+          businessDate: '2026-11-25'
+          completedAt: '2026-11-25T09:15:00Z'
+          currency: LKR
+          offline: false
+          flags: []
+          lines:
+          - lineId: 0193f100-0000-7000-8000-000000000011
+            variantId: 0193c000-0000-7000-8000-000000000204
+            packagingUnitId: 0193c000-0000-7000-8000-000000000301
+            description: Eggs Red L
+            qty: '10'
+            qtyBase: '10'
+            stockState: DEFAULT
+            weighed: false
+            unitPrice: '55.00'
+            lineDiscount: '0.00'
+            allocatedDiscount: '0.00'
+            tax: '0.00'
+            lineTotal: '550.00'
+          totals:
+            subtotal: '550.00'
+            discountTotal: '0.00'
+            taxTotal: '0.00'
+            grandTotal: '550.00'
+          tenders:
+          - tenderId: 0193f100-0000-7000-8000-000000000021
+            method: CASH
+            amount: '550.00'
+            tendered: '1000.00'
+            change: '450.00'
+    SaleReturned:
+      name: bmp.sales.sale-returned.v1
+      title: Sale returned
+      summary: 'Lines of a bill came back with a credit note (SAL-10): payments refunds the `refundTenders`, inventory restocks
+        the lines with `restock` at their original cost.'
+      payload:
+        $ref: '#/components/schemas/SaleReturned'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193f100-0000-7000-8000-000000000001
+          aggregateVersion: 2
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          creditNoteId: 0193f200-0000-7000-8000-000000000001
+          number: CN-000001
+          billId: 0193f100-0000-7000-8000-000000000001
+          billNumber: R1-000042
+          locationId: 0193b000-0000-7000-8000-000000000401
+          registerId: 0193d100-0000-7000-8000-000000000001
+          currency: LKR
+          reason: Cracked
+          total: '110.00'
+          taxTotal: '0.00'
+          lines:
+          - billLineId: 0193f100-0000-7000-8000-000000000011
+            variantId: 0193c000-0000-7000-8000-000000000204
+            qty: '2'
+            qtyBase: '2'
+            stockState: DEFAULT
+            amount: '110.00'
+            tax: '0.00'
+            restock: true
+          refundTenders:
+          - refundId: 0193d500-0000-7000-8000-000000000001
+            method: CASH
+            amount: '110.00'
+            originalTenderId: 0193f100-0000-7000-8000-000000000021
+          returnedAt: '2026-11-25T10:00:00Z'
+    SaleVoided:
+      name: bmp.sales.sale-voided.v1
+      title: Sale voided
+      summary: 'A bill was voided on its business date (SAL-09): payments reverses its tenders, inventory its stock movements.'
+      payload:
+        $ref: '#/components/schemas/SaleVoided'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193f100-0000-7000-8000-000000000001
+          aggregateVersion: 2
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          billId: 0193f100-0000-7000-8000-000000000001
+          number: R1-000042
+          locationId: 0193b000-0000-7000-8000-000000000401
+          registerId: 0193d100-0000-7000-8000-000000000001
+          currency: LKR
+          reason: Wrong customer
+          approvedBy: 0193a6f1-0000-7000-8000-00000000f002
+          grandTotal: '550.00'
+          tenders:
+          - tenderId: 0193f100-0000-7000-8000-000000000021
+            method: CASH
+            amount: '550.00'
+            tendered: '1000.00'
+            change: '450.00'
+          voidedAt: '2026-11-25T09:30:00Z'
+    StockIssued:
+      name: bmp.inventory.stock-issued.v1
+      title: Stock issued
+      summary: Stock left through a sale, or came back through a return (restocked lines, at the original cost) or a void; lines
+        are signed movements with their cost per bill line (`sourceLineId`), `corrections` carry true-ups of negative stock.
+      payload:
+        $ref: '#/components/schemas/StockIssued'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193f100-0000-7000-8000-000000000001
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          sourceType: SALE
+          sourceId: 0193f100-0000-7000-8000-000000000001
+          billId: 0193f100-0000-7000-8000-000000000001
+          locationId: 0193b000-0000-7000-8000-000000000401
+          currency: LKR
+          lines:
+          - movementId: 0193e000-0000-7000-8000-000000000901
+            sourceLineId: 0193f100-0000-7000-8000-000000000011
+            variantId: 0193c000-0000-7000-8000-000000000204
+            stockState: DEFAULT
+            qtyBase: '-10'
+            unitCost: '42.500000'
+            costAmount: '-425.00'
+          corrections: []
+    PaymentCaptured:
+      name: bmp.payments.payment-captured.v1
+      title: Payment captured
+      summary: A tender of a completed bill (PAY-01) or an account collection (PAY-02) was captured.
+      payload:
+        $ref: '#/components/schemas/PaymentCaptured'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193d400-0000-7000-8000-000000000001
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          paymentId: 0193d400-0000-7000-8000-000000000001
+          kind: BILL
+          billId: 0193f100-0000-7000-8000-000000000001
+          tenderId: 0193f100-0000-7000-8000-000000000021
+          method: CASH
+          amount: '550.00'
+          tendered: '1000.00'
+          changeGiven: '450.00'
+          registerId: 0193d100-0000-7000-8000-000000000001
+          drawerSessionId: 0193d300-0000-7000-8000-000000000001
+          currency: LKR
+          capturedAt: '2026-11-25T09:15:00Z'
+    PaymentRefunded:
+      name: bmp.payments.payment-refunded.v1
+      title: Payment refunded
+      summary: Money went back to a customer (PAY-03), for a return or by hand.
+      payload:
+        $ref: '#/components/schemas/PaymentRefunded'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193d400-0000-7000-8000-000000000001
+          aggregateVersion: 2
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          refundId: 0193d500-0000-7000-8000-000000000001
+          paymentId: 0193d400-0000-7000-8000-000000000001
+          billId: 0193f100-0000-7000-8000-000000000001
+          creditNoteId: 0193f200-0000-7000-8000-000000000001
+          amount: '110.00'
+          method: CASH
+          reason: Cracked
+          drawerSessionId: 0193d300-0000-7000-8000-000000000001
+          currency: LKR
+          refundedAt: '2026-11-25T10:00:00Z'
+    DrawerReconciled:
+      name: bmp.payments.drawer-reconciled.v1
+      title: Drawer reconciled
+      summary: A counted drawer was reconciled; `variance` = counted − expected (PAY-04).
+      payload:
+        $ref: '#/components/schemas/DrawerReconciled'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193d300-0000-7000-8000-000000000001
+          aggregateVersion: 4
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          sessionId: 0193d300-0000-7000-8000-000000000001
+          registerId: 0193d100-0000-7000-8000-000000000001
+          expected: '5550.00'
+          counted: '5450.00'
+          variance: '-100.00'
+          currency: LKR
+          reconciledAt: '2026-11-25T18:05:00Z'
+    BillNumberGapDetected:
+      name: bmp.sync.bill-number-gap-detected.v1
+      title: Bill number gap detected
+      summary: A register's synced bill numbers skip some; raised once per gap (SYN-06).
+      payload:
+        $ref: '#/components/schemas/BillNumberGapDetected'
+      examples:
+      - payload:
+          eventId: 0193f1a0-0000-7000-8000-00000000e101
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T09:15:01Z'
+          aggregateId: 0193d100-0000-7000-8000-000000000001
+          aggregateVersion: 1
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+            deviceId: 0193a6f1-0000-7000-8000-00000000d001
+          registerId: 0193d100-0000-7000-8000-000000000001
+          billPrefix: R1
+          missingNumbers:
+          - R1-000043
 
   schemas:
     Uuid:
@@ -1872,3 +2174,665 @@ components:
             $ref: '#/components/schemas/StockMovementLine'
         totalVarianceCost:
           $ref: '#/components/schemas/Decimal'
+    SaleLine:
+      type: object
+      additionalProperties: false
+      required:
+      - lineId
+      - variantId
+      - packagingUnitId
+      - qty
+      - qtyBase
+      - stockState
+      - unitPrice
+      - lineDiscount
+      - allocatedDiscount
+      - tax
+      - lineTotal
+      properties:
+        lineId:
+          $ref: '#/components/schemas/Uuid'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        packagingUnitId:
+          $ref: '#/components/schemas/Uuid'
+        description:
+          type: string
+        qty:
+          $ref: '#/components/schemas/Decimal'
+        qtyBase:
+          $ref: '#/components/schemas/Decimal'
+        stockState:
+          type: string
+        weighed:
+          type: boolean
+        unitPrice:
+          $ref: '#/components/schemas/Decimal'
+        lineDiscount:
+          $ref: '#/components/schemas/Decimal'
+        allocatedDiscount:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        lineTotal:
+          $ref: '#/components/schemas/Decimal'
+    SaleTotals:
+      type: object
+      additionalProperties: false
+      required:
+      - subtotal
+      - discountTotal
+      - taxTotal
+      - grandTotal
+      properties:
+        subtotal:
+          $ref: '#/components/schemas/Decimal'
+        discountTotal:
+          $ref: '#/components/schemas/Decimal'
+        taxTotal:
+          $ref: '#/components/schemas/Decimal'
+        grandTotal:
+          $ref: '#/components/schemas/Decimal'
+    SaleTender:
+      type: object
+      additionalProperties: false
+      required:
+      - tenderId
+      - method
+      - amount
+      properties:
+        tenderId:
+          $ref: '#/components/schemas/Uuid'
+        method:
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - BANK_TRANSFER
+          - MOBILE_WALLET
+          - CHEQUE
+          - CREDIT
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        tendered:
+          $ref: '#/components/schemas/Decimal'
+        change:
+          $ref: '#/components/schemas/Decimal'
+        reference:
+          type: string
+    SaleCompleted:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - billId
+      - number
+      - channel
+      - locationId
+      - registerId
+      - businessDate
+      - completedAt
+      - currency
+      - offline
+      - flags
+      - lines
+      - totals
+      - tenders
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        number:
+          type: string
+        channel:
+          type: string
+          enum:
+          - RETAIL
+          - WHOLESALE
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        shiftId:
+          $ref: '#/components/schemas/Uuid'
+        deviceId:
+          $ref: '#/components/schemas/Uuid'
+        cashierId:
+          $ref: '#/components/schemas/Uuid'
+        priceListId:
+          $ref: '#/components/schemas/Uuid'
+        priceListVersion:
+          type: integer
+        businessDate:
+          type: string
+          format: date
+        completedAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        offline:
+          type: boolean
+        flags:
+          type: array
+          items:
+            type: string
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SaleLine'
+        totals:
+          $ref: '#/components/schemas/SaleTotals'
+        tenders:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SaleTender'
+    ReturnedLine:
+      type: object
+      additionalProperties: false
+      required:
+      - billLineId
+      - variantId
+      - qty
+      - qtyBase
+      - stockState
+      - amount
+      - tax
+      - restock
+      properties:
+        billLineId:
+          $ref: '#/components/schemas/Uuid'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        qty:
+          $ref: '#/components/schemas/Decimal'
+        qtyBase:
+          $ref: '#/components/schemas/Decimal'
+        stockState:
+          type: string
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        tax:
+          $ref: '#/components/schemas/Decimal'
+        restock:
+          type: boolean
+    RefundTender:
+      type: object
+      additionalProperties: false
+      required:
+      - refundId
+      - method
+      - amount
+      properties:
+        refundId:
+          $ref: '#/components/schemas/Uuid'
+        method:
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - BANK_TRANSFER
+          - MOBILE_WALLET
+          - CHEQUE
+          - CREDIT
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        reference:
+          type: string
+        originalTenderId:
+          $ref: '#/components/schemas/Uuid'
+    SaleReturned:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - creditNoteId
+      - number
+      - billId
+      - locationId
+      - registerId
+      - currency
+      - reason
+      - total
+      - lines
+      - refundTenders
+      - returnedAt
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        creditNoteId:
+          $ref: '#/components/schemas/Uuid'
+        number:
+          type: string
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        billNumber:
+          type: string
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        reason:
+          type: string
+        total:
+          $ref: '#/components/schemas/Decimal'
+        taxTotal:
+          $ref: '#/components/schemas/Decimal'
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/ReturnedLine'
+        refundTenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/RefundTender'
+        returnedAt:
+          type: string
+          format: date-time
+    SaleVoided:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - billId
+      - number
+      - locationId
+      - registerId
+      - currency
+      - reason
+      - grandTotal
+      - tenders
+      - voidedAt
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        number:
+          type: string
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        reason:
+          type: string
+        approvedBy:
+          $ref: '#/components/schemas/Uuid'
+        grandTotal:
+          $ref: '#/components/schemas/Decimal'
+        tenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/SaleTender'
+        voidedAt:
+          type: string
+          format: date-time
+    IssuedLine:
+      type: object
+      additionalProperties: false
+      required:
+      - movementId
+      - sourceLineId
+      - variantId
+      - stockState
+      - qtyBase
+      - unitCost
+      - costAmount
+      properties:
+        movementId:
+          $ref: '#/components/schemas/Uuid'
+        sourceLineId:
+          $ref: '#/components/schemas/Uuid'
+        variantId:
+          $ref: '#/components/schemas/Uuid'
+        stockState:
+          type: string
+        batchId:
+          $ref: '#/components/schemas/Uuid'
+        qtyBase:
+          $ref: '#/components/schemas/Decimal'
+        unitCost:
+          $ref: '#/components/schemas/Decimal'
+        costAmount:
+          $ref: '#/components/schemas/Decimal'
+    StockIssued:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - sourceType
+      - sourceId
+      - billId
+      - locationId
+      - currency
+      - lines
+      - corrections
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        sourceType:
+          type: string
+          enum:
+          - SALE
+          - SALE_RETURN
+          - SALE_VOID
+        sourceId:
+          $ref: '#/components/schemas/Uuid'
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        locationId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        lines:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/IssuedLine'
+        corrections:
+          type: array
+          items:
+            $ref: '#/components/schemas/IssuedLine'
+    PaymentCaptured:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - paymentId
+      - kind
+      - method
+      - amount
+      - currency
+      - capturedAt
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        paymentId:
+          $ref: '#/components/schemas/Uuid'
+        kind:
+          type: string
+          enum:
+          - BILL
+          - ACCOUNT
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        tenderId:
+          $ref: '#/components/schemas/Uuid'
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        method:
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - BANK_TRANSFER
+          - MOBILE_WALLET
+          - CHEQUE
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        tendered:
+          $ref: '#/components/schemas/Decimal'
+        changeGiven:
+          $ref: '#/components/schemas/Decimal'
+        reference:
+          type: string
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        drawerSessionId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        capturedAt:
+          type: string
+          format: date-time
+    PaymentRefunded:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - refundId
+      - paymentId
+      - amount
+      - method
+      - reason
+      - currency
+      - refundedAt
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        refundId:
+          $ref: '#/components/schemas/Uuid'
+        paymentId:
+          $ref: '#/components/schemas/Uuid'
+        billId:
+          $ref: '#/components/schemas/Uuid'
+        creditNoteId:
+          $ref: '#/components/schemas/Uuid'
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        method:
+          type: string
+          enum:
+          - CASH
+          - CARD
+          - BANK_TRANSFER
+          - MOBILE_WALLET
+          - CHEQUE
+        reason:
+          type: string
+        drawerSessionId:
+          $ref: '#/components/schemas/Uuid'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        refundedAt:
+          type: string
+          format: date-time
+    DrawerReconciled:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - sessionId
+      - registerId
+      - expected
+      - counted
+      - variance
+      - currency
+      - reconciledAt
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        sessionId:
+          $ref: '#/components/schemas/Uuid'
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        expected:
+          $ref: '#/components/schemas/Decimal'
+        counted:
+          $ref: '#/components/schemas/Decimal'
+        variance:
+          $ref: '#/components/schemas/Decimal'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        reconciledAt:
+          type: string
+          format: date-time
+    BillNumberGapDetected:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - registerId
+      - billPrefix
+      - missingNumbers
+      properties:
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        registerId:
+          $ref: '#/components/schemas/Uuid'
+        billPrefix:
+          type: string
+        missingNumbers:
+          type: array
+          minItems: 1
+          items:
+            type: string

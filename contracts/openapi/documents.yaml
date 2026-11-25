@@ -1,0 +1,819 @@
+openapi: 3.1.0
+info:
+  title: BMP Documents API
+  version: 1.0.0
+  description: 'Receipt rendering, print agents and print jobs (phase 03, rules DOC-01..DOC-06).
+
+
+    Receipts render to ESC/POS bytes for 58 mm (32 characters) and 80 mm (48 characters) thermal printers, to PDF and to
+
+    a plain text preview (DOC-01, DOC-02); Sinhala and Tamil text is rasterised because thermal printers lack the fonts
+
+    (DOC-03). Reprints and back-office prints become print jobs for the location''s print agent, which long-polls for the
+
+    next job and reports whether it printed (DOC-05); the agent keeps the latest receipt template so it can print offline
+
+    (DOC-06).
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Receipts
+  description: Rendering receipts (DOC-01..DOC-04).
+- name: PrintAgents
+  description: Print agents and their jobs (DOC-05, DOC-06).
+paths:
+  /api/v1/documents/receipts:render:
+    post:
+      tags:
+      - Receipts
+      operationId: renderReceipt
+      summary: Render a receipt (DOC-01..DOC-03)
+      description: ESC/POS answers `application/octet-stream`, PDF `application/pdf`, TEXT `text/plain`.
+      x-permission: documents:render
+      x-error-codes:
+      - VALIDATION_FAILED
+      - BILL_NOT_FOUND
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenderReceiptRequest'
+            example:
+              format: TEXT
+              billId: 0193f100-0000-7000-8000-000000000001
+              paperWidthMm: 58
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+            text/plain:
+              schema:
+                type: string
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/bills/{billId}/reprint:
+    post:
+      tags:
+      - PrintAgents
+      operationId: reprintBill
+      summary: Reprint a bill's receipt (DOC-05)
+      description: Queues a print job with a COPY banner for the print agent of the bill's location.
+      x-permission: sales:read
+      x-error-codes:
+      - BILL_NOT_FOUND
+      - NO_PRINT_AGENT
+      - UNKNOWN_PRINT_AGENT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReprintRequest'
+            example: {}
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+              example:
+                id: 0193d800-0000-7000-8000-000000000001
+                agentId: 0193d700-0000-7000-8000-000000000001
+                documentType: RECEIPT
+                sourceId: 0193f100-0000-7000-8000-000000000001
+                status: QUEUED
+                attempts: 0
+                receipt:
+                  billId: 0193f100-0000-7000-8000-000000000001
+                  billNumber: R1-000042
+                  issuedAt: 2026-11-25 14:45
+                  cashier: Nimal
+                  register: R1
+                  lines:
+                  - name: Eggs Red L
+                    qty: '10'
+                    unit: piece
+                    unitPrice: '55.00'
+                    lineTotal: '550.00'
+                  discountTotal: '0.00'
+                  taxTotal: '0.00'
+                  total: '550.00'
+                  tenders:
+                  - method: CASH
+                    amount: '1000.00'
+                  change: '450.00'
+                  currency: LKR
+                  copy: true
+                templateVersion: 2
+                createdAt: '2026-11-25T10:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/print-agents:
+    get:
+      tags:
+      - PrintAgents
+      operationId: listPrintAgents
+      summary: Print agents
+      x-permission: documents:print
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintAgentPage'
+              example:
+                items:
+                - id: 0193d700-0000-7000-8000-000000000001
+                  locationId: 0193b000-0000-7000-8000-000000000401
+                  name: Counter printer
+                  printerModel: Xprinter XP-58
+                  paperWidthMm: 58
+                  status: ONLINE
+                  lastSeenAt: '2026-11-25T09:00:00Z'
+                  createdAt: '2026-11-25T08:00:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - PrintAgents
+      operationId: registerPrintAgent
+      summary: Register a print agent
+      x-permission: documents:print
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_LOCATION
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterPrintAgentRequest'
+            example:
+              locationId: 0193b000-0000-7000-8000-000000000401
+              name: Counter printer
+              printerModel: Xprinter XP-58
+              paperWidthMm: 58
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintAgent'
+              example:
+                id: 0193d700-0000-7000-8000-000000000001
+                locationId: 0193b000-0000-7000-8000-000000000401
+                name: Counter printer
+                printerModel: Xprinter XP-58
+                paperWidthMm: 58
+                status: ONLINE
+                lastSeenAt: '2026-11-25T09:00:00Z'
+                createdAt: '2026-11-25T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/print-agents/{agentId}:
+    get:
+      tags:
+      - PrintAgents
+      operationId: getPrintAgent
+      summary: Get a print agent
+      x-permission: documents:print
+      x-error-codes:
+      - PRINT_AGENT_NOT_FOUND
+      parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintAgent'
+              example:
+                id: 0193d700-0000-7000-8000-000000000001
+                locationId: 0193b000-0000-7000-8000-000000000401
+                name: Counter printer
+                printerModel: Xprinter XP-58
+                paperWidthMm: 58
+                status: ONLINE
+                lastSeenAt: '2026-11-25T09:00:00Z'
+                createdAt: '2026-11-25T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/print-agents/{agentId}/template:
+    get:
+      tags:
+      - PrintAgents
+      operationId: getReceiptTemplate
+      summary: The latest receipt template, for printing offline (DOC-06)
+      x-permission: documents:print
+      x-error-codes:
+      - PRINT_AGENT_NOT_FOUND
+      parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReceiptTemplate'
+              example:
+                version: 2
+                shopName: Kegalle Egg & Oil Stores
+                addressLines:
+                - 12 Main Street
+                - Kegalle
+                phone: 035 222 1234
+                footerLines:
+                - Thank you, come again
+                paperWidthMm: 58
+                showQr: false
+                openDrawerOnCash: true
+                language: en
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/print-agents/{agentId}/jobs:next:
+    get:
+      tags:
+      - PrintAgents
+      operationId: nextPrintJob
+      summary: The agent's next job, waiting up to `waitSeconds` (DOC-05)
+      description: Answers 204 when nothing arrived in time; the job is marked SENT and handed out again if no result comes
+        back within a minute.
+      x-permission: documents:print
+      x-error-codes:
+      - PRINT_AGENT_NOT_FOUND
+      parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: waitSeconds
+        in: query
+        required: false
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 30
+          default: 20
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+              example:
+                id: 0193d800-0000-7000-8000-000000000001
+                agentId: 0193d700-0000-7000-8000-000000000001
+                documentType: RECEIPT
+                sourceId: 0193f100-0000-7000-8000-000000000001
+                status: SENT
+                attempts: 1
+                receipt:
+                  billId: 0193f100-0000-7000-8000-000000000001
+                  billNumber: R1-000042
+                  issuedAt: 2026-11-25 14:45
+                  cashier: Nimal
+                  register: R1
+                  lines:
+                  - name: Eggs Red L
+                    qty: '10'
+                    unit: piece
+                    unitPrice: '55.00'
+                    lineTotal: '550.00'
+                  discountTotal: '0.00'
+                  taxTotal: '0.00'
+                  total: '550.00'
+                  tenders:
+                  - method: CASH
+                    amount: '1000.00'
+                  change: '450.00'
+                  currency: LKR
+                  copy: true
+                templateVersion: 2
+                createdAt: '2026-11-25T10:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '204':
+          description: No job.
+  /api/v1/print-jobs/{jobId}/result:
+    post:
+      tags:
+      - PrintAgents
+      operationId: reportPrintJobResult
+      summary: Report whether a job printed (DOC-05)
+      x-permission: documents:print
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PRINT_JOB_NOT_FOUND
+      - PRINT_JOB_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: jobId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrintJobResult'
+            example:
+              status: PRINTED
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintJob'
+              example:
+                id: 0193d800-0000-7000-8000-000000000001
+                agentId: 0193d700-0000-7000-8000-000000000001
+                documentType: RECEIPT
+                sourceId: 0193f100-0000-7000-8000-000000000001
+                status: PRINTED
+                attempts: 1
+                receipt:
+                  billId: 0193f100-0000-7000-8000-000000000001
+                  billNumber: R1-000042
+                  issuedAt: 2026-11-25 14:45
+                  cashier: Nimal
+                  register: R1
+                  lines:
+                  - name: Eggs Red L
+                    qty: '10'
+                    unit: piece
+                    unitPrice: '55.00'
+                    lineTotal: '550.00'
+                  discountTotal: '0.00'
+                  taxTotal: '0.00'
+                  total: '550.00'
+                  tenders:
+                  - method: CASH
+                    amount: '1000.00'
+                  change: '450.00'
+                  currency: LKR
+                  copy: true
+                templateVersion: 2
+                createdAt: '2026-11-25T10:00:00Z'
+                completedAt: '2026-11-25T10:00:05Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    ReceiptFormat:
+      type: string
+      enum:
+      - ESCPOS
+      - PDF
+      - TEXT
+    ReceiptLine:
+      type: object
+      required:
+      - name
+      - qty
+      - unit
+      - unitPrice
+      - lineTotal
+      properties:
+        name:
+          type: string
+        qty:
+          type: string
+        unit:
+          type: string
+        unitPrice:
+          type: string
+        lineTotal:
+          type: string
+        discount:
+          type: string
+    ReceiptTender:
+      type: object
+      required:
+      - method
+      - amount
+      properties:
+        method:
+          type: string
+        amount:
+          type: string
+    ReceiptModel:
+      type: object
+      required:
+      - billId
+      - billNumber
+      - issuedAt
+      - lines
+      - total
+      - currency
+      properties:
+        billId:
+          type: string
+          format: uuid
+        billNumber:
+          type: string
+        issuedAt:
+          type: string
+          description: Local date and time in the tenant's time zone.
+        cashier:
+          type: string
+        register:
+          type: string
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptLine'
+        discountTotal:
+          type: string
+        taxTotal:
+          type: string
+        total:
+          type: string
+        tenders:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReceiptTender'
+        change:
+          type: string
+        customer:
+          type: string
+          description: The customer's name, on credit bills only.
+        currency:
+          type: string
+        copy:
+          type: boolean
+          description: 'A reprint: prints a COPY banner.'
+        cashTendered:
+          type: boolean
+          description: Opens the cash drawer after printing (DOC-04).
+    ReceiptTemplate:
+      type: object
+      required:
+      - version
+      - shopName
+      - paperWidthMm
+      properties:
+        version:
+          type: integer
+          minimum: 1
+        shopName:
+          type: string
+        addressLines:
+          type: array
+          items:
+            type: string
+        phone:
+          type: string
+        taxNumber:
+          type: string
+        footerLines:
+          type: array
+          items:
+            type: string
+        paperWidthMm:
+          type: integer
+          enum:
+          - 58
+          - 80
+        showQr:
+          type: boolean
+        openDrawerOnCash:
+          type: boolean
+        language:
+          type: string
+          enum:
+          - en
+          - si
+          - ta
+    RenderReceiptRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - format
+      properties:
+        format:
+          $ref: '#/components/schemas/ReceiptFormat'
+        billId:
+          type: string
+          format: uuid
+          description: Render a stored bill; or give `receipt`.
+        receipt:
+          $ref: '#/components/schemas/ReceiptModel'
+        paperWidthMm:
+          type: integer
+          enum:
+          - 58
+          - 80
+        copy:
+          type: boolean
+    PrintAgentStatus:
+      type: string
+      enum:
+      - ONLINE
+      - OFFLINE
+      - PAPER_OUT
+      - ERROR
+    PrintAgent:
+      type: object
+      required:
+      - id
+      - locationId
+      - name
+      - paperWidthMm
+      - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        printerModel:
+          type: string
+        paperWidthMm:
+          type: integer
+        status:
+          $ref: '#/components/schemas/PrintAgentStatus'
+        lastSeenAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    PrintAgentPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PrintAgent'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    RegisterPrintAgentRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - locationId
+      - name
+      - paperWidthMm
+      properties:
+        id:
+          type: string
+          format: uuid
+        locationId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 80
+        printerModel:
+          type: string
+          minLength: 1
+          maxLength: 80
+        paperWidthMm:
+          type: integer
+          enum:
+          - 58
+          - 80
+    PrintJobStatus:
+      type: string
+      enum:
+      - QUEUED
+      - SENT
+      - PRINTED
+      - FAILED
+    PrintJob:
+      type: object
+      required:
+      - id
+      - agentId
+      - documentType
+      - status
+      - attempts
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        agentId:
+          type: string
+          format: uuid
+        documentType:
+          type: string
+          enum:
+          - RECEIPT
+        sourceId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/PrintJobStatus'
+        attempts:
+          type: integer
+        receipt:
+          $ref: '#/components/schemas/ReceiptModel'
+        templateVersion:
+          type: integer
+        error:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+    PrintJobResult:
+      type: object
+      additionalProperties: false
+      required:
+      - status
+      properties:
+        status:
+          type: string
+          enum:
+          - PRINTED
+          - FAILED
+        error:
+          type: string
+          minLength: 1
+          maxLength: 500
+        printerStatus:
+          $ref: '#/components/schemas/PrintAgentStatus'
+    ReprintRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        agentId:
+          type: string
+          format: uuid
+          description: Defaults to the bill location's agent.
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'

@@ -1,0 +1,1258 @@
+openapi: 3.1.0
+info:
+  title: BMP Payments API
+  version: 1.0.0
+  description: 'Payments, refunds and cash drawer sessions (phase 03, rules PAY-01..PAY-06).
+
+
+    Payments of bills are captured from `SaleCompleted`, one per non-credit tender, and cash tenders are added to the
+
+    register''s open drawer session (PAY-01); this API records account collections (PAY-02), refunds up to what was
+
+    captured (PAY-03) and the drawer: opening float, paid-outs, paid-ins and drops, the count by denomination and the
+
+    reconciliation with its variance (PAY-04). Card numbers are never accepted in any field (PAY-05). The summary gives
+
+    the business date''s totals by method, for comparison with the bank (PAY-06).
+
+    '
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Payments
+  description: Captured payments and refunds (PAY-01..PAY-03, PAY-05, PAY-06).
+- name: DrawerSessions
+  description: Cash drawer sessions (PAY-04).
+paths:
+  /api/v1/payments:
+    get:
+      tags:
+      - Payments
+      operationId: listPayments
+      summary: Payments, newest first
+      x-permission: payments:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: billId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: customerId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: method
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PaymentMethod'
+      - name: businessDate
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPage'
+              example:
+                items:
+                - id: 0193d400-0000-7000-8000-000000000001
+                  kind: BILL
+                  billId: 0193f100-0000-7000-8000-000000000001
+                  tenderId: 0193f100-0000-7000-8000-000000000021
+                  method: CASH
+                  amount:
+                    amount: '550.00'
+                    currency: LKR
+                  tendered:
+                    amount: '1000.00'
+                    currency: LKR
+                  changeGiven:
+                    amount: '450.00'
+                    currency: LKR
+                  refunded:
+                    amount: '0.00'
+                    currency: LKR
+                  registerId: 0193d100-0000-7000-8000-000000000001
+                  drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                  currency: LKR
+                  capturedAt: '2026-11-25T09:15:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Payments
+      operationId: capturePayment
+      summary: Record an account collection (PAY-02)
+      description: Publishes `PaymentCaptured` (kind ACCOUNT).
+      x-permission: payments:capture
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_CUSTOMER
+      - DRAWER_NOT_OPEN
+      - UNKNOWN_REGISTER
+      - CARD_DATA_NOT_ALLOWED
+      - TENDERED_TOO_LOW
+      - REFERENCE_REQUIRED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CapturePaymentRequest'
+            example:
+              id: 0193d400-0000-7000-8000-000000000001
+              customerId: 0193d000-0000-7000-8000-000000000102
+              method: CASH
+              amount: '5000.00'
+              tendered: '5000.00'
+              registerId: 0193d100-0000-7000-8000-000000000001
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example:
+                id: 0193d400-0000-7000-8000-000000000001
+                kind: ACCOUNT
+                method: CASH
+                amount:
+                  amount: '5000.00'
+                  currency: LKR
+                tendered:
+                  amount: '5000.00'
+                  currency: LKR
+                changeGiven:
+                  amount: '0.00'
+                  currency: LKR
+                refunded:
+                  amount: '0.00'
+                  currency: LKR
+                registerId: 0193d100-0000-7000-8000-000000000001
+                drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                currency: LKR
+                capturedAt: '2026-11-25T09:15:00Z'
+                customerId: 0193d000-0000-7000-8000-000000000102
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/payments/summary:
+    get:
+      tags:
+      - Payments
+      operationId: getPaymentSummary
+      summary: Totals by method of a business date (PAY-06)
+      x-permission: payments:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: date
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+      - name: registerId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentSummary'
+              example:
+                businessDate: '2026-11-25'
+                byMethod:
+                - method: CASH
+                  count: 21
+                  captured:
+                    amount: '48250.00'
+                    currency: LKR
+                  refunded:
+                    amount: '110.00'
+                    currency: LKR
+                  net:
+                    amount: '48140.00'
+                    currency: LKR
+                net:
+                  amount: '48140.00'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/payments/{paymentId}:
+    get:
+      tags:
+      - Payments
+      operationId: getPayment
+      summary: Get a payment
+      x-permission: payments:read
+      x-error-codes:
+      - PAYMENT_NOT_FOUND
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+              example:
+                id: 0193d400-0000-7000-8000-000000000001
+                kind: BILL
+                billId: 0193f100-0000-7000-8000-000000000001
+                tenderId: 0193f100-0000-7000-8000-000000000021
+                method: CASH
+                amount:
+                  amount: '550.00'
+                  currency: LKR
+                tendered:
+                  amount: '1000.00'
+                  currency: LKR
+                changeGiven:
+                  amount: '450.00'
+                  currency: LKR
+                refunded:
+                  amount: '0.00'
+                  currency: LKR
+                registerId: 0193d100-0000-7000-8000-000000000001
+                drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                currency: LKR
+                capturedAt: '2026-11-25T09:15:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/payments/{paymentId}/refunds:
+    post:
+      tags:
+      - Payments
+      operationId: refundPayment
+      summary: Refund a payment (PAY-03)
+      description: Publishes `PaymentRefunded`.
+      x-permission: payments:refund
+      x-error-codes:
+      - VALIDATION_FAILED
+      - PAYMENT_NOT_FOUND
+      - REFUND_EXCEEDS_PAYMENT
+      - DRAWER_NOT_OPEN
+      - UNKNOWN_REGISTER
+      - CARD_DATA_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefundRequest'
+            example:
+              id: 0193d500-0000-7000-8000-000000000001
+              amount: '110.00'
+              reason: Two cracked eggs
+              registerId: 0193d100-0000-7000-8000-000000000001
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Refund'
+              example:
+                id: 0193d500-0000-7000-8000-000000000001
+                paymentId: 0193d400-0000-7000-8000-000000000001
+                amount:
+                  amount: '110.00'
+                  currency: LKR
+                method: CASH
+                reason: Two cracked eggs
+                drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                createdBy: 0193a6f1-0000-7000-8000-00000000f001
+                createdAt: '2026-11-25T10:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/drawer-sessions:
+    get:
+      tags:
+      - DrawerSessions
+      operationId: listDrawerSessions
+      summary: Drawer sessions, newest first
+      x-permission: payments:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: registerId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/DrawerStatus'
+      - $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSessionPage'
+              example:
+                items:
+                - id: 0193d300-0000-7000-8000-000000000001
+                  registerId: 0193d100-0000-7000-8000-000000000001
+                  status: OPEN
+                  openedBy: 0193a6f1-0000-7000-8000-00000000f001
+                  openingFloat:
+                    amount: '5000.00'
+                    currency: LKR
+                  movements:
+                  - id: 0193d600-0000-7000-8000-000000000001
+                    type: FLOAT
+                    amount:
+                      amount: '5000.00'
+                      currency: LKR
+                    occurredAt: '2026-11-25T08:00:00Z'
+                  openedAt: '2026-11-25T08:00:00Z'
+                  version: 0
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - DrawerSessions
+      operationId: openDrawerSession
+      summary: Open a drawer with its float
+      description: At most one OPEN session per register (PAY-04).
+      x-permission: drawer:operate-own
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_REGISTER
+      - DRAWER_ALREADY_OPEN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenDrawerRequest'
+            example:
+              registerId: 0193d100-0000-7000-8000-000000000001
+              openingFloat: '5000.00'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSession'
+              examples:
+                default:
+                  $ref: '#/components/examples/DrawerSession'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/drawer-sessions/{sessionId}:
+    get:
+      tags:
+      - DrawerSessions
+      operationId: getDrawerSession
+      summary: Get a drawer session
+      x-permission: payments:read
+      x-error-codes:
+      - DRAWER_SESSION_NOT_FOUND
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSession'
+              examples:
+                default:
+                  $ref: '#/components/examples/DrawerSession'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/drawer-sessions/{sessionId}/expected:
+    get:
+      tags:
+      - DrawerSessions
+      operationId: getExpectedCash
+      summary: The cash the drawer should hold now (PAY-04)
+      x-permission: payments:read
+      x-error-codes:
+      - DRAWER_SESSION_NOT_FOUND
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpectedCash'
+              example:
+                sessionId: 0193d300-0000-7000-8000-000000000001
+                openingFloat:
+                  amount: '5000.00'
+                  currency: LKR
+                sales:
+                  amount: '550.00'
+                  currency: LKR
+                refunds:
+                  amount: '0.00'
+                  currency: LKR
+                paidOut:
+                  amount: '0.00'
+                  currency: LKR
+                paidIn:
+                  amount: '0.00'
+                  currency: LKR
+                drops:
+                  amount: '0.00'
+                  currency: LKR
+                expected:
+                  amount: '5550.00'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/drawer-sessions/{sessionId}/movements:
+    post:
+      tags:
+      - DrawerSessions
+      operationId: recordCashMovement
+      summary: Record a paid-out, paid-in or drop
+      x-permission: drawer:operate-own
+      x-error-codes:
+      - VALIDATION_FAILED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_STATE_INVALID
+      - CARD_DATA_NOT_ALLOWED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashMovementRequest'
+            example:
+              type: PAID_OUT
+              amount: '250.00'
+              reason: Tea
+      responses:
+        '201':
+          description: Created.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSession'
+              examples:
+                default:
+                  $ref: '#/components/examples/DrawerSession'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/drawer-sessions/{sessionId}/count:
+    post:
+      tags:
+      - DrawerSessions
+      operationId: countDrawer
+      summary: Count the drawer by denomination (PAY-04)
+      x-permission: drawer:operate-own
+      x-error-codes:
+      - VALIDATION_FAILED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_STATE_INVALID
+      - DENOMINATION_UNKNOWN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CountDrawerRequest'
+            example:
+              denominations:
+              - value: '5000'
+                count: 1
+              - value: '100'
+                count: 4
+              - value: '50'
+                count: 1
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSession'
+              example:
+                id: 0193d300-0000-7000-8000-000000000001
+                registerId: 0193d100-0000-7000-8000-000000000001
+                status: COUNTED
+                openedBy: 0193a6f1-0000-7000-8000-00000000f001
+                openingFloat:
+                  amount: '5000.00'
+                  currency: LKR
+                movements:
+                - id: 0193d600-0000-7000-8000-000000000001
+                  type: FLOAT
+                  amount:
+                    amount: '5000.00'
+                    currency: LKR
+                  occurredAt: '2026-11-25T08:00:00Z'
+                openedAt: '2026-11-25T08:00:00Z'
+                version: 3
+                expectedCash:
+                  amount: '5550.00'
+                  currency: LKR
+                countedCash:
+                  amount: '5450.00'
+                  currency: LKR
+                variance:
+                  amount: '-100.00'
+                  currency: LKR
+                denominations:
+                - value: '5000'
+                  count: 1
+                - value: '100'
+                  count: 4
+                - value: '50'
+                  count: 1
+                countedAt: '2026-11-25T18:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/drawer-sessions/{sessionId}/reconcile:
+    post:
+      tags:
+      - DrawerSessions
+      operationId: reconcileDrawer
+      summary: Reconcile a counted drawer (PAY-04)
+      description: Publishes `DrawerReconciled`; a variance above `drawerVarianceAlertAmount` is logged as a warning.
+      x-permission: payments:reconcile
+      x-error-codes:
+      - VALIDATION_FAILED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_STATE_INVALID
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: sessionId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReconcileDrawerRequest'
+            example:
+              note: 100 short, cashier informed
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DrawerSession'
+              example:
+                id: 0193d300-0000-7000-8000-000000000001
+                registerId: 0193d100-0000-7000-8000-000000000001
+                status: RECONCILED
+                openedBy: 0193a6f1-0000-7000-8000-00000000f001
+                openingFloat:
+                  amount: '5000.00'
+                  currency: LKR
+                movements:
+                - id: 0193d600-0000-7000-8000-000000000001
+                  type: FLOAT
+                  amount:
+                    amount: '5000.00'
+                    currency: LKR
+                  occurredAt: '2026-11-25T08:00:00Z'
+                openedAt: '2026-11-25T08:00:00Z'
+                version: 4
+                expectedCash:
+                  amount: '5550.00'
+                  currency: LKR
+                countedCash:
+                  amount: '5450.00'
+                  currency: LKR
+                variance:
+                  amount: '-100.00'
+                  currency: LKR
+                denominations:
+                - value: '5000'
+                  count: 1
+                - value: '100'
+                  count: 4
+                - value: '50'
+                  count: 1
+                countedAt: '2026-11-25T18:00:00Z'
+                reconciledAt: '2026-11-25T18:05:00Z'
+                reconciledBy: 0193a6f1-0000-7000-8000-00000000f001
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    PaymentMethod:
+      type: string
+      enum:
+      - CASH
+      - CARD
+      - BANK_TRANSFER
+      - MOBILE_WALLET
+      - CHEQUE
+    PaymentKind:
+      type: string
+      enum:
+      - BILL
+      - ACCOUNT
+    Payment:
+      type: object
+      required:
+      - id
+      - kind
+      - method
+      - amount
+      - refunded
+      - currency
+      - capturedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          $ref: '#/components/schemas/PaymentKind'
+        billId:
+          type: string
+          format: uuid
+        tenderId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        tendered:
+          $ref: ./common.yaml#/components/schemas/Money
+        changeGiven:
+          $ref: ./common.yaml#/components/schemas/Money
+        refunded:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Σ refunds so far.
+        reference:
+          type: string
+        registerId:
+          type: string
+          format: uuid
+        drawerSessionId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        currency:
+          type: string
+        capturedAt:
+          type: string
+          format: date-time
+    PaymentPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    CapturePaymentRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - customerId
+      - method
+      - amount
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        customerId:
+          type: string
+          format: uuid
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        amount:
+          $ref: '#/components/schemas/Amount'
+        tendered:
+          $ref: '#/components/schemas/Amount'
+          description: Cash handed over.
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 60
+        registerId:
+          type: string
+          format: uuid
+          description: Cash goes into this register's open drawer.
+    Refund:
+      type: object
+      required:
+      - id
+      - paymentId
+      - amount
+      - method
+      - reason
+      - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        reason:
+          type: string
+        drawerSessionId:
+          type: string
+          format: uuid
+        creditNoteId:
+          type: string
+          format: uuid
+        createdBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+    RefundRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - amount
+      - reason
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        amount:
+          $ref: '#/components/schemas/Amount'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+          description: Defaults to the payment's method.
+        registerId:
+          type: string
+          format: uuid
+          description: 'Required for cash: the drawer it is paid from.'
+    MethodTotal:
+      type: object
+      required:
+      - method
+      - count
+      - captured
+      - refunded
+      - net
+      properties:
+        method:
+          $ref: '#/components/schemas/PaymentMethod'
+        count:
+          type: integer
+        captured:
+          $ref: ./common.yaml#/components/schemas/Money
+        refunded:
+          $ref: ./common.yaml#/components/schemas/Money
+        net:
+          $ref: ./common.yaml#/components/schemas/Money
+    PaymentSummary:
+      type: object
+      required:
+      - businessDate
+      - byMethod
+      - net
+      properties:
+        businessDate:
+          type: string
+          format: date
+        registerId:
+          type: string
+          format: uuid
+        byMethod:
+          type: array
+          items:
+            $ref: '#/components/schemas/MethodTotal'
+        net:
+          $ref: ./common.yaml#/components/schemas/Money
+    DrawerStatus:
+      type: string
+      enum:
+      - OPEN
+      - COUNTED
+      - RECONCILED
+    CashMovementType:
+      type: string
+      enum:
+      - FLOAT
+      - SALE
+      - REFUND
+      - PAID_OUT
+      - PAID_IN
+      - DROP
+    CashMovement:
+      type: object
+      required:
+      - id
+      - type
+      - amount
+      - occurredAt
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/CashMovementType'
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        reason:
+          type: string
+        sourceType:
+          type: string
+        sourceId:
+          type: string
+          format: uuid
+        occurredAt:
+          type: string
+          format: date-time
+    Denomination:
+      type: object
+      additionalProperties: false
+      required:
+      - value
+      - count
+      properties:
+        value:
+          $ref: '#/components/schemas/Amount'
+        count:
+          type: integer
+          minimum: 0
+    DrawerSession:
+      type: object
+      required:
+      - id
+      - registerId
+      - status
+      - openingFloat
+      - openedAt
+      - version
+      properties:
+        id:
+          type: string
+          format: uuid
+        registerId:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/DrawerStatus'
+        openedBy:
+          type: string
+          format: uuid
+        openingFloat:
+          $ref: ./common.yaml#/components/schemas/Money
+        expectedCash:
+          $ref: ./common.yaml#/components/schemas/Money
+        countedCash:
+          $ref: ./common.yaml#/components/schemas/Money
+        variance:
+          $ref: ./common.yaml#/components/schemas/Money
+        denominations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Denomination'
+        movements:
+          type: array
+          items:
+            $ref: '#/components/schemas/CashMovement'
+        openedAt:
+          type: string
+          format: date-time
+        countedAt:
+          type: string
+          format: date-time
+        reconciledAt:
+          type: string
+          format: date-time
+        reconciledBy:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          format: int64
+    DrawerSessionPage:
+      type: object
+      required:
+      - items
+      - page
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DrawerSession'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    OpenDrawerRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - registerId
+      - openingFloat
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated on the till; the server generates one when absent.
+        registerId:
+          type: string
+          format: uuid
+        openingFloat:
+          $ref: '#/components/schemas/Amount'
+        openedAt:
+          type: string
+          format: date-time
+    CashMovementRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - type
+      - amount
+      - reason
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - PAID_OUT
+          - PAID_IN
+          - DROP
+        amount:
+          $ref: '#/components/schemas/Amount'
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 200
+        occurredAt:
+          type: string
+          format: date-time
+    CountDrawerRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - denominations
+      properties:
+        denominations:
+          type: array
+          description: Counted notes and coins (LKR denominations by default).
+          minItems: 1
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/Denomination'
+    ReconcileDrawerRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        note:
+          type: string
+          minLength: 1
+          maxLength: 500
+    ExpectedCash:
+      type: object
+      required:
+      - sessionId
+      - openingFloat
+      - sales
+      - refunds
+      - paidOut
+      - paidIn
+      - drops
+      - expected
+      properties:
+        sessionId:
+          type: string
+          format: uuid
+        openingFloat:
+          $ref: ./common.yaml#/components/schemas/Money
+        sales:
+          $ref: ./common.yaml#/components/schemas/Money
+        refunds:
+          $ref: ./common.yaml#/components/schemas/Money
+        paidOut:
+          $ref: ./common.yaml#/components/schemas/Money
+        paidIn:
+          $ref: ./common.yaml#/components/schemas/Money
+        drops:
+          $ref: ./common.yaml#/components/schemas/Money
+        expected:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: float + sales − refunds − paid out + paid in − drops.
+    Code:
+      type: string
+      pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$
+    Status:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    Quantity:
+      type: string
+      description: A positive decimal with up to 6 decimals.
+      pattern: ^(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '10'
+    SignedQuantity:
+      type: string
+      description: A decimal with up to 6 decimals; in > 0, out < 0 (INV-02).
+      pattern: ^-?(0|[1-9][0-9]{0,13})(\.[0-9]{1,6})?$
+      example: '-19565'
+    UnitCost:
+      type: string
+      description: A non-negative cost per unit with up to 6 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,12})(\.[0-9]{1,6})?$
+      example: '0.705341'
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '13800.00'
+  examples:
+    DrawerSession:
+      value:
+        id: 0193d300-0000-7000-8000-000000000001
+        registerId: 0193d100-0000-7000-8000-000000000001
+        status: OPEN
+        openedBy: 0193a6f1-0000-7000-8000-00000000f001
+        openingFloat:
+          amount: '5000.00'
+          currency: LKR
+        movements:
+        - id: 0193d600-0000-7000-8000-000000000001
+          type: FLOAT
+          amount:
+            amount: '5000.00'
+            currency: LKR
+          occurredAt: '2026-11-25T08:00:00Z'
+        openedAt: '2026-11-25T08:00:00Z'
+        version: 0
