@@ -9,7 +9,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
 | 02 | Inventory and procurement | done | phase/02-inventory-and-procurement | 2026-11-23 |
-| 03 | Sales, payments, sync and printing | not started | | |
+| 03 | Sales, payments, sync and printing | in progress | phase/03-sales-payments-sync-printing | |
 | 04 | Finance and reporting | not started | | |
 | 05 | Multi-business onboarding | not started | | |
 | 06 | Scale-out to microservices | not started | | |
@@ -18,28 +18,35 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 02 — Inventory, procurement and parties (started 2026-11-23, branch `phase/02-inventory-and-procurement`)
-- Current task: none — phase 02 closed; merge to `main` awaits approval
-- Next step (exact, so a new session can resume): merge `phase/02-inventory-and-procurement` into `main`, push, close the "Phase 02 started" issue, then start phase 03 with `/run-phase 03`.
+- Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
+  `phase/03-sales-payments-sync-printing`)
+- Current task: T03-01 Contracts
+- Next step (exact, so a new session can resume): write `contracts/openapi/sales.yaml`, `payments.yaml`, `sync.yaml`,
+  `documents.yaml` and the phase 03 events in `contracts/asyncapi/events.yaml` (`SaleCompleted`, `SaleReturned`,
+  `SaleVoided`, `StockIssued`, `PaymentCaptured`, `PaymentRefunded`, `DrawerReconciled`, `BillNumberGapDetected`), with
+  `/run-phase 03`.
 
 ## Task checklist (current phase)
 
-Phase 02:
-- [x] T02-01 Contracts (`party.yaml`, `inventory.yaml`, `procurement.yaml`, events in AsyncAPI) — additions beyond the endpoint lists: `POST /goods-receipts/{id}/cancel` for drafts; stock events carry one source with its lines (`StockReceived` also for openings and transfers, with cost `corrections`); `StockIssued` is defined with its sales listener in phase 03
-- [x] T02-02 Party module — address and credit terms are columns of `party`; phones E.164 read in LK; one create endpoint (`party:create-customer`) with `party:write` checked for suppliers and `force`; events without contact details; trigram name search (ADR-022)
-- [x] T02-03 Inventory replicas — `stock_item` (units, states, tracking), `stock_product` (for valuation by product and category), `location_ref`, `transformation_def_ref` (one row per published version); version-guarded upserts and tombstones as in pricing
-- [x] T02-04 Inventory ledger core — `stock_movement` partitioned by month (2026–2028 + default, RLS on every partition, INSERT/SELECT only); balances keep `stock_value = Σ cost_amount`; negative stock is trued up on the next receipt with a CORRECTION movement under both policies; FIFO layers keep their value; FEFO spreads issues of batch-tracked variants; the low flag lives on `reorder_policy`; 50-thread concurrency IT
-- [x] T02-05 Transformations, adjustments, transfers, opening balances, counts — transformations lock inputs and outputs first, issue inputs at current cost and share it by costSharePct (largest remainder); count variance = counted − system at the line's snapshot (movements since are in both); openings are once per variant/location/state, checked under the balance lock; transfers mirror the outgoing batches and costs
-- [x] T02-06 Inventory listeners for purchasing — `GoodsReceived` (inbox-guarded) becomes one RECEIPT movement per line: deliveries at their line total into the named or a generated batch, returns to the supplier at current cost (reason `RETURN_TO_SUPPLIER`); receipts always post (may go negative, inactive variants included) and publish `StockReceived` with signed lines
-- [x] T02-07 Valuation, reorder list, rebuild — balances, movements, valuation (Σ movement costs up to `asOf`, by variant/product/category/location; no category = nil UUID) and the reorder list read with `JdbcClient`; reorder levels under If-Match; inventory implements procurement's `ReorderSuggestionProvider` (procurement skips inactive suppliers/locations); `rebuild-balances` locks the tenant's balances, then replays the ledger through the costing policy (moving-average cost and FIFO layers are not sums) and rewrites what differs; RLS coverage now includes partitions and their grants (ADR-024)
-- [x] T02-08 Procurement module — done before T02-06 because inventory listens to `GoodsReceived`; returns are receipts with negative lines naming the delivery they correct, at most what arrived less earlier returns (checked again under lock when posting); over-receipt allowed; numbers taken at creation; invoice due date from the supplier's payment terms; the reorder SPI default is a `@Fallback` bean (ADR-023)
-- [x] T02-09 Flow test with the pilot shop (`ReceiveAndTransformFlowIT`) — eggs 300/300/260, ten oil cans (195,652.8 ml with the placeholder density), a can opened at 19,400 ml (−165.28 ml variance, 0.71134 per open ml), 1 kg karola into four 250 g packets, six broken eggs at 252.00, one `StockLevelLow`, valuation 177,494.00 = Σ balance values, rebuild without differences
-- [x] Definition of Done
-  - [x] Every PTY/INV/PRO rule has a named test; flow IT passes with exact numbers
-  - [x] Ledger tables have no UPDATE/DELETE grants (RLS coverage test extended to check grants, partitions included)
-  - [x] Concurrency IT and rebuild-equality IT pass
-  - [x] PIT ≥ 70% on `party.domain` (94 %), `inventory.domain` (88 %), `procurement.domain` (74 %); PIT is now a CI gate for every module
-  - [x] Contracts, READMEs, `.http` files updated; PROGRESS summary written
+Phase 03:
+- [ ] T03-01 Contracts (`sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml`, AsyncAPI events)
+- [ ] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote`
+- [ ] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas)
+- [ ] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`)
+- [ ] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02)
+- [ ] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`)
+- [ ] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests)
+- [ ] T03-08 Sync module (SYN-01..08, command facades, 1,000-record batch < 10 s)
+- [ ] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module
+- [ ] T03-10 Print agent application (`print-agent/`)
+- [ ] T03-11 Full-day flow test (`ShopDayFlowIT`)
+- [ ] Definition of Done
+  - [ ] Every SAL/PAY/SYN/DOC rule has a named test; `ShopDayFlowIT` passes
+  - [ ] Sync upload is idempotent under retries and partial failures (processing killed mid-batch and resubmitted)
+  - [ ] Print agent prints to the fake printer offline and online; installer builds on CI for Windows
+  - [ ] Logging check: a completed bill produces exactly one INFO `Bill completed` line without customer PII
+  - [ ] PIT ≥ 70% on sales, payments, sync domain packages
+  - [ ] Contracts, READMEs, `.http` files, PROGRESS summary updated
 
 ## Open questions
 
