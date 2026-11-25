@@ -20,16 +20,17 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-02 Sales domain (TDD)
-- Next step (exact, so a new session can resume): create `modules/sales` with the domain (`Bill`, `BillTotalsCalculator`,
-  `DiscountAllocator`, `TenderValidator`, `CreditNote`) test-first for SAL-04..07, 09, 10, 13, 15, with `/run-phase 03`.
+- Current task: T03-03 Sales persistence, API, events, registers and shifts
+- Next step (exact, so a new session can resume): add `pricing.api.PricingQueries` (quote a basket: unit price, rule
+  discount, tax rates with their compound flag) and `iam.api.IamQueries` (user has permission, device binding), then the
+  sales migration, replicas (catalog variants, party customers), handlers, controllers, events and ITs, with
   `/run-phase 03`.
 
 ## Task checklist (current phase)
 
 Phase 03:
 - [x] T03-01 Contracts (`sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml`, AsyncAPI events) — online bills only through the sales API (offline ones through `POST /sync/uploads`); `StockIssued` covers SALE, SALE_RETURN and SALE_VOID with signed lines and `corrections`; uploads and receipt rendering keep the Idempotency-Key like every POST; `GET /print-agents/{id}/template` serves the receipt template to agents
-- [ ] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote`
+- [x] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote` — pricing's tax split moved to the shared kernel (`TaxSplit`) so bills are taxed exactly as quoted; `CardNumbers` (PAY-05) in the shared kernel; online breaches throw, offline ones become bill flags; offline totals are kept as device totals when they differ, tenders are checked against them
 - [ ] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas)
 - [ ] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`)
 - [ ] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02)
