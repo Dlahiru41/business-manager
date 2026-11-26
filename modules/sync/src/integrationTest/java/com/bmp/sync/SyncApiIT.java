@@ -241,7 +241,9 @@ class SyncApiIT {
                         "WASTAGE",
                         UUID.randomUUID(),
                         "{\"reason\": \"MAGIC\", \"lines\": [{\"variantId\": \"" + UUID.randomUUID()
-                                + "\", \"qty\": \"1\"}], \"occurredAt\": \"" + NOW + "\"}")));
+                                + "\", \"qty\": \"1\"}], \"occurredAt\": \"" + NOW + "\"}"),
+                till.bill(UUID.randomUUID(), 7, "1", null, NOW)
+                        .replace("\"amount\": \"55.00\"", "\"amount\": \"55.00004\"")));
 
         assertThat(results(upload))
                 .extracting(r -> r.path("status").asString() + " "
@@ -250,8 +252,12 @@ class SyncApiIT {
                         "REJECTED BILL_NOT_FOUND",
                         "REJECTED DEPENDENCY_REJECTED",
                         "REJECTED VALIDATION_FAILED",
+                        "REJECTED VALIDATION_FAILED",
                         "REJECTED VALIDATION_FAILED");
-        assertThat(upload.path("rejected").asInt()).isEqualTo(4);
+        assertThat(results(upload).get(4).path("problem").path("detail").asString())
+                .as("an amount with five decimals, named")
+                .contains("tenders[0].amount");
+        assertThat(upload.path("rejected").asInt()).isEqualTo(5);
         JsonNode again = json(till.upload(
                 null, record("SHIFT_OPEN", UUID.randomUUID(), "{\"openedAt\": \"" + NOW + "\"}", voidOfNothing)));
         assertThat(results(again).get(0).path("problem").path("code").asString())

@@ -1,5 +1,11 @@
 package com.bmp.sync.application;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
@@ -9,7 +15,8 @@ import org.jspecify.annotations.Nullable;
 
 /**
  * The payloads of uploaded records, one per {@code *Upload} schema of {@code sync.yaml}. Missing required fields fail
- * while reading (the record is rejected with VALIDATION_FAILED).
+ * while reading and the constraints (amounts with at most 4 decimals, quantities with at most 6, list sizes, text
+ * lengths) are checked right after; either rejects the record with VALIDATION_FAILED.
  */
 final class Payloads {
 
@@ -19,11 +26,21 @@ final class Payloads {
             UUID id,
             UUID variantId,
             UUID packagingUnitId,
+
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 14, fraction = 6)
             BigDecimal qty,
+
             @Nullable Boolean weighed,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
             BigDecimal unitPrice,
-            @Nullable BigDecimal lineDiscount,
-            @Nullable BigDecimal ruleDiscount,
+
+            @Nullable @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal lineDiscount,
+
+            @Nullable @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal ruleDiscount,
+
             @Nullable UUID discountApprovedBy) {
 
         Line {
@@ -37,10 +54,15 @@ final class Payloads {
 
     record Tender(
             UUID id,
-            String method,
+            @Size(max = 20) String method,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
             BigDecimal amount,
-            @Nullable BigDecimal tendered,
-            @Nullable String reference) {
+
+            @Nullable @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal tendered,
+
+            @Nullable @Size(max = 60) String reference) {
 
         Tender {
             Objects.requireNonNull(id, "id");
@@ -49,7 +71,18 @@ final class Payloads {
         }
     }
 
-    record Totals(BigDecimal subtotal, BigDecimal discountTotal, BigDecimal taxTotal, BigDecimal grandTotal) {
+    record Totals(
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal subtotal,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal discountTotal,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal taxTotal,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal grandTotal) {
 
         Totals {
             Objects.requireNonNull(subtotal, "subtotal");
@@ -60,9 +93,12 @@ final class Payloads {
     }
 
     record Discount(
-            String type,
+            @Size(max = 20) String type,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
             BigDecimal value,
-            @Nullable String reason,
+
+            @Nullable @Size(max = 200) String reason,
             @Nullable UUID approvedBy) {
 
         Discount {
@@ -73,17 +109,15 @@ final class Payloads {
 
     record Bill(
             UUID id,
-            String number,
+            @Pattern(regexp = "^[A-Z0-9]{1,8}-[0-9]{6}$") String number,
             @Nullable UUID shiftId,
-            String channel,
+            @Size(max = 20) String channel,
             @Nullable UUID customerId,
             @Nullable UUID cashierId,
-            @Nullable UUID priceListId,
-            @Nullable Integer priceListVersion,
-            List<Line> lines,
-            @Nullable Discount billDiscount,
-            List<Tender> tenders,
-            Totals totals,
+            @Size(min = 1, max = 500) List<@Valid Line> lines,
+            @Nullable @Valid Discount billDiscount,
+            @Size(min = 1, max = 20) List<@Valid Tender> tenders,
+            @Valid Totals totals,
             Instant completedAt) {
 
         Bill {
@@ -97,7 +131,11 @@ final class Payloads {
         }
     }
 
-    record VoidBill(UUID billId, String reason, @Nullable UUID approvedBy, Instant voidedAt) {
+    record VoidBill(
+            UUID billId,
+            @Size(min = 1, max = 200) String reason,
+            @Nullable UUID approvedBy,
+            Instant voidedAt) {
 
         VoidBill {
             Objects.requireNonNull(billId, "billId");
@@ -106,7 +144,13 @@ final class Payloads {
         }
     }
 
-    record ReturnLine(UUID billLineId, BigDecimal qty, boolean restock) {
+    record ReturnLine(
+            UUID billLineId,
+
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 14, fraction = 6)
+            BigDecimal qty,
+
+            boolean restock) {
 
         ReturnLine {
             Objects.requireNonNull(billLineId, "billLineId");
@@ -115,7 +159,12 @@ final class Payloads {
     }
 
     record Refund(
-            String method, BigDecimal amount, @Nullable String reference) {
+            @Size(max = 20) String method,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal amount,
+
+            @Nullable @Size(max = 60) String reference) {
 
         Refund {
             Objects.requireNonNull(method, "method");
@@ -125,9 +174,9 @@ final class Payloads {
 
     record ReturnBill(
             UUID billId,
-            String reason,
-            List<ReturnLine> lines,
-            @Nullable List<Refund> refundTenders,
+            @Size(min = 1, max = 200) String reason,
+            @Size(min = 1, max = 500) List<@Valid ReturnLine> lines,
+            @Nullable @Size(min = 1, max = 20) List<@Valid Refund> refundTenders,
             @Nullable UUID approvedBy,
             Instant returnedAt) {
 
@@ -154,7 +203,11 @@ final class Payloads {
         }
     }
 
-    record DrawerOpen(BigDecimal openingFloat, Instant openedAt) {
+    record DrawerOpen(
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal openingFloat,
+
+            Instant openedAt) {
 
         DrawerOpen {
             Objects.requireNonNull(openingFloat, "openingFloat");
@@ -162,7 +215,15 @@ final class Payloads {
         }
     }
 
-    record CashMovement(UUID sessionId, String type, BigDecimal amount, String reason, Instant occurredAt) {
+    record CashMovement(
+            UUID sessionId,
+            @Size(max = 20) String type,
+
+            @DecimalMin("0") @Digits(integer = 15, fraction = 4)
+            BigDecimal amount,
+
+            @Size(min = 1, max = 200) String reason,
+            Instant occurredAt) {
 
         CashMovement {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -173,14 +234,19 @@ final class Payloads {
         }
     }
 
-    record Denomination(BigDecimal value, int count) {
+    record Denomination(
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 13, fraction = 2)
+            BigDecimal value,
+
+            @Min(0) int count) {
 
         Denomination {
             Objects.requireNonNull(value, "value");
         }
     }
 
-    record DrawerCount(UUID sessionId, List<Denomination> denominations, Instant countedAt) {
+    record DrawerCount(
+            UUID sessionId, @Size(min = 1, max = 30) List<@Valid Denomination> denominations, Instant countedAt) {
 
         DrawerCount {
             Objects.requireNonNull(sessionId, "sessionId");
@@ -192,7 +258,9 @@ final class Payloads {
     record WastageLine(
             UUID variantId,
             @Nullable UUID packagingUnitId,
-            @Nullable String stockState,
+            @Nullable @Size(max = 30) String stockState,
+
+            @DecimalMin(value = "0", inclusive = false) @Digits(integer = 14, fraction = 6)
             BigDecimal qty) {
 
         WastageLine {
@@ -201,7 +269,11 @@ final class Payloads {
         }
     }
 
-    record Wastage(String reason, @Nullable String note, List<WastageLine> lines, Instant occurredAt) {
+    record Wastage(
+            @Size(max = 30) String reason,
+            @Nullable @Size(max = 500) String note,
+            @Size(min = 1, max = 500) List<@Valid WastageLine> lines,
+            Instant occurredAt) {
 
         Wastage {
             Objects.requireNonNull(reason, "reason");

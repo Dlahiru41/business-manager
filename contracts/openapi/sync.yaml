@@ -525,11 +525,6 @@ components:
         cashierId:
           type: string
           format: uuid
-        priceListId:
-          type: string
-          format: uuid
-        priceListVersion:
-          type: integer
         lines:
           type: array
           minItems: 1

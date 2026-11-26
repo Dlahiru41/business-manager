@@ -4,7 +4,10 @@ import com.bmp.inventory.api.InventoryCommands;
 import com.bmp.payments.api.PaymentCommands;
 import com.bmp.sales.api.SalesCommands;
 import com.bmp.sync.domain.model.UploadRecordType;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import tools.jackson.core.JacksonException;
@@ -23,12 +26,19 @@ class RecordDispatcher {
     private final PaymentCommands payments;
     private final InventoryCommands inventory;
     private final JsonMapper json;
+    private final Validator validator;
 
-    RecordDispatcher(SalesCommands sales, PaymentCommands payments, InventoryCommands inventory, JsonMapper json) {
+    RecordDispatcher(
+            SalesCommands sales,
+            PaymentCommands payments,
+            InventoryCommands inventory,
+            JsonMapper json,
+            Validator validator) {
         this.sales = sales;
         this.payments = payments;
         this.inventory = inventory;
         this.json = json;
+        this.validator = validator;
     }
 
     void dispatch(SyncDevices.Till till, UploadRecordType type, UUID id, JsonNode payload) {
@@ -85,11 +95,22 @@ class RecordDispatcher {
 
     /** Only reading the payload may reject it as malformed; a failure in the owning module stops the batch. */
     private <T> T read(JsonNode payload, Class<T> type) {
+        T read;
         try {
-            return json.treeToValue(payload, type);
+            read = json.treeToValue(payload, type);
         } catch (JacksonException | IllegalArgumentException | NullPointerException e) {
             throw new InvalidPayloadException(type.getSimpleName(), e);
         }
+        Set<ConstraintViolation<T>> violations = validator.validate(read);
+        if (!violations.isEmpty()) {
+            throw new InvalidPayloadException(
+                    type.getSimpleName(),
+                    violations.stream()
+                            .map(v -> v.getPropertyPath().toString())
+                            .sorted()
+                            .toList());
+        }
+        return read;
     }
 
     private static SalesCommands.OfflineBill bill(SyncDevices.Till till, Payloads.Bill b) {

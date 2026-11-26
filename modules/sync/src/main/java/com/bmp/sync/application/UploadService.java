@@ -215,7 +215,9 @@ public class UploadService {
                             r.id(),
                             problem(
                                     PlatformErrorCode.VALIDATION_FAILED,
-                                    "The payload does not match the " + r.type() + " record")));
+                                    e.fields().isEmpty()
+                                            ? e.getMessage()
+                                            : e.getMessage() + ": " + String.join(", ", e.fields()))));
         }
     }
 

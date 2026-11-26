@@ -46,6 +46,14 @@ record answers, and how the load budget is met.
    the outcome share one transaction, to save round trips (open question: batching several records per transaction
    if 10 s must hold there).
 
+9. **Offline prices are checked as of the bill's time, not by the till's price list version.** Pricing answers what
+   was in force at an instant, not what a given version said, so an offline line is compared with the price in force
+   at `completedAt`; a till that priced from a stale cached version gets `PRICE_MISMATCH`, which is the point. The
+   bill records the version the server priced from. `BillUpload` no longer carries `priceListId`/`priceListVersion`.
+10. **Payloads are validated before they reach the owning module**: amounts with at most 4 decimals, quantities with
+    at most 6, at most 500 lines and 20 tenders, text lengths as in the online API; a violation rejects the record with
+    VALIDATION_FAILED naming the fields.
+
 ## Consequences
 - A till can resend a whole day, any number of times; nothing is booked twice.
 - Uploads are serial per batch; throughput is bounded by database latency, not by the application.
