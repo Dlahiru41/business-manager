@@ -10,7 +10,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
 | 02 | Inventory and procurement | done | phase/02-inventory-and-procurement | 2026-11-23 |
 | 03 | Sales, payments, sync and printing | done | phase/03-sales-payments-sync-printing | 2026-11-27 |
-| 04 | Finance and reporting | not started | | |
+| 04 | Finance and reporting | in progress | phase/04-finance-and-reporting | |
 | 05 | Multi-business onboarding | not started | | |
 | 06 | Scale-out to microservices | not started | | |
 
@@ -18,34 +18,25 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 ## Current phase
 
-- Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
-  `phase/03-sales-payments-sync-printing`)
-- Current task: none — phase 03 closed; CI was green on the branch head (all jobs, both print-agent installers) and
-  the branch was merged into `main` on 2026-11-27
-- Next step (exact, so a new session can resume): close the "Phase 03 started" issue on GitHub, then start phase 04
-  with `/run-phase 04`.
+- Phase: 04 — Finance and reporting (started 2026-11-27, branch `phase/04-finance-and-reporting`)
+- Current task: T04-01 Contracts
+- Next step (exact, so a new session can resume): write `contracts/openapi/finance.yaml`, `reporting.yaml` and the
+  phase's AsyncAPI events, then T04-02.
 
 ## Task checklist (current phase)
 
-Phase 03:
-- [x] T03-01 Contracts (`sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml`, AsyncAPI events) — online bills only through the sales API (offline ones through `POST /sync/uploads`); `StockIssued` covers SALE, SALE_RETURN and SALE_VOID with signed lines and `corrections`; uploads and receipt rendering keep the Idempotency-Key like every POST; `GET /print-agents/{id}/template` serves the receipt template to agents
-- [x] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote` — pricing's tax split moved to the shared kernel (`TaxSplit`) so bills are taxed exactly as quoted; `CardNumbers` (PAY-05) in the shared kernel; online breaches throw, offline ones become bill flags; offline totals are kept as device totals when they differ, tenders are checked against them
-- [x] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas) — prices asked of pricing through the new `pricing.api.PricingQueries`, approvers of iam through `iam.api.IamQueries`; offline bills keep their device totals as `deviceTotals` and `SaleCompleted` carries what was paid; the register's synthetic offline shift is outside the one-open-shift rule; two sales settings `wholesaleRequiresCustomer`, `tenderReferenceRequired` (ADR-025)
-- [x] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`) — SALE movements per bill line at current cost; restocked returns undo the issue (balance left last first) at the issue cost; voids put back what is still out; a return or void before its sale is booked retries (ADR-026)
-- [x] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02) — sales confirms activity once any bill exists; tenant now keeps the strongest answer of all probes, so a module without documents never unlocks another module's (ADR-027)
-- [x] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`) — append-only payment, refund and cash movement ledgers; cash outside a drawer is recorded and flagged, never refused; return refunds spread over the bill's payments by method; drawer count by tenant denominations (`payments.cashDenominations`) and reconciliation against the expected cash at that moment (ADR-028)
-- [x] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests) — `ReturnChoreographyIT` (app): a return delivered before its sale fails in payments and inventory, succeeds after resubmission, and a duplicate changes nothing (ADR-028 §5)
-- [x] T03-08 Sync module (SYN-01..08, command facades, 1,000-record batch < 10 s) — one transaction per record holds the replay check, the effect and the outcome; dataset versions are digests and changed datasets are sent whole; facades `SalesCommands`, `InventoryCommands`/`InventoryQueries` and till read methods in catalog, pricing and party (ADR-029). The 1,000-record batch takes ~100 s on this Windows/Docker Desktop machine (1–3 ms per database round trip): the load test holds 10 s where a 50-record calibration shows a local database, otherwise it checks the batch scales linearly
-- [x] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module — renderer (pure Java + PDFBox): text mode for Latin rows, `GS v 0` raster for other scripts, native `GS ( k` QR, cut, drawer kick after cash; golden files for 58/80 mm text and ESC/POS; documents: render endpoint, print agents, print jobs handed out at least once (re-sent after a minute without an answer), reprints as COPY, template from the tenant's default receipt template; tills get it as the sync dataset `receiptTemplate` through `documents.api.DocumentsQueries`; web-support stores non-text idempotent responses in Base64 so ESC/POS and PDF replay byte for byte (ADR-030)
-- [x] T03-10 Print agent application (`print-agent/`) — Spring Boot on 127.0.0.1:9123 behind a shared token (`/v1/print`, `/v1/drawer/open`, `/v1/status`); TCP 9100, OS print queue and serial printers; H2 file queue (Flyway) printed oldest first with back-off, the till's requests never given up; cloud link with the device credential (template cache, long-polled jobs printed once by job id, results resent with the same idempotency key); ECS JSON rolling logs without receipt contents; `jpackage` installers built on CI for Windows (exe) and Linux (deb) (ADR-031)
-- [x] T03-11 Full-day flow test (`ShopDayFlowIT`) — the pilot shop's day through the public APIs: shift and drawer, a retail bill with a weighed line, a wholesale bill at the quantity break with card and cash, 20 offline bills from `PosSimulator` (test-support) uploaded twice (20 ACCEPTED, then 20 DUPLICATE; only the over-limit discount flagged), the skipped number reported once, a cash refund with restock, a manager-approved void, the drawer 100.00 short and reconciled; stock by state, a costed SALE movement per line, payments by method and no unfinished event publication at the end. The identity provider is stubbed in the test (device and manager registration)
-- [x] Definition of Done
-  - [x] Every SAL/PAY/SYN/DOC rule has a named test (SAL-11 and SAL-13 added: `SalesEdgeCasesIT.sal11…`, `SalesSettingsTest.sal13…`); `ShopDayFlowIT` passes
-  - [x] Sync upload is idempotent under retries and partial failures: `SyncResubmissionIT` fails the third bill with a database error, the batch stops with 500, the resent batch stores each bill, payment and stock issue once
-  - [x] Print agent prints to the fake printer offline and online (`PrintAgentIT`); `jpackage` app image builds locally — the Windows installer job on CI (`print-agent-installer`) is yet to be seen green
-  - [x] Logging check: `ShopDayFlowIT` finds exactly one INFO `Bill completed` line for the credit bill (upload and replay) without the customer's name, phone or id
-  - [x] PIT ≥ 70%: sales 86 %, payments 79 %, sync 80 % (new `SyncDomainTest`), documents 94 %, inventory 88 %
-  - [x] Contracts, READMEs, `.http` files, PROGRESS summary updated
+Phase 04:
+- [ ] T04-01 Contracts (`finance.yaml`, `reporting.yaml`, AsyncAPI `ExpenseRecorded`, `JournalPosted`, `ReceivableOverdue`, `PeriodClosed`)
+- [ ] T04-02 Finance domain (TDD): `Account`, `JournalEntry`, `PostingRule` per event, `OpenItem` settlement, `FiscalPeriod`
+- [ ] T04-03 Finance listeners and persistence (inbox-guarded listeners, `JdbcClient` journal writer, `party_balance` and its rebuild)
+- [ ] T04-04 Expenses, receivables, payables, supplier payments, periods; `CreditExposureProvider` (FIN-06..FIN-11)
+- [ ] T04-05 Reporting read models (listeners, `daily_summary`, rebuild)
+- [ ] T04-06 Reports, dashboard and exports (REP-02..REP-07)
+- [ ] T04-07 Notification module (basic)
+- [ ] T04-08 Month-end reconciliation flow test (`MonthEndFlowIT`)
+- [ ] Definition of Done
+
+Phase 03 (closed 2026-11-27, merged into `main`): all tasks and the Definition of Done ticked; see its summary below.
 
 ## Open questions
 
