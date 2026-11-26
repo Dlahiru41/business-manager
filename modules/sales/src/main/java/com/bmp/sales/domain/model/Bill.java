@@ -475,6 +475,15 @@ public class Bill implements Auditable {
         return deviceTotals == null ? null : deviceTotals.totals();
     }
 
+    /**
+     * What the customer was charged (SAL-04): the till's totals when an offline bill's differ from the server's
+     * recomputation, otherwise the bill's totals. Line totals are always the server's.
+     */
+    public Totals payableTotals() {
+        Totals device = deviceTotals();
+        return device != null ? device : totals();
+    }
+
     public Set<BillFlag> flags() {
         Set<BillFlag> set = EnumSet.noneOf(BillFlag.class);
         Arrays.stream(flags).map(BillFlag::valueOf).forEach(set::add);
@@ -543,6 +552,12 @@ public class Bill implements Auditable {
 
     public @Nullable BillDiscount discount() {
         return discount;
+    }
+
+    /** Discounts a cashier gave: line and bill discounts without what price rules took off (SAL-05). */
+    public BigDecimal cashierDiscount() {
+        return discountTotal.subtract(
+                lines.stream().map(BillLine::ruleDiscount).reduce(BigDecimal.ZERO, BigDecimal::add));
     }
 
     public BigDecimal billDiscountAmount() {

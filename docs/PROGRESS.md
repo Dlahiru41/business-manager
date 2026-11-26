@@ -20,18 +20,17 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-03 Sales persistence, API, events, registers and shifts
-- Next step (exact, so a new session can resume): add `pricing.api.PricingQueries` (quote a basket: unit price, rule
-  discount, tax rates with their compound flag) and `iam.api.IamQueries` (user has permission, device binding), then the
-  sales migration, replicas (catalog variants, party customers), handlers, controllers, events and ITs, with
-  `/run-phase 03`.
+- Current task: T03-04 Inventory listeners for sales
+- Next step (exact, so a new session can resume): T03-04 — inventory listens to `SaleCompleted`, `SaleReturned` and
+  `SaleVoided` (inventory gains `sales :: api`), issues SALE movements at current cost, restocks returned lines at their
+  issue cost and reverses voids, publishes `StockIssued`; then T03-05, with `/run-phase 03`.
 
 ## Task checklist (current phase)
 
 Phase 03:
 - [x] T03-01 Contracts (`sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml`, AsyncAPI events) — online bills only through the sales API (offline ones through `POST /sync/uploads`); `StockIssued` covers SALE, SALE_RETURN and SALE_VOID with signed lines and `corrections`; uploads and receipt rendering keep the Idempotency-Key like every POST; `GET /print-agents/{id}/template` serves the receipt template to agents
 - [x] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote` — pricing's tax split moved to the shared kernel (`TaxSplit`) so bills are taxed exactly as quoted; `CardNumbers` (PAY-05) in the shared kernel; online breaches throw, offline ones become bill flags; offline totals are kept as device totals when they differ, tenders are checked against them
-- [ ] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas)
+- [x] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas) — prices asked of pricing through the new `pricing.api.PricingQueries`, approvers of iam through `iam.api.IamQueries`; offline bills keep their device totals as `deviceTotals` and `SaleCompleted` carries what was paid; the register's synthetic offline shift is outside the one-open-shift rule; two sales settings `wholesaleRequiresCustomer`, `tenderReferenceRequired` (ADR-025)
 - [ ] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`)
 - [ ] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02)
 - [ ] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`)
@@ -52,6 +51,8 @@ Phase 03:
 
 _One line each: date, question, assumption taken, ADR link._
 
+- 2026-11-26 — Approvers named on a bill (`approvedBy`, `discountApprovedBy`, `creditApprovedBy`) are checked for the permission in iam, but their presence at the till is not (no PIN or approver token). Assumption: the POS authenticates the approver locally; a step-up is an open question for the POS front-end (ADR-025 §2).
+- 2026-11-26 — Returns of an offline bill flagged `TOTALS_MISMATCH` are priced from the server's line totals, which may exceed what the customer paid. Assumption: the flag is visible to whoever approves the return; capping refunds at the amount paid is to be decided (ADR-025 §5).
 - 2026-11-21 — Settings sanity limits (returnWindowDays ≤ 365, offlineMaxHours ≤ 720, periodLockDays ≤ 31) and numbering prefixes (PO-, GRN-, CN-) are assumptions in the schemas; confirm with the client.
 - 2026-11-21 — Default role permissions follow 08-security.md §3 literally, so only OWNER has `tenant:read`/`tenant:*`; MANAGER etc. may need `tenant:read` for settings — assumption: least privilege, tenants extend roles via the iam API (ADR-014).
 - 2026-11-22 — Users without e-mail get their first password from an administrator in the Keycloak console (no API for it in phase 00); disabled users keep already-issued access tokens until they expire (≤ 15 min). Assumption: acceptable for the pilot (ADR-016).
@@ -77,7 +78,7 @@ _One line each: date, question, assumption taken, ADR link._
 - 2026-11-23 — Phones without a country code are read as Sri Lankan (+94) per PTY-01; the tenant module has no country setting. Assumption: a constant until a tenant setting is needed (ADR-022).
 - 2026-11-22 — A price applies from its `minQty` (default 1, PRC-02/PRC-04), so 0.75 kg of loose goods needs a kilogram price with a smaller minimum (the pilot fixture uses 0.001). Assumption: kept as specified; confirm whether weighed units should default lower (ADR-021 item 10).
 - 2026-11-22 — Pilot fixture prices, the 18 % VAT rate on cooking oil only and the oil density 1086.96 ml/kg are placeholders (`PilotShopFixture` Javadoc); the client's figures are still open (§9 below).
-- 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`).
+- 2026-11-22 — Pricing has no `api` query interface yet; sales (phase 02) decides between calling `prices:resolve` in-process through a new pricing API and its own replica (see `modules/pricing/README.md`). Resolved 2026-11-26: sales asks `pricing.api.PricingQueries` in-process (ADR-025 §3).
 - 2026-11-22 — Phase 01 review items deferred (no rule broken today; each needs design, a later module or volume first):
   - Till caches (phase 03, sync): deactivating or reprioritising a price list publishes no event and keeps the snapshot ETag; price rules have no versions or events, so a bill's `RULE:<code>` cannot show what the rule did then and tills cannot price offline with rules.
   - Bulk price upserts report the first bad row only, without its index (04 §4 asks for all field errors as `prices[i].…`).

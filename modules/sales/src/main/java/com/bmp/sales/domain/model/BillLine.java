@@ -48,6 +48,9 @@ public class BillLine {
     @Column(name = "line_discount", nullable = false)
     private BigDecimal lineDiscount;
 
+    @Column(name = "rule_discount", nullable = false)
+    private BigDecimal ruleDiscount;
+
     @Column(name = "allocated_bill_discount", nullable = false)
     private BigDecimal allocatedBillDiscount;
 
@@ -85,6 +88,7 @@ public class BillLine {
         this.weighed = draft.weighed();
         this.unitPrice = draft.unitPrice();
         this.lineDiscount = draft.lineDiscount();
+        this.ruleDiscount = draft.ruleDiscount();
         this.allocatedBillDiscount = allocated;
         this.taxAmount = tax;
         this.lineTotal = total;
@@ -139,6 +143,11 @@ public class BillLine {
 
     public BigDecimal lineDiscount() {
         return lineDiscount;
+    }
+
+    /** What price rules took off; included in {@link #lineDiscount()}. */
+    public BigDecimal ruleDiscount() {
+        return ruleDiscount;
     }
 
     public BigDecimal allocatedBillDiscount() {

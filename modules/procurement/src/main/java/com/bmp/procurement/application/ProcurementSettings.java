@@ -7,6 +7,7 @@ import com.bmp.shared.money.RoundingPolicy;
 import com.bmp.tenant.api.TenantQueries;
 import java.util.Map;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 /** The tenant data procurement depends on: currency, rounding and document numbers (PRO-07). */
@@ -16,7 +17,7 @@ public class ProcurementSettings {
     private final TenantQueries tenants;
     private final NumberSequences numbers;
 
-    public ProcurementSettings(TenantQueries tenants, NumberSequences numbers) {
+    public ProcurementSettings(TenantQueries tenants, @Qualifier("procurementNumbers") NumberSequences numbers) {
         this.tenants = tenants;
         this.numbers = numbers;
     }

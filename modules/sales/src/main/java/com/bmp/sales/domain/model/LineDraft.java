@@ -12,7 +12,8 @@ import org.jspecify.annotations.Nullable;
  * @param qty in the packaging unit
  * @param qtyBase in the variant's base unit (SAL-08)
  * @param unitPrice per packaging unit
- * @param lineDiscount an amount off this line
+ * @param lineDiscount an amount off this line: the cashier's discount plus {@code ruleDiscount}
+ * @param ruleDiscount what price rules took off (quantity breaks, promotions); not a cashier discount (SAL-05)
  * @param taxInclusive whether the price includes tax (its price list's setting)
  * @param rates the tax rates of the variant's category on the business date
  */
@@ -27,6 +28,7 @@ public record LineDraft(
         boolean weighed,
         BigDecimal unitPrice,
         BigDecimal lineDiscount,
+        BigDecimal ruleDiscount,
         @Nullable String priceSource,
         boolean taxInclusive,
         List<TaxSplit.Rate> rates) {

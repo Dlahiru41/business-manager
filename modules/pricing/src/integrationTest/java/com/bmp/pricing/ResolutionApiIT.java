@@ -9,10 +9,19 @@ import static com.bmp.pricing.PricingApi.unit;
 import static com.bmp.pricing.PricingApi.variant;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.awaitility.Awaitility.await;
 
+import com.bmp.pricing.api.PricingQueries;
+import com.bmp.pricing.api.dto.BasketQuote;
+import com.bmp.pricing.api.dto.QuotedLine;
+import com.bmp.shared.context.TenantContext;
 import com.bmp.test.persistence.WithPostgres;
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +48,12 @@ class ResolutionApiIT {
 
     @Autowired
     PlatformTransactionManager transactions;
+
+    @Autowired
+    PricingQueries pricing;
+
+    @Autowired
+    Clock clock;
 
     private PricingApi api;
     private JsonNode eggs;
@@ -198,5 +213,45 @@ class ResolutionApiIT {
                         "/api/v1/prices:resolve", api.owner, "{\"channel\": \"RETAIL\", \"lines\": []}"))
                 .hasStatus(422)
                 .hasCode("VALIDATION_FAILED");
+    }
+
+    @Test
+    void salesQuotesABasketThroughPricingQueriesWithRuleDiscountsAndLineStatuses() {
+        assertThat(api.post("/api/v1/price-rules", """
+                        {"code": "EGG-300", "name": "Eggs, 300 pieces and more", "kind": "QTY_BREAK",
+                         "conditions": {"channel": "WHOLESALE", "productIds": ["%s"], "minQtyBase": "300"},
+                         "effect": {"type": "PERCENT_OFF", "value": "5"}, "priority": 10}
+                        """.formatted(eggs.path("id").asString())))
+                .hasStatus(201);
+        BasketQuote basket = new BasketQuote(
+                "WHOLESALE",
+                null,
+                null,
+                clock.instant(),
+                List.of(
+                        new BasketQuote.Line(
+                                "eggs", id(redL), UUID.fromString(unit(redL, "piece")), new BigDecimal("300")),
+                        new BasketQuote.Line("oil", id(oil), UUID.fromString(unit(oil, "ml")), new BigDecimal("100"))));
+
+        List<QuotedLine> quoted =
+                Objects.requireNonNull(TenantContext.callWith(api.tenant, () -> pricing.quote(basket)));
+
+        assertThat(quoted)
+                .extracting(QuotedLine::lineId, QuotedLine::status)
+                .containsExactly(tuple("eggs", "PRICED"), tuple("oil", "NOT_SELLABLE"));
+        QuotedLine trays = quoted.getFirst();
+        assertThat(trays.unitPrice()).isEqualByComparingTo("48.00");
+        assertThat(trays.ruleDiscount()).as("300 × 48 × 5%").isEqualByComparingTo("720.00");
+        assertThat(trays.source()).isEqualTo("RULE:EGG-300");
+        assertThat(trays.priceListId()).isNotNull();
+        assertThat(trays.rates()).isEmpty();
+        assertThat(trays.priced()).isTrue();
+        assertThat(quoted.get(1).unitPrice()).isNull();
+        assertThat(quoted.get(1).ruleDiscount()).isZero();
+        assertThat(quoted.get(1).priced()).isFalse();
+    }
+
+    private static UUID id(JsonNode node) {
+        return UUID.fromString(node.path("id").asString());
     }
 }

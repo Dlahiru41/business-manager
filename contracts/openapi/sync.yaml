@@ -556,6 +556,8 @@ components:
                 $ref: '#/components/schemas/Amount'
               lineDiscount:
                 $ref: '#/components/schemas/Amount'
+              ruleDiscount:
+                $ref: '#/components/schemas/Amount'
               discountApprovedBy:
                 type: string
                 format: uuid

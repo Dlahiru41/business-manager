@@ -59,6 +59,7 @@ public final class SalesFixtures {
                 false,
                 new BigDecimal(unitPrice),
                 new BigDecimal(lineDiscount),
+                BigDecimal.ZERO,
                 "LIST",
                 true,
                 List.of());
@@ -76,6 +77,7 @@ public final class SalesFixtures {
                 "OPEN",
                 false,
                 plain.unitPrice(),
+                BigDecimal.ZERO,
                 BigDecimal.ZERO,
                 "LIST",
                 inclusive,

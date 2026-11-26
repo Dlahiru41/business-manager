@@ -434,6 +434,9 @@ paths:
                     lineDiscount:
                       amount: '0.00'
                       currency: LKR
+                    ruleDiscount:
+                      amount: '0.00'
+                      currency: LKR
                     allocatedBillDiscount:
                       amount: '0.00'
                       currency: LKR
@@ -687,6 +690,9 @@ paths:
                   lineDiscount:
                     amount: '0.00'
                     currency: LKR
+                  ruleDiscount:
+                    amount: '0.00'
+                    currency: LKR
                   allocatedBillDiscount:
                     amount: '0.00'
                     currency: LKR
@@ -873,6 +879,9 @@ paths:
                     amount: '55.00'
                     currency: LKR
                   lineDiscount:
+                    amount: '0.00'
+                    currency: LKR
+                  ruleDiscount:
                     amount: '0.00'
                     currency: LKR
                   allocatedBillDiscount:
@@ -1269,7 +1278,6 @@ components:
       required:
       - id
       - registerId
-      - cashierId
       - status
       - openedAt
       - offline
@@ -1365,10 +1373,8 @@ components:
           $ref: ./common.yaml#/components/schemas/Money
         tendered:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Cash handed over (CASH).
         change:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Change given (CASH).
         reference:
           type: string
           description: Card slip, transfer or cheque reference; never a card number.
@@ -1480,6 +1486,10 @@ components:
           description: The price the till shows; checked against pricing (SAL-03).
         lineDiscount:
           $ref: '#/components/schemas/Amount'
+          description: The cashier's discount on the line.
+        ruleDiscount:
+          $ref: '#/components/schemas/Amount'
+          description: What price rules took off, as the till computed it.
         discountApprovedBy:
           type: string
           format: uuid
@@ -1526,6 +1536,8 @@ components:
           $ref: ./common.yaml#/components/schemas/Money
         lineDiscount:
           $ref: ./common.yaml#/components/schemas/Money
+        ruleDiscount:
+          $ref: ./common.yaml#/components/schemas/Money
         allocatedBillDiscount:
           $ref: ./common.yaml#/components/schemas/Money
         taxAmount:
@@ -1538,6 +1550,8 @@ components:
           $ref: '#/components/schemas/Quantity'
     BillTotals:
       type: object
+      description: subtotal = Σ round(qty × unit price); discountTotal = line and bill discounts; grandTotal = Σ line totals,
+        what the customer pays.
       required:
       - subtotal
       - discountTotal
@@ -1546,15 +1560,12 @@ components:
       properties:
         subtotal:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Σ round(qty × unit price).
         discountTotal:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Line and bill discounts.
         taxTotal:
           $ref: ./common.yaml#/components/schemas/Money
         grandTotal:
           $ref: ./common.yaml#/components/schemas/Money
-          description: 'Σ line totals: what the customer pays.'
     TotalsInput:
       type: object
       description: The totals the till computed (SAL-04).
@@ -1631,6 +1642,8 @@ components:
           $ref: '#/components/schemas/BillTotals'
         deviceTotals:
           $ref: '#/components/schemas/BillTotals'
+          description: Only on an offline bill whose till totals differ from the server's recomputation (SAL-04). The customer
+            paid these; tenders add up to their grand total and SaleCompleted carries them.
         tenders:
           type: array
           items:
@@ -1728,6 +1741,10 @@ components:
         completedAt:
           type: string
           format: date-time
+        creditApprovedBy:
+          type: string
+          format: uuid
+          description: A user with `sales:credit-override` above the credit limit.
     UpdateBillRequest:
       type: object
       additionalProperties: false
@@ -2000,6 +2017,9 @@ components:
             amount: '55.00'
             currency: LKR
           lineDiscount:
+            amount: '0.00'
+            currency: LKR
+          ruleDiscount:
             amount: '0.00'
             currency: LKR
           allocatedBillDiscount:

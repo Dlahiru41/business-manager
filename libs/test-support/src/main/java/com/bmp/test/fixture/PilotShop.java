@@ -151,6 +151,12 @@ public final class PilotShop {
                 || path.startsWith("/api/v1/supplier-invoices")) {
             return "procurement";
         }
+        if (path.startsWith("/api/v1/registers")
+                || path.startsWith("/api/v1/shifts")
+                || (path.startsWith("/api/v1/bills") && !path.endsWith("/reprint"))
+                || path.startsWith("/api/v1/credit-notes")) {
+            return "sales";
+        }
         if (path.startsWith("/api/v1/stock")
                 || path.startsWith("/api/v1/admin/stock")
                 || path.endsWith("/reorder-policy")) {

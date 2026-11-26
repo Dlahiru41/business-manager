@@ -47,8 +47,10 @@ In (idempotent through the inbox):
 
 ## Public API for other modules
 
-Pricing exposes no `api` query interface yet: sales (phase 02) resolves prices through `POST /api/v1/prices:resolve`
-or a module API added then. It implements the catalog's `TaxCategoryLookup` SPI.
+- `api.PricingQueries.quote(BasketQuote)`: the same resolution as `POST /api/v1/prices:resolve`, in-process and
+  read-only; sales prices online bills with it (ADR-025 §3). Each `QuotedLine` carries its status, unit price, rule
+  discount, tax inclusion, price list and version, source and tax rates.
+- Pricing implements the catalog's `TaxCategoryLookup` SPI.
 
 ## Endpoints
 

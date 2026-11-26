@@ -102,6 +102,8 @@ Templates only set defaults; everything can be edited afterwards.
 | sales | `allowCreditSales` | false |
 | sales | `offlineMaxHours` | 72 |
 | sales | `rounding` | LINE_HALF_UP_2 |
+| sales | `wholesaleRequiresCustomer` | false (SAL-14) |
+| sales | `tenderReferenceRequired` | true (SAL-06: CARD/TRANSFER need a reference) |
 | pricing | `pricesTaxInclusive` | true |
 | pricing | `derivePriceFromBase` | false |
 | pricing | `cashierCanOverridePrice` | false |

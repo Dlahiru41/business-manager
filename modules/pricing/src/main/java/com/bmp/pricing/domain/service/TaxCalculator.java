@@ -49,8 +49,12 @@ public final class TaxCalculator {
         return new Split(
                 split.net(),
                 split.taxes().stream()
-                        .map(t -> new LineTax(t.rateId(), t.code(), t.ratePct(), t.amount()))
+                        .map(t -> new LineTax(t.rateId(), t.code(), t.ratePct(), t.amount(), compound(rates, t)))
                         .toList(),
                 split.total());
+    }
+
+    private static boolean compound(List<TaxRate> rates, TaxSplit.Tax tax) {
+        return rates.stream().anyMatch(r -> r.id().equals(tax.rateId()) && r.compound());
     }
 }
