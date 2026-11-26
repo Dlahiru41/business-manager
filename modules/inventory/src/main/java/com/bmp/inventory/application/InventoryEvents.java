@@ -2,6 +2,7 @@ package com.bmp.inventory.application;
 
 import com.bmp.inventory.api.events.StockAdjusted;
 import com.bmp.inventory.api.events.StockCountPosted;
+import com.bmp.inventory.api.events.StockIssued;
 import com.bmp.inventory.api.events.StockMovementLine;
 import com.bmp.inventory.api.events.StockReceived;
 import com.bmp.inventory.api.events.StockTransformed;
@@ -45,6 +46,31 @@ public class InventoryEvents {
                 stamp.metadata(),
                 sourceType,
                 sourceId,
+                LocationId.of(locationId),
+                currency,
+                lines(posted.stream().filter(m -> !m.isCorrection()).toList()),
+                lines(posted.stream().filter(PlannedMovement::isCorrection).toList())));
+    }
+
+    /** A sale, return or void booked in stock (T03-04); corrections are the true-ups of returns into negative stock. */
+    public void issued(
+            String sourceType,
+            UUID sourceId,
+            UUID billId,
+            UUID locationId,
+            String currency,
+            List<PlannedMovement> posted) {
+        EventStamp stamp = stamps.next();
+        publisher.publishEvent(new StockIssued(
+                stamp.eventId(),
+                TenantContext.require(),
+                stamp.occurredAt(),
+                sourceId,
+                0,
+                stamp.metadata(),
+                sourceType,
+                sourceId,
+                billId,
                 LocationId.of(locationId),
                 currency,
                 lines(posted.stream().filter(m -> !m.isCorrection()).toList()),

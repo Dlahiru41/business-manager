@@ -43,12 +43,16 @@ Decisions: [ADR-024](../../docs/decisions/ADR-024-inventory-modelling-choices.md
 ## Events
 
 Out (`contracts/asyncapi/events.yaml`): `StockReceived` (goods receipts, openings and transfers),
-`StockAdjusted`, `StockTransformed`, `StockCountPosted`, `StockLevelLow`. True-ups of negative stock travel as
+`StockAdjusted`, `StockTransformed`, `StockCountPosted`, `StockLevelLow`, `StockIssued` (sales, returns and voids,
+with the cost of every bill line). True-ups of negative stock travel as
 `corrections` on the event of the movement that caused them.
 
 In: catalog `ProductCreated/Updated`, `VariantCreated/Updated/Deactivated`, `TransformationDefinitionPublished/Retired`;
 tenant `LocationCreated/Updated`; procurement `GoodsReceived` (one RECEIPT movement per line; returns leave at current
-cost; a variant not replicated yet makes the event retry later). Every listener is inbox-guarded.
+cost; a variant not replicated yet makes the event retry later); sales `SaleCompleted` (one SALE movement per bill
+line at current cost, never refused), `SaleReturned` (restocked lines come back at their issue cost; lines not
+restocked move nothing) and `SaleVoided` (what is still out of the bill comes back), ADR-026. Every listener is
+inbox-guarded.
 
 ## Public API for other modules
 

@@ -20,10 +20,11 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-04 Inventory listeners for sales
-- Next step (exact, so a new session can resume): T03-04 — inventory listens to `SaleCompleted`, `SaleReturned` and
-  `SaleVoided` (inventory gains `sales :: api`), issues SALE movements at current cost, restocks returned lines at their
-  issue cost and reverses voids, publishes `StockIssued`; then T03-05, with `/run-phase 03`.
+- Current task: T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02)
+- Next step (exact, so a new session can resume): T03-05 — sales implements `tenant.api.spi.BusinessActivityProbe`
+  (CONFIRMED once any bill exists, drafts included) and tenant keeps the strongest answer of all probes (ADR-027);
+  `SalesSpisIT` covers exposure after credit sales, returns and voids, the offline credit flag and the regional lock;
+  then T03-06 payments, with `/run-phase 03`.
 
 ## Task checklist (current phase)
 
@@ -31,7 +32,7 @@ Phase 03:
 - [x] T03-01 Contracts (`sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml`, AsyncAPI events) — online bills only through the sales API (offline ones through `POST /sync/uploads`); `StockIssued` covers SALE, SALE_RETURN and SALE_VOID with signed lines and `corrections`; uploads and receipt rendering keep the Idempotency-Key like every POST; `GET /print-agents/{id}/template` serves the receipt template to agents
 - [x] T03-02 Sales domain (TDD): `Bill`, `BillTotalsCalculator`, `DiscountAllocator`, `TenderValidator`, `CreditNote` — pricing's tax split moved to the shared kernel (`TaxSplit`) so bills are taxed exactly as quoted; `CardNumbers` (PAY-05) in the shared kernel; online breaches throw, offline ones become bill flags; offline totals are kept as device totals when they differ, tenders are checked against them
 - [x] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas) — prices asked of pricing through the new `pricing.api.PricingQueries`, approvers of iam through `iam.api.IamQueries`; offline bills keep their device totals as `deviceTotals` and `SaleCompleted` carries what was paid; the register's synthetic offline shift is outside the one-open-shift rule; two sales settings `wholesaleRequiresCustomer`, `tenderReferenceRequired` (ADR-025)
-- [ ] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`)
+- [x] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`) — SALE movements per bill line at current cost; restocked returns undo the issue (balance left last first) at the issue cost; voids put back what is still out; a return or void before its sale is booked retries (ADR-026)
 - [ ] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02)
 - [ ] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`)
 - [ ] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests)

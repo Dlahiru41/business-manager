@@ -5,7 +5,7 @@
  */
 @ApplicationModule(
         displayName = "Inventory",
-        allowedDependencies = {"tenant :: api", "catalog :: api", "procurement :: api"})
+        allowedDependencies = {"tenant :: api", "catalog :: api", "procurement :: api", "sales :: api"})
 @NullMarked
 package com.bmp.inventory;
 

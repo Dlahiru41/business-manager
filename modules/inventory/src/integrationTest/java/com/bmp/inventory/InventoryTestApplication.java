@@ -1,5 +1,6 @@
 package com.bmp.inventory;
 
+import com.bmp.inventory.api.events.StockIssued;
 import com.bmp.inventory.api.events.StockLevelLow;
 import com.bmp.inventory.api.events.StockReceived;
 import com.bmp.shared.id.TenantId;
@@ -37,6 +38,7 @@ public class InventoryTestApplication {
 
         private final List<StockReceived> received = new CopyOnWriteArrayList<>();
         private final List<StockLevelLow> low = new CopyOnWriteArrayList<>();
+        private final List<StockIssued> issued = new CopyOnWriteArrayList<>();
 
         @EventListener
         public void on(StockReceived event) {
@@ -46,6 +48,15 @@ public class InventoryTestApplication {
         @EventListener
         public void on(StockLevelLow event) {
             low.add(event);
+        }
+
+        @EventListener
+        public void on(StockIssued event) {
+            issued.add(event);
+        }
+
+        public List<StockIssued> issued(TenantId tenant) {
+            return issued.stream().filter(e -> e.tenantId().equals(tenant)).toList();
         }
 
         public List<StockReceived> received(TenantId tenant) {
