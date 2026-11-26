@@ -90,6 +90,12 @@ class SyncApiIT {
                         .asInt())
                 .isEqualTo(7);
         assertThat(datasets.path("customers").path("data")).isEmpty();
+        assertThat(datasets.path("receiptTemplate")
+                        .path("data")
+                        .path("shopName")
+                        .asString())
+                .as("no template yet: the tenant's name heads the receipt")
+                .startsWith("Bootstrap");
         String cursors = String.join(
                 ",",
                 java.util.stream.StreamSupport.stream(datasets.properties().spliterator(), false)
@@ -116,6 +122,19 @@ class SyncApiIT {
                         .path("displayName")
                         .asString())
                 .isEqualTo("Hotel Lake View");
+        assertThat(till.client.post(
+                        "/api/v1/receipt-templates",
+                        till.owner,
+                        "{\"name\": \"Counter\", \"paperWidthMm\": 58, \"language\": \"en\", \"isDefault\": true,"
+                                + " \"header\": {\"lines\": [\"Lanka Mart\", \"12 Main Street\"]}}"))
+                .hasStatus(201);
+        JsonNode template = json(till.get("/api/v1/sync/changes?cursors=" + cursors))
+                .path("datasets")
+                .path("receiptTemplate")
+                .path("data");
+        assertThat(template.path("shopName").asString()).isEqualTo("Lanka Mart");
+        assertThat(template.path("addressLines").get(0).asString()).isEqualTo("12 Main Street");
+        assertThat(template.path("paperWidthMm").asInt()).isEqualTo(58);
         assertThatProblem(till.get("/api/v1/sync/changes?cursors=gossip:1")).hasStatus(400);
     }
 

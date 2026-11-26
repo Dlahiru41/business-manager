@@ -13,5 +13,6 @@ dependencies {
     implementation(project(":modules:sales"))
     implementation(project(":modules:payments"))
     implementation(project(":modules:inventory"))
+    implementation(project(":modules:documents"))
     implementation("io.micrometer:micrometer-core")
 }

@@ -145,6 +145,7 @@ class SyncController implements SyncApi {
                 case "priceLists" -> body.priceLists(dataset);
                 case "taxRates" -> body.taxRates(dataset);
                 case "settings" -> body.settings(dataset);
+                case "receiptTemplate" -> body.receiptTemplate(dataset);
                 case "customers" -> body.customers(dataset);
                 case "stockBalances" -> body.stockBalances(dataset);
                 default -> throw new IllegalStateException("Unknown dataset " + name);

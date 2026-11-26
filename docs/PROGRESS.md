@@ -20,10 +20,12 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-09 Receipt renderer and documents module
-- Next step (exact, so a new session can resume): T03-09 — `libs/receipt-renderer` (DOC-01..04: ESC/POS 58/80 mm,
-  PDF, text, Sinhala/Tamil raster, golden files) and `modules/documents` (render endpoint, print agents, print jobs,
-  receipt template; add the `receiptTemplate` sync dataset); then T03-10 print agent, with `/run-phase 03`.
+- Current task: T03-10 Print agent application
+- Next step (exact, so a new session can resume): T03-10 — `print-agent/` Spring Boot app on 127.0.0.1:9123 (local
+  API `/v1/print`, `/v1/drawer/open`, `/v1/status` behind a shared token; printers via `javax.print`, TCP 9100 and
+  jSerialComm from `agent.yaml`; persisted local queue with back-off; cloud link with the device credential:
+  template refresh, long-poll `jobs:next`, results; JSON rolling logs), fake TCP printer IT, offline-queue test,
+  jpackage installers on CI (Windows); then T03-11 `ShopDayFlowIT`, with `/run-phase 03`.
 
 ## Task checklist (current phase)
 
@@ -36,7 +38,7 @@ Phase 03:
 - [x] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`) — append-only payment, refund and cash movement ledgers; cash outside a drawer is recorded and flagged, never refused; return refunds spread over the bill's payments by method; drawer count by tenant denominations (`payments.cashDenominations`) and reconciliation against the expected cash at that moment (ADR-028)
 - [x] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests) — `ReturnChoreographyIT` (app): a return delivered before its sale fails in payments and inventory, succeeds after resubmission, and a duplicate changes nothing (ADR-028 §5)
 - [x] T03-08 Sync module (SYN-01..08, command facades, 1,000-record batch < 10 s) — one transaction per record holds the replay check, the effect and the outcome; dataset versions are digests and changed datasets are sent whole; facades `SalesCommands`, `InventoryCommands`/`InventoryQueries` and till read methods in catalog, pricing and party (ADR-029). The 1,000-record batch takes ~100 s on this Windows/Docker Desktop machine (1–3 ms per database round trip): the load test holds 10 s where a 50-record calibration shows a local database, otherwise it checks the batch scales linearly
-- [ ] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module
+- [x] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module — renderer (pure Java + PDFBox): text mode for Latin rows, `GS v 0` raster for other scripts, native `GS ( k` QR, cut, drawer kick after cash; golden files for 58/80 mm text and ESC/POS; documents: render endpoint, print agents, print jobs handed out at least once (re-sent after a minute without an answer), reprints as COPY, template from the tenant's default receipt template; tills get it as the sync dataset `receiptTemplate` through `documents.api.DocumentsQueries`; web-support stores non-text idempotent responses in Base64 so ESC/POS and PDF replay byte for byte (ADR-030)
 - [ ] T03-10 Print agent application (`print-agent/`)
 - [ ] T03-11 Full-day flow test (`ShopDayFlowIT`)
 - [ ] Definition of Done
@@ -52,6 +54,7 @@ Phase 03:
 _One line each: date, question, assumption taken, ADR link._
 
 - 2026-11-26 — SYN load budget: 1,000 records in < 10 s holds only where a database round trip is about 0.25 ms; on Docker Desktop for Windows (2.6 ms) the batch takes ~90 s with one transaction per record (SYN-04). The load test holds 10 s where calibration shows a local database and checks linear scaling elsewhere. Confirm whether 10 s must hold on such machines (would need batched statements or several records per transaction) (ADR-029 §8).
+- 2026-11-26 — DOC-03 asks for Noto Sans Sinhala and Noto Sans Tamil to be bundled; downloading them needs the user's approval, so the renderer takes font files by configuration and falls back to installed fonts (Nirmala UI on Windows, `fonts-noto-core` on Linux), and the Sinhala test checks the raster's structure rather than a pixel snapshot. Assumption: bundle the OFL fonts once approved (ADR-030 §1).
 - 2026-11-26 — Sync sends a changed dataset whole; row-level deltas (SYN-03 "deltas") are left for large catalogs (ADR-029 §1).
 - 2026-11-26 — TEN-02 probes: only sales confirms business activity (bills). Goods receipts, stock openings and purchase orders of a tenant without bills are covered by the default guess only (ASSUMED after one day, platform administrators may still change currency). Assumption: inventory and procurement add probes when needed (ADR-027 §3).
 - 2026-11-26 — Approvers named on a bill (`approvedBy`, `discountApprovedBy`, `creditApprovedBy`) are checked for the permission in iam, but their presence at the till is not (no PIN or approver token). Assumption: the POS authenticates the approver locally; a step-up is an open question for the POS front-end (ADR-025 §2).

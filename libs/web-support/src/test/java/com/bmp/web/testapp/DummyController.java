@@ -78,6 +78,13 @@ public class DummyController {
     }
 
     @Idempotent
+    @PostMapping(value = "/render", produces = "application/octet-stream")
+    ResponseEntity<byte[]> render() {
+        CREATIONS.incrementAndGet();
+        return ResponseEntity.ok(PrinterStream.bytes());
+    }
+
+    @Idempotent
     @PostMapping("/explode")
     ResponseEntity<Void> explode() {
         EXPLOSIONS.incrementAndGet();

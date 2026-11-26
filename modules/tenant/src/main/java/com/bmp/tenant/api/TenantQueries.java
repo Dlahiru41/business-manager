@@ -2,6 +2,7 @@ package com.bmp.tenant.api;
 
 import com.bmp.shared.id.LocationId;
 import com.bmp.shared.id.TenantId;
+import com.bmp.tenant.api.dto.ReceiptTemplateInfo;
 import com.bmp.tenant.api.dto.TenantSummary;
 import java.util.Optional;
 
@@ -25,4 +26,7 @@ public interface TenantQueries {
      * e.g. {@code true} or {@code "LKR"}; empty for an unknown group or key.
      */
     Optional<String> setting(String group, String key);
+
+    /** The tenant's default receipt template, if one was set up (DOC-06). */
+    Optional<ReceiptTemplateInfo> defaultReceiptTemplate();
 }

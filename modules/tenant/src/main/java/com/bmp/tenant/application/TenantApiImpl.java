@@ -6,14 +6,17 @@ import com.bmp.shared.id.TenantId;
 import com.bmp.tenant.api.TenantProvisioning;
 import com.bmp.tenant.api.TenantQueries;
 import com.bmp.tenant.api.dto.NewTenant;
+import com.bmp.tenant.api.dto.ReceiptTemplateInfo;
 import com.bmp.tenant.api.dto.TenantSummary;
 import com.bmp.tenant.application.command.CreateTenantHandler;
+import com.bmp.tenant.application.query.ReceiptTemplateView;
 import com.bmp.tenant.application.query.SettingGroupView;
 import com.bmp.tenant.application.query.TenantView;
 import com.bmp.tenant.application.settings.SettingsReader;
 import com.bmp.tenant.domain.model.Location;
 import com.bmp.tenant.domain.model.SettingGroup;
 import com.bmp.tenant.domain.port.LocationRepository;
+import com.bmp.tenant.domain.port.ReceiptTemplateRepository;
 import com.bmp.tenant.domain.port.TenantRepository;
 import java.util.EnumMap;
 import java.util.Map;
@@ -38,6 +41,7 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
     private final LocationRepository locations;
     private final CreateTenantHandler createTenant;
     private final SettingsReader settings;
+    private final ReceiptTemplateRepository templates;
     private final TransactionTemplate readOnly;
 
     TenantApiImpl(
@@ -45,11 +49,13 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
             LocationRepository locations,
             CreateTenantHandler createTenant,
             SettingsReader settings,
+            ReceiptTemplateRepository templates,
             PlatformTransactionManager transactionManager) {
         this.tenants = tenants;
         this.locations = locations;
         this.createTenant = createTenant;
         this.settings = settings;
+        this.templates = templates;
         this.readOnly = new TransactionTemplate(transactionManager);
         this.readOnly.setReadOnly(true);
         // Its own transaction: the tenant is fixed per transaction, so a lookup for another tenant must not join one.
@@ -85,6 +91,16 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
                 .map(this::read)
                 .flatMap(view -> Optional.ofNullable(view.values().get(key)))
                 .map(Object::toString);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Optional<ReceiptTemplateInfo> defaultReceiptTemplate() {
+        return templates
+                .findDefault()
+                .map(ReceiptTemplateView::of)
+                .map(t -> new ReceiptTemplateInfo(
+                        t.id(), t.version(), t.paperWidthMm(), t.header(), t.footer(), t.fields(), t.language()));
     }
 
     @Override

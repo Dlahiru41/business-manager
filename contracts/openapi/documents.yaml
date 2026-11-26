@@ -124,7 +124,7 @@ paths:
                 receipt:
                   billId: 0193f100-0000-7000-8000-000000000001
                   billNumber: R1-000042
-                  issuedAt: 2026-11-25 14:45
+                  issuedAt: '2026-11-25T14:45:00'
                   cashier: Nimal
                   register: R1
                   lines:
@@ -382,7 +382,7 @@ paths:
                 receipt:
                   billId: 0193f100-0000-7000-8000-000000000001
                   billNumber: R1-000042
-                  issuedAt: 2026-11-25 14:45
+                  issuedAt: '2026-11-25T14:45:00'
                   cashier: Nimal
                   register: R1
                   lines:
@@ -459,7 +459,7 @@ paths:
                 receipt:
                   billId: 0193f100-0000-7000-8000-000000000001
                   billNumber: R1-000042
-                  issuedAt: 2026-11-25 14:45
+                  issuedAt: '2026-11-25T14:45:00'
                   cashier: Nimal
                   register: R1
                   lines:
@@ -551,7 +551,8 @@ components:
           type: string
         issuedAt:
           type: string
-          description: Local date and time in the tenant's time zone.
+          description: Local date and time in the tenant's time zone, ISO 8601 without an offset.
+          example: '2026-11-25T14:45:00'
         cashier:
           type: string
         register:
@@ -592,7 +593,10 @@ components:
       properties:
         version:
           type: integer
-          minimum: 1
+          minimum: 0
+          description: The default template's version in the tenant module (0 for its first revision, and when the
+            tenant has no template yet and the shop name alone heads the receipt). The agent replaces its cached
+            template when this changes (DOC-06).
         shopName:
           type: string
         addressLines:

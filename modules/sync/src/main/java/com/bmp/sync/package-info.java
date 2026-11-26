@@ -13,7 +13,8 @@
             "party :: api",
             "sales :: api",
             "payments :: api",
-            "inventory :: api"
+            "inventory :: api",
+            "documents :: api"
         })
 @NullMarked
 package com.bmp.sync;

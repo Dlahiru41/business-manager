@@ -8,8 +8,8 @@ Offline tills: they bootstrap their data, fetch what changed, and upload what th
 - **SYN-01** only device tokens (`DEVICE_REQUIRED`) of an active device bound to an active register
   (`DEVICE_NOT_BOUND`); the register's location applies to every record.
 - **SYN-02** `GET /sync/bootstrap`: the register (prefix, last accepted number) and the datasets `catalog`,
-  `priceLists`, `taxRates`, `settings` (general, sales and pricing keys), `customers` (no contact details) and
-  `stockBalances` of the register's location, each with a version.
+  `priceLists`, `taxRates`, `settings` (general, sales and pricing keys), `receiptTemplate` (as print agents get it),
+  `customers` (no contact details) and `stockBalances` of the register's location, each with a version.
 - **SYN-03** `GET /sync/changes?cursors=name:version,...`: the datasets whose version changed, whole.
 - **SYN-04** `POST /sync/uploads`: up to 1,000 records (`SHIFT_OPEN`, `DRAWER_OPEN`, `BILL`, `VOID`, `RETURN`,
   `CASH_MOVEMENT`, `DRAWER_COUNT`, `SHIFT_CLOSE`, `WASTAGE`), in order, each in its own transaction through
@@ -30,7 +30,7 @@ Out: `BillNumberGapDetected`. In: none.
 ## Public API for other modules
 
 `api.events.*` only. Sync calls the command and query APIs of sales, payments, inventory, catalog, pricing, party,
-tenant and iam; nothing calls sync.
+documents, tenant and iam; nothing calls sync.
 
 ## Endpoints
 

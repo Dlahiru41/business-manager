@@ -25,7 +25,7 @@ import org.springframework.context.event.EventListener;
 
 /**
  * Boots sync with every module a till's upload reaches (sales, payments, inventory) and its data comes from (catalog,
- * pricing, party, tenant). Iam is not here: {@link Devices} answers {@code IamQueries} for the devices a test binds.
+ * pricing, party, documents, tenant). Iam is not here: {@link Devices} answers {@code IamQueries} for the devices a test binds.
  */
 @SpringBootApplication(
         scanBasePackages = {
@@ -36,6 +36,7 @@ import org.springframework.context.event.EventListener;
             "com.bmp.catalog",
             "com.bmp.pricing",
             "com.bmp.party",
+            "com.bmp.documents",
             "com.bmp.tenant"
         })
 @AutoConfigurationPackage(
@@ -47,6 +48,7 @@ import org.springframework.context.event.EventListener;
             "com.bmp.catalog",
             "com.bmp.pricing",
             "com.bmp.party",
+            "com.bmp.documents",
             "com.bmp.tenant"
         })
 @Import(TestJwtConfiguration.class)

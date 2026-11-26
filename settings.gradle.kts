@@ -19,7 +19,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "bmp-platform"
 
-include("libs:shared-kernel", "libs:web-support", "libs:persistence-support", "libs:test-support")
+include(
+    "libs:shared-kernel",
+    "libs:web-support",
+    "libs:persistence-support",
+    "libs:test-support",
+    "libs:receipt-renderer")
 
 // Every directory under modules/ with a build file is a bounded-context module (Spring Modulith application module).
 file("modules")

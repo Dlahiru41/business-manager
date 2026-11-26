@@ -9,6 +9,7 @@ import com.bmp.test.security.JwtTestTokens;
 import com.bmp.web.idempotency.InMemoryIdempotencyStore;
 import com.bmp.web.idempotency.RequestHasher;
 import com.bmp.web.testapp.DummyController;
+import com.bmp.web.testapp.PrinterStream;
 import com.bmp.web.testapp.WebSupportTestApplication;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -181,6 +182,24 @@ class IdempotencyApiTest {
         assertThat(replay).bodyJson().doesNotHavePath("$.secret");
         assertThat(replay).bodyJson().extractingPath("$.id").isEqualTo(DummyController.THING_ID.toString());
         assertThat(store.storedBodies()).noneMatch(body -> body.contains("one-time"));
+        assertThat(DummyController.CREATIONS).hasValue(1);
+    }
+
+    @Test
+    void shouldReplayABinaryResponseByteForByte() {
+        String key = UUID.randomUUID().toString();
+
+        MvcTestResult first =
+                mvc.post().uri("/test/render").header("Idempotency-Key", key).exchange();
+        MvcTestResult replay =
+                mvc.post().uri("/test/render").header("Idempotency-Key", key).exchange();
+
+        assertThat(first).hasStatus(200);
+        assertThat(replay).hasStatus(200).hasHeader("Idempotent-Replayed", "true");
+        assertThat(replay.getResponse().getContentAsByteArray()).isEqualTo(PrinterStream.bytes());
+        assertThat(replay.getResponse().getContentType()).isEqualTo("application/octet-stream");
+        assertThat(replay).doesNotContainHeader("X-Bmp-Stored-Body-Encoding");
+        assertThat(store.storedBodies()).noneMatch(body -> body.indexOf(' ') >= 0);
         assertThat(DummyController.CREATIONS).hasValue(1);
     }
 

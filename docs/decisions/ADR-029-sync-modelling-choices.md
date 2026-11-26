@@ -17,7 +17,8 @@ record answers, and how the load budget is met.
 2. **Datasets come through the owning modules' APIs** (`CatalogQueries.tillSnapshot`, `PricingQueries.tillPriceLists`
    and `tillTaxRates`, `PartyQueries.activeCustomers`, `InventoryQueries.available`, `TenantQueries.setting`). Catalog
    and pricing hand over their snapshot records as opaque objects sync serialises unchanged. Customers carry no phone
-   or other contact detail. The receipt template follows with the documents module (T03-09).
+   or other contact detail. The receipt template comes from `DocumentsQueries.receiptTemplate` (added in T03-09), the
+   same template print agents cache.
 3. **One transaction per record holds the replay check, the record's effect and its outcome** (`sync.upload_record`,
    unique per tenant, type and id). The owning modules' commands (`SalesCommands`, `PaymentCommands`,
    `InventoryCommands`) join that transaction, so even a command that is not idempotent by itself (a wastage) takes

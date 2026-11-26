@@ -451,6 +451,81 @@ class SalesEdgeCasesIT {
     }
 
     @Test
+    void aBillsReceiptCarriesItsLinesChangeAndCreditCustomerButADraftOrVoidHasNone() {
+        SalesApi api = api("Receipts");
+        UUID draftId = UUID.randomUUID();
+        assertThat(api.submit("{\"id\": \"" + draftId + "\", \"number\": \"" + api.nextNumber()
+                        + "\", \"registerId\": \"" + api.register + "\", \"channel\": \"RETAIL\", \"lines\": ["
+                        + eggs(api, "10") + "]}"))
+                .hasStatus(201);
+        BigDecimal total = new BigDecimal("110.00");
+        Bill cash = submitOffline(
+                api,
+                new SubmitBill(
+                        UUID.randomUUID(),
+                        api.nextNumber(),
+                        api.register,
+                        api.shift,
+                        SalesChannel.RETAIL,
+                        null,
+                        List.of(eggLine(api, "2", "55.00", null)),
+                        null,
+                        true,
+                        List.of(new TenderInput(
+                                UUID.randomUUID(), TenderMethod.CASH, total, new BigDecimal("200.00"), null)),
+                        new Totals(total, BigDecimal.ZERO, BigDecimal.ZERO, total),
+                        NOW,
+                        null,
+                        null,
+                        null));
+
+        var receipt = in(api, () -> queries.findReceipt(cash.id())).orElseThrow();
+
+        assertThat(receipt.number()).isEqualTo(cash.number());
+        assertThat(receipt.registerCode()).isEqualTo("R1");
+        assertThat(receipt.completedAt()).isEqualTo(NOW);
+        assertThat(receipt.lines()).singleElement().satisfies(l -> {
+            assertThat(l.unit()).isEqualTo("Piece");
+            assertThat(l.qty()).isEqualByComparingTo("2");
+            assertThat(l.lineTotal()).isEqualByComparingTo("110.00");
+        });
+        assertThat(receipt.tenders()).singleElement().satisfies(t -> {
+            assertThat(t.method()).isEqualTo("CASH");
+            assertThat(t.change()).isEqualByComparingTo("90.00");
+        });
+        assertThat(receipt.grandTotal()).isEqualByComparingTo("110.00");
+        assertThat(receipt.customer()).isNull();
+        assertThat(receipt.currency()).isEqualTo("LKR");
+
+        UUID customer = api.creditCustomer("Hotel Lake View", "1000.00");
+        SubmitBill credit = new SubmitBill(
+                UUID.randomUUID(),
+                api.nextNumber(),
+                api.register,
+                api.shift,
+                SalesChannel.RETAIL,
+                customer,
+                List.of(eggLine(api, "2", "55.00", null)),
+                null,
+                true,
+                List.of(new TenderInput(UUID.randomUUID(), TenderMethod.CREDIT, total, null, null)),
+                new Totals(total, BigDecimal.ZERO, BigDecimal.ZERO, total),
+                NOW,
+                null,
+                null,
+                null);
+        submitOffline(api, credit);
+        var onCredit = in(api, () -> queries.findReceipt(credit.id())).orElseThrow();
+        assertThat(onCredit.customer()).isEqualTo("Hotel Lake View");
+        assertThat(onCredit.tenders().getFirst().change()).isZero();
+
+        in(api, () -> bills.voidBill(credit.id(), "Duplicate", approvers.add("sales:void"), NOW, Mode.OFFLINE));
+        assertThat(in(api, () -> queries.findReceipt(credit.id()))).as("voided").isEmpty();
+        assertThat(in(api, () -> queries.findReceipt(draftId))).as("a draft").isEmpty();
+        assertThat(in(api, () -> queries.findReceipt(UUID.randomUUID()))).isEmpty();
+    }
+
+    @Test
     void sal09Sal10VoidsAndReturnsKeepTheirWindowsAndRefundsAddUp() {
         SalesApi api = api("Windows");
         UUID manager = approvers.add("sales:void", "sales:return-override");

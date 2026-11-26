@@ -1,6 +1,7 @@
 package com.bmp.sync.application;
 
 import com.bmp.catalog.api.CatalogQueries;
+import com.bmp.documents.api.DocumentsQueries;
 import com.bmp.inventory.api.InventoryQueries;
 import com.bmp.party.api.PartyQueries;
 import com.bmp.pricing.api.PricingQueries;
@@ -40,9 +41,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Service
 public class BootstrapService {
 
-    /** The datasets a till holds; the receipt template follows with the documents module (T03-09). */
+    /** The datasets a till holds. */
     public static final List<String> DATASETS =
-            List.of("catalog", "priceLists", "taxRates", "settings", "customers", "stockBalances");
+            List.of("catalog", "priceLists", "taxRates", "settings", "receiptTemplate", "customers", "stockBalances");
 
     private static final Map<String, List<String>> SETTINGS = Map.of(
             "general",
@@ -67,6 +68,7 @@ public class BootstrapService {
     private final InventoryQueries inventory;
     private final TenantQueries tenants;
     private final SalesQueries sales;
+    private final DocumentsQueries documents;
     private final SyncStates states;
     private final JsonMapper json;
     private final TransactionTemplate transaction;
@@ -81,6 +83,7 @@ public class BootstrapService {
             InventoryQueries inventory,
             TenantQueries tenants,
             SalesQueries sales,
+            DocumentsQueries documents,
             SyncStates states,
             JsonMapper json,
             PlatformTransactionManager transactions,
@@ -92,6 +95,7 @@ public class BootstrapService {
         this.inventory = inventory;
         this.tenants = tenants;
         this.sales = sales;
+        this.documents = documents;
         this.states = states;
         this.json = json;
         this.transaction = new TransactionTemplate(transactions);
@@ -155,6 +159,7 @@ public class BootstrapService {
             case "priceLists" -> pricing.tillPriceLists();
             case "taxRates" -> pricing.tillTaxRates();
             case "settings" -> settings();
+            case "receiptTemplate" -> documents.receiptTemplate();
             case "customers" ->
                 parties.activeCustomers().stream()
                         .map(c -> new Customer(

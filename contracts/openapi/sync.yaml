@@ -329,7 +329,8 @@ components:
           description: '`data`: the sales and pricing settings a till needs.'
         receiptTemplate:
           $ref: '#/components/schemas/Dataset'
-          description: '`data`: the latest receipt template (DOC-06).'
+          description: '`data`: the latest receipt template, as documents.yaml `ReceiptTemplate` describes it
+            (DOC-06).'
         customers:
           $ref: '#/components/schemas/Dataset'
           description: '`data`: `SyncCustomer[]`.'
