@@ -8,6 +8,30 @@
       "type": "string",
       "pattern": "^(0|[1-9][0-9]{0,12})(\\.[0-9]{1,2})?$",
       "default": "500.00"
+    },
+    "cashDenominations": {
+      "description": "PAY-04: the notes and coins a drawer is counted in, as decimal strings.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 30,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(0|[1-9][0-9]{0,12})(\\.[0-9]{1,2})?$"
+      },
+      "default": [
+        "5000",
+        "2000",
+        "1000",
+        "500",
+        "100",
+        "50",
+        "20",
+        "10",
+        "5",
+        "2",
+        "1"
+      ]
     }
   }
 }

@@ -187,9 +187,11 @@ paths:
       - name: date
         in: query
         required: true
+        description: The business date (tenant time zone and cut-off hour).
         schema:
           type: string
           format: date
+          example: '2026-11-25'
       - name: registerId
         in: query
         required: false
@@ -807,6 +809,7 @@ components:
       - ACCOUNT
     Payment:
       type: object
+      description: Money taken (PAY-01, PAY-02); refunded is the sum of its refunds so far.
       required:
       - id
       - kind
@@ -840,7 +843,6 @@ components:
           $ref: ./common.yaml#/components/schemas/Money
         refunded:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Σ refunds so far.
         reference:
           type: string
         registerId:
@@ -1181,6 +1183,7 @@ components:
           maxLength: 500
     ExpectedCash:
       type: object
+      description: 'PAY-04: expected = float + sales − refunds − paid out + paid in − drops.'
       required:
       - sessionId
       - openingFloat
@@ -1208,7 +1211,6 @@ components:
           $ref: ./common.yaml#/components/schemas/Money
         expected:
           $ref: ./common.yaml#/components/schemas/Money
-          description: float + sales − refunds − paid out + paid in − drops.
     Code:
       type: string
       pattern: ^[A-Za-z0-9][A-Za-z0-9_\-]{0,29}$

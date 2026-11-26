@@ -110,3 +110,4 @@ Templates only set defaults; everything can be edited afterwards.
 | tax | `taxRegistrationNumber` | null |
 | finance | `periodLockDays` | 5 |
 | payments | `drawerVarianceAlertAmount` | 500.00 |
+| payments | `cashDenominations` | LKR 5000, 2000, 1000, 500, 100, 50, 20, 10, 5, 2, 1 (PAY-04) |
