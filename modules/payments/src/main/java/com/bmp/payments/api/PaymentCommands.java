@@ -8,8 +8,8 @@ import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Drawer commands for modules that replay what a till did offline (sync, SYN-04). Each runs in its own transaction in
- * the current tenant and is idempotent on its id: the same command again changes nothing and answers the same.
+ * Drawer commands for modules that replay what a till did offline (sync, SYN-04). Each runs in the caller's transaction, or its own
+ * when there is none, in the current tenant, and is idempotent on its id: the same command again changes nothing and answers the same.
  */
 public interface PaymentCommands {
 

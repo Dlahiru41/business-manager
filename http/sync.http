@@ -1,0 +1,44 @@
+# Sync module (contracts/openapi/sync.yaml). A till syncs with its device token: register a device bound to the
+# register (iam.http) and get its token (auth.http, client credentials of device-<id>) into deviceToken.
+
+### Everything a till needs to work offline (SYN-02)
+GET {{baseUrl}}/api/v1/sync/bootstrap
+Authorization: Bearer {{deviceToken}}
+Device-Time: 2026-11-25T09:00:00Z
+
+> {%
+client.global.set("cursors", Object.entries(response.body.datasets)
+    .map(([name, set]) => name + ":" + set.version).join(","));
+%}
+
+### What changed since (SYN-03)
+GET {{baseUrl}}/api/v1/sync/changes?cursors={{cursors}}
+Authorization: Bearer {{deviceToken}}
+
+### An offline shift, a bill and its close, in order (SYN-04; the record id is the idempotency key, SYN-05)
+POST {{baseUrl}}/api/v1/sync/uploads
+Authorization: Bearer {{deviceToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+Device-Time: 2026-11-25T18:00:00Z
+
+{"records": [
+  {"type": "SHIFT_OPEN", "id": "0193e100-0000-7000-8000-000000000001", "payload": {"openedAt": "2026-11-25T08:00:00Z"}},
+  {"type": "BILL", "id": "0193e100-0000-7000-8000-000000000002",
+   "dependsOn": ["0193e100-0000-7000-8000-000000000001"],
+   "payload": {"id": "0193e100-0000-7000-8000-000000000002", "number": "R1-000101",
+               "shiftId": "0193e100-0000-7000-8000-000000000001", "channel": "RETAIL",
+               "lines": [{"id": "0193e100-0000-7000-8000-000000000003", "variantId": "{{eggVariantId}}",
+                          "packagingUnitId": "{{eggPieceUnitId}}", "qty": "10", "unitPrice": "55.00"}],
+               "tenders": [{"id": "0193e100-0000-7000-8000-000000000004", "method": "CASH", "amount": "550.00",
+                            "tendered": "1000.00"}],
+               "totals": {"subtotal": "550.00", "discountTotal": "0.00", "taxTotal": "0.00", "grandTotal": "550.00"},
+               "completedAt": "2026-11-25T10:15:00Z"}},
+  {"type": "SHIFT_CLOSE", "id": "0193e100-0000-7000-8000-000000000005",
+   "dependsOn": ["0193e100-0000-7000-8000-000000000001"],
+   "payload": {"shiftId": "0193e100-0000-7000-8000-000000000001", "closedAt": "2026-11-25T18:00:00Z"}}
+]}
+
+### The till's sync status: clock skew, flags, missing bill numbers (SYN-06, SYN-07)
+GET {{baseUrl}}/api/v1/sync/status
+Authorization: Bearer {{deviceToken}}

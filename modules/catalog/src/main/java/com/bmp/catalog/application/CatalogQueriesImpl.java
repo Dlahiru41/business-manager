@@ -3,6 +3,7 @@ package com.bmp.catalog.application;
 import com.bmp.catalog.api.CatalogQueries;
 import com.bmp.catalog.api.dto.PackagingUnitInfo;
 import com.bmp.catalog.api.dto.VariantInfo;
+import com.bmp.catalog.application.query.CatalogQueryService;
 import com.bmp.catalog.domain.model.PackagingUnit;
 import com.bmp.catalog.domain.model.Product;
 import com.bmp.catalog.domain.model.Variant;
@@ -24,13 +25,25 @@ class CatalogQueriesImpl implements CatalogQueries {
     private final ProductRepository products;
     private final UnitRepository units;
     private final CatalogRevisions revisions;
+    private final CatalogQueryService catalog;
 
     CatalogQueriesImpl(
-            VariantRepository variants, ProductRepository products, UnitRepository units, CatalogRevisions revisions) {
+            VariantRepository variants,
+            ProductRepository products,
+            UnitRepository units,
+            CatalogRevisions revisions,
+            CatalogQueryService catalog) {
         this.variants = variants;
         this.products = products;
         this.units = units;
         this.revisions = revisions;
+        this.catalog = catalog;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Object tillSnapshot() {
+        return catalog.snapshot(null);
     }
 
     @Override

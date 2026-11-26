@@ -23,4 +23,10 @@ public interface CatalogQueries {
 
     /** The tenant's catalog version: it grows with every catalog change. */
     long catalogVersion();
+
+    /**
+     * The whole catalog as a till caches it (SYN-02): a tree of records that serialises to catalog.yaml
+     * {@code CatalogSnapshot}. Other modules pass it on and never look inside.
+     */
+    Object tillSnapshot();
 }

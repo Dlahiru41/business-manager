@@ -11,4 +11,13 @@ import java.util.List;
 public interface PricingQueries {
 
     List<QuotedLine> quote(BasketQuote basket);
+
+    /**
+     * The active price lists with their prices, as a till caches them (SYN-02): records that serialise to pricing.yaml
+     * {@code PriceSnapshot}s. Other modules pass them on and never look inside.
+     */
+    Object tillPriceLists();
+
+    /** Tax categories and their rates, as a till caches them (SYN-02); passed on, never looked into. */
+    Object tillTaxRates();
 }

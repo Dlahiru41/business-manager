@@ -8,23 +8,31 @@ import com.bmp.tenant.api.TenantQueries;
 import com.bmp.tenant.api.dto.NewTenant;
 import com.bmp.tenant.api.dto.TenantSummary;
 import com.bmp.tenant.application.command.CreateTenantHandler;
+import com.bmp.tenant.application.query.SettingGroupView;
 import com.bmp.tenant.application.query.TenantView;
 import com.bmp.tenant.application.settings.SettingsReader;
 import com.bmp.tenant.domain.model.Location;
 import com.bmp.tenant.domain.model.SettingGroup;
 import com.bmp.tenant.domain.port.LocationRepository;
 import com.bmp.tenant.domain.port.TenantRepository;
+import java.util.EnumMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /** Implements the public API of the tenant module for other modules. */
 @Component
 class TenantApiImpl implements TenantQueries, TenantProvisioning {
+
+    /** Key of the per-transaction settings memo. */
+    private static final Object SETTINGS_MEMO = new Object();
 
     private final TenantRepository tenants;
     private final LocationRepository locations;
@@ -74,7 +82,7 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
     @Transactional(readOnly = true)
     public Optional<String> setting(String group, String key) {
         return SettingGroup.fromCode(group)
-                .map(settings::read)
+                .map(this::read)
                 .flatMap(view -> Optional.ofNullable(view.values().get(key)))
                 .map(Object::toString);
     }
@@ -92,5 +100,30 @@ class TenantApiImpl implements TenantQueries, TenantProvisioning {
                 view.timeZone(),
                 view.businessDayCutoffHour(),
                 view.status());
+    }
+
+    /**
+     * A group's settings, read once per transaction: a sale asks for several keys of the same groups, and the tenant
+     * is fixed for the transaction. Outside a transaction every call reads.
+     */
+    @SuppressWarnings("unchecked") // the resource is only ever bound to this map type
+    private SettingGroupView read(SettingGroup group) {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            return settings.read(group);
+        }
+        Map<SettingGroup, SettingGroupView> memo =
+                (Map<SettingGroup, SettingGroupView>) TransactionSynchronizationManager.getResource(SETTINGS_MEMO);
+        if (memo == null) {
+            Map<SettingGroup, SettingGroupView> fresh = new EnumMap<>(SettingGroup.class);
+            TransactionSynchronizationManager.bindResource(SETTINGS_MEMO, fresh);
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int status) {
+                    TransactionSynchronizationManager.unbindResourceIfPossible(SETTINGS_MEMO);
+                }
+            });
+            memo = fresh;
+        }
+        return memo.computeIfAbsent(group, settings::read);
     }
 }

@@ -9,12 +9,11 @@ import com.bmp.shared.error.BusinessRuleViolation;
 import com.bmp.shared.error.PlatformErrorCode;
 import java.util.Map;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * {@link PaymentCommands} for sync (SYN-04): what a till did offline, each in its own transaction; the ids the till
- * gave make a replay change nothing. The device is the caller, so the drawer-owner check does not apply.
+ * {@link PaymentCommands} for sync (SYN-04): what a till did offline, in the caller's transaction (sync runs one per
+ * record); the ids the till gave make a replay change nothing. The device is the caller, so the drawer-owner check does not apply.
  */
 @Component
 class PaymentCommandsImpl implements PaymentCommands {
@@ -28,19 +27,19 @@ class PaymentCommandsImpl implements PaymentCommands {
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public DrawerSessionInfo openDrawer(OpenDrawer c) {
         return queries.info(drawers.open(c.sessionId(), c.registerId(), c.openingFloat(), c.openedAt(), c.cashierId()));
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public void recordCashMovement(CashMovementCommand c) {
         drawers.record(c.sessionId(), c.movementId(), type(c.type()), c.amount(), c.reason(), c.occurredAt(), false);
     }
 
     @Override
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    @Transactional
     public DrawerSessionInfo countDrawer(CountDrawer c) {
         return queries.info(drawers.count(
                 c.sessionId(),

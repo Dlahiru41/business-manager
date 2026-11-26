@@ -30,7 +30,10 @@ public final class BmpPostgres {
             .withEnv("BMP_APP_PASSWORD", TEST_PASSWORD)
             .withEnv("BMP_PLATFORM_ADMIN_PASSWORD", TEST_PASSWORD)
             .withCopyFileToContainer(
-                    MountableFile.forClasspathResource("init/01-roles.sh"), "/docker-entrypoint-initdb.d/01-roles.sh");
+                    MountableFile.forClasspathResource("init/01-roles.sh"), "/docker-entrypoint-initdb.d/01-roles.sh")
+            // A throwaway test database needs no durability: commits skip the disk flush (fsync is the main cost of a
+            // commit on Docker Desktop). Production and the local compose stack keep PostgreSQL's defaults.
+            .withCommand("postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off");
 
     private BmpPostgres() {}
 

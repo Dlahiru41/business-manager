@@ -15,6 +15,7 @@ import jakarta.persistence.TypedQuery;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
@@ -117,6 +118,15 @@ final class JpaSalesStores {
                     .param("customerId", customerId)
                     .query(BigDecimal.class)
                     .single();
+        }
+
+        @Override
+        public List<String> numbersOf(UUID registerId) {
+            return jdbc.sql("SELECT number FROM sales.bill WHERE tenant_id = :tenantId AND register_id = :registerId")
+                    .param("tenantId", TenantContext.require().value())
+                    .param("registerId", registerId)
+                    .query((rs, row) -> Objects.requireNonNull(rs.getString("number")))
+                    .list();
         }
 
         @Override

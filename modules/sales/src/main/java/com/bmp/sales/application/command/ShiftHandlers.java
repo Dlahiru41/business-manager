@@ -76,6 +76,12 @@ public class ShiftHandlers {
         return shifts.saveAndFlush(shift);
     }
 
+    /** Whether the shift exists and is closed (a till resending its close). */
+    @Transactional(readOnly = true)
+    public boolean isClosed(UUID shiftId) {
+        return shifts.findById(shiftId).map(s -> !s.isOpen()).orElse(false);
+    }
+
     /** Rule SAL-12: the register's synthetic offline shift, created when first needed. */
     @Transactional
     public Shift offlineShift(UUID registerId, Instant at) {

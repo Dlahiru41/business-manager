@@ -3,13 +3,17 @@ package com.bmp.pricing.application;
 import com.bmp.pricing.api.PricingQueries;
 import com.bmp.pricing.api.dto.BasketQuote;
 import com.bmp.pricing.api.dto.QuotedLine;
+import com.bmp.pricing.application.query.PricingQueryService;
 import com.bmp.pricing.application.query.ResolvePricesService;
+import com.bmp.pricing.domain.model.PricingStatus;
 import com.bmp.pricing.domain.model.SalesChannel;
 import com.bmp.pricing.domain.service.ResolutionRequest;
 import com.bmp.pricing.domain.service.ResolvedBasket;
 import com.bmp.pricing.domain.service.ResolvedLine;
+import com.bmp.web.pagination.PageQuery;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,10 +21,31 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 class PricingQueriesImpl implements PricingQueries {
 
-    private final ResolvePricesService resolver;
+    /** More lists, categories or rates than a tenant has. */
+    private static final int ALL = 200;
 
-    PricingQueriesImpl(ResolvePricesService resolver) {
+    private final ResolvePricesService resolver;
+    private final PricingQueryService pricing;
+
+    PricingQueriesImpl(ResolvePricesService resolver, PricingQueryService pricing) {
         this.resolver = resolver;
+        this.pricing = pricing;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Object tillPriceLists() {
+        return pricing.priceLists(null, PricingStatus.ACTIVE, PageQuery.of(ALL, null)).items().stream()
+                .map(l -> pricing.snapshot(l.id(), null))
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Object tillTaxRates() {
+        return Map.of(
+                "categories", pricing.taxCategories(PageQuery.of(ALL, null)).items(),
+                "rates", pricing.taxRates(null, PageQuery.of(ALL, null)).items());
     }
 
     @Override

@@ -27,6 +27,8 @@ import org.springframework.test.context.event.ApplicationEvents;
 import org.springframework.test.context.event.RecordApplicationEvents;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @SpringBootTest(classes = TenantTestApplication.class)
 @AutoConfigureMockMvc
@@ -45,6 +47,9 @@ class TenantLifecycleApiIT {
 
     @Autowired
     TenantQueries queries;
+
+    @Autowired
+    PlatformTransactionManager transactions;
 
     private TenantApi api;
 
@@ -202,5 +207,31 @@ class TenantLifecycleApiIT {
         assertThat(TenantContext.callWith(id, () -> queries.currentTenant()))
                 .as("the tenant of the context, read in the caller's transaction")
                 .contains(first);
+    }
+
+    @Test
+    void settingsAreReadOncePerGroupAndTransactionAndAfreshOutsideOne() {
+        TenantId id = TenantId.of(UUID.randomUUID());
+        provisioning.provision(
+                id, new NewTenant("Settings Shop", null, "RETAIL", "LKR", "Asia/Colombo", 0, "STANDARD", null));
+
+        java.util.List<java.util.Optional<String>> inOne = TenantContext.callWith(
+                id,
+                () -> new TransactionTemplate(transactions)
+                        .execute(s -> java.util.List.of(
+                                queries.setting("sales", "returnWindowDays"),
+                                queries.setting("sales", "voidRequiresManager"),
+                                queries.setting("payments", "drawerVarianceAlertAmount"),
+                                queries.setting("nonsense", "key"))));
+
+        assertThat(inOne)
+                .containsExactly(
+                        java.util.Optional.of("7"),
+                        java.util.Optional.of("true"),
+                        java.util.Optional.of("\"500.00\""),
+                        java.util.Optional.empty());
+        assertThat(TenantContext.callWith(id, () -> queries.setting("sales", "returnWindowDays")))
+                .as("outside a transaction")
+                .contains("7");
     }
 }

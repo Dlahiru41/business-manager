@@ -14,6 +14,7 @@ dependencies {
     implementation(project(":modules:inventory"))
     implementation(project(":modules:sales"))
     implementation(project(":modules:payments"))
+    implementation(project(":modules:sync"))
     implementation(project(":modules:audit"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-opentelemetry")

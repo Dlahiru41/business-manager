@@ -32,6 +32,9 @@ public interface BillRepository {
     /** Σ CREDIT tenders of the customer's completed bills less what credit notes credited back (SAL-07 default). */
     BigDecimal creditExposure(UUID customerId);
 
+    /** Rule SYN-06: the numbers of every bill of a register. */
+    List<String> numbersOf(UUID registerId);
+
     /** Rule TEN-02: whether the tenant has any bill, a draft included. */
     boolean anyBill();
 

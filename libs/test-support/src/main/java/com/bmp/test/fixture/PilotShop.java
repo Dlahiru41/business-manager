@@ -157,6 +157,9 @@ public final class PilotShop {
                 || path.startsWith("/api/v1/credit-notes")) {
             return "sales";
         }
+        if (path.startsWith("/api/v1/sync")) {
+            return "sync";
+        }
         if (path.startsWith("/api/v1/payments") || path.startsWith("/api/v1/drawer-sessions")) {
             return "payments";
         }
