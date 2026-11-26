@@ -106,6 +106,7 @@ class SalesRecordsTest {
                 "Cracked",
                 List.of(new Bill.ReturnLine(line.id(), BigDecimal.ONE, false)),
                 List.of(),
+                List.of(),
                 TODAY,
                 7,
                 false,

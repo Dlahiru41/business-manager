@@ -6,6 +6,7 @@ import com.bmp.sales.domain.service.ReturnAmounts;
 import com.bmp.sales.domain.service.TenderValidator;
 import com.bmp.shared.audit.Auditable;
 import com.bmp.shared.error.BusinessRuleViolation;
+import com.bmp.shared.error.PlatformErrorCode;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.id.UserId;
 import com.bmp.shared.money.CurrencyCode;
@@ -30,7 +31,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -341,6 +342,7 @@ public class Bill implements Auditable {
             String reason,
             List<ReturnLine> returned,
             List<RefundTender> refunds,
+            List<RefundTender> refundedBefore,
             LocalDate today,
             int returnWindowDays,
             boolean overrideApproved,
@@ -356,15 +358,22 @@ public class Bill implements Auditable {
             throw new BusinessRuleViolation(
                     SalesErrorCode.RETURN_WINDOW_PASSED, Map.of("returnWindowDays", returnWindowDays));
         }
-        Map<UUID, BigDecimal> asked = new HashMap<>();
-        returned.forEach(r -> asked.merge(r.billLineId(), r.qty(), BigDecimal::add));
-        List<CreditNoteLine> creditLines = new ArrayList<>();
+        // Every check comes first; the bill changes only once the whole return is valid.
+        Set<UUID> seen = new HashSet<>();
+        for (ReturnLine r : returned) {
+            if (!seen.add(r.billLineId())) {
+                throw new BusinessRuleViolation(
+                        PlatformErrorCode.VALIDATION_FAILED,
+                        "A bill line appears once in a return",
+                        Map.of("billLineId", r.billLineId()));
+            }
+        }
+        List<Pending> pending = new ArrayList<>();
         BigDecimal total = BigDecimal.ZERO;
         BigDecimal tax = BigDecimal.ZERO;
         for (ReturnLine r : returned) {
             BillLine line = line(r.billLineId());
-            if (r.qty().signum() <= 0
-                    || asked.getOrDefault(r.billLineId(), r.qty()).compareTo(line.remainingQty()) > 0) {
+            if (r.qty().signum() <= 0 || r.qty().compareTo(line.remainingQty()) > 0) {
                 throw new BusinessRuleViolation(
                         SalesErrorCode.RETURN_QTY_EXCEEDED,
                         Map.of(
@@ -382,19 +391,33 @@ public class Bill implements Auditable {
                     line.returnedAmount(),
                     line.returnedTax(),
                     rounding);
-            BigDecimal qtyBase = line.qtyBase().multiply(r.qty()).divide(line.qty(), 6, java.math.RoundingMode.HALF_UP);
-            line.returned(r.qty(), share.amount(), share.tax());
-            creditLines.add(new CreditNoteLine(
-                    ids.get(), tenantId, line, r.qty(), qtyBase, share.amount(), share.tax(), r.restock()));
+            pending.add(new Pending(line, r, share));
             total = total.add(share.amount());
             tax = tax.add(share.tax());
         }
-        List<RefundTender> plan = refunds.isEmpty() ? defaultRefund(total, ids) : refunds;
+        List<RefundTender> plan = refunds.isEmpty() ? defaultRefund(total, refundedBefore, ids) : refunds;
         BigDecimal planned = plan.stream().map(RefundTender::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
         if (planned.compareTo(total) != 0) {
             throw new BusinessRuleViolation(
                     SalesErrorCode.REFUND_TENDER_MISMATCH,
                     Map.of("refunds", planned.toPlainString(), "total", total.toPlainString()));
+        }
+        checkRefunds(plan, refundedBefore);
+        List<CreditNoteLine> creditLines = new ArrayList<>();
+        for (Pending p : pending) {
+            BillLine line = p.line();
+            BigDecimal qty = p.returned().qty();
+            BigDecimal qtyBase = line.qtyBase().multiply(qty).divide(line.qty(), 6, java.math.RoundingMode.HALF_UP);
+            line.returned(qty, p.share().amount(), p.share().tax());
+            creditLines.add(new CreditNoteLine(
+                    ids.get(),
+                    tenantId,
+                    line,
+                    qty,
+                    qtyBase,
+                    p.share().amount(),
+                    p.share().tax(),
+                    p.returned().restock()));
         }
         this.status = lines.stream().allMatch(l -> l.remainingQty().signum() == 0)
                 ? BillStatus.RETURNED
@@ -403,14 +426,85 @@ public class Bill implements Auditable {
                 creditNoteId, tenantId, creditNoteNumber, id, reason, total, tax, creditLines, plan, approvedBy, at);
     }
 
-    /** Rule SAL-10: the original method, cash when the bill had several. */
-    private List<RefundTender> defaultRefund(BigDecimal total, Supplier<UUID> ids) {
-        Set<TenderMethod> methods = new LinkedHashSet<>();
-        tenders.forEach(t -> methods.add(t.method()));
-        boolean single = methods.size() == 1;
-        TenderMethod method = single ? methods.iterator().next() : TenderMethod.CASH;
-        return List.of(new RefundTender(
-                ids.get(), method, total, null, single ? tenders.getFirst().id() : null));
+    /** A line of a return, checked and priced, not yet applied. */
+    private record Pending(BillLine line, ReturnLine returned, ReturnAmounts.Share share) {}
+
+    /**
+     * Rule SAL-10: what the customer still owes on account is reduced first (CREDIT); the rest is paid back by the
+     * original money method, cash when the bill had several.
+     */
+    private List<RefundTender> defaultRefund(BigDecimal total, List<RefundTender> before, Supplier<UUID> ids) {
+        BigDecimal creditLeft = paid(true).subtract(refunded(before, true)).max(BigDecimal.ZERO);
+        BigDecimal toCredit = total.min(creditLeft);
+        BigDecimal toMoney = total.subtract(toCredit);
+        List<RefundTender> plan = new ArrayList<>();
+        if (toCredit.signum() > 0) {
+            List<BillTender> credit = ofKind(true);
+            plan.add(new RefundTender(
+                    ids.get(),
+                    TenderMethod.CREDIT,
+                    toCredit,
+                    null,
+                    credit.size() == 1 ? credit.getFirst().id() : null));
+        }
+        if (toMoney.signum() > 0 || plan.isEmpty()) {
+            List<BillTender> money = ofKind(false);
+            Set<TenderMethod> methods = new LinkedHashSet<>();
+            money.forEach(t -> methods.add(t.method()));
+            boolean single = methods.size() == 1;
+            plan.add(new RefundTender(
+                    ids.get(),
+                    single ? methods.iterator().next() : TenderMethod.CASH,
+                    toMoney,
+                    null,
+                    single && money.size() == 1 ? money.getFirst().id() : null));
+        }
+        return plan;
+    }
+
+    /**
+     * Rule SAL-10: refunds give back what was paid, the way it was paid. CREDIT goes up to the bill's credit tenders
+     * and only to its customer; money methods go up to its other tenders. Earlier credit notes count.
+     */
+    private void checkRefunds(List<RefundTender> plan, List<RefundTender> before) {
+        if (customerId == null && refunded(plan, true).signum() > 0) {
+            throw exceedsPaid(true, refunded(plan, true), BigDecimal.ZERO);
+        }
+        for (boolean credit : new boolean[] {true, false}) {
+            BigDecimal asked = refunded(plan, credit).add(refunded(before, credit));
+            if (asked.compareTo(paid(credit)) > 0) {
+                throw exceedsPaid(credit, asked, paid(credit));
+            }
+        }
+    }
+
+    private static BusinessRuleViolation exceedsPaid(boolean credit, BigDecimal asked, BigDecimal paid) {
+        return new BusinessRuleViolation(
+                SalesErrorCode.REFUND_EXCEEDS_PAID,
+                Map.of(
+                        "method",
+                        credit ? "CREDIT" : "money",
+                        "refund",
+                        asked.toPlainString(),
+                        "paid",
+                        paid.toPlainString()));
+    }
+
+    private List<BillTender> ofKind(boolean credit) {
+        return tenders.stream()
+                .filter(t -> (t.method() == TenderMethod.CREDIT) == credit)
+                .toList();
+    }
+
+    private BigDecimal paid(boolean credit) {
+        return ofKind(credit).stream().map(BillTender::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
+    }
+
+    private static BigDecimal refunded(List<RefundTender> refunds, boolean credit) {
+        return refunds.stream()
+                .filter(r -> (r.method() == TenderMethod.CREDIT) == credit)
+                .map(RefundTender::amount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
     private void price(List<LineDraft> newLines, @Nullable BillDiscount newDiscount, RoundingPolicy rounding) {

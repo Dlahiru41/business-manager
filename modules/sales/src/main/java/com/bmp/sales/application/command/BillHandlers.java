@@ -540,6 +540,9 @@ public class BillHandlers {
                 r.refunds().stream()
                         .map(f -> new RefundTender(ids.newUuid(), f.method(), f.amount(), f.reference(), null))
                         .toList(),
+                creditNotes.findByBill(billId).stream()
+                        .flatMap(n -> n.refundTenders().stream())
+                        .toList(),
                 today,
                 window,
                 override,

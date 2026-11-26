@@ -827,6 +827,8 @@ paths:
       - VOID_WINDOW_PASSED
       - APPROVAL_REQUIRED
       - APPROVER_NOT_ALLOWED
+      - UNKNOWN_REGISTER
+      - BILL_OF_ANOTHER_LOCATION
       - IDEMPOTENCY_KEY_REQUIRED
       - IDEMPOTENCY_KEY_REUSED
       - REQUEST_IN_PROGRESS
@@ -957,6 +959,10 @@ paths:
       - RETURN_QTY_EXCEEDED
       - UNKNOWN_BILL_LINE
       - REFUND_TENDER_MISMATCH
+      - REFUND_EXCEEDS_PAID
+      - CARD_DATA_NOT_ALLOWED
+      - UNKNOWN_REGISTER
+      - BILL_OF_ANOTHER_LOCATION
       - APPROVER_NOT_ALLOWED
       - IDEMPOTENCY_KEY_REQUIRED
       - IDEMPOTENCY_KEY_REUSED
@@ -1866,7 +1872,9 @@ components:
             $ref: '#/components/schemas/ReturnLineInput'
         refundTenders:
           type: array
-          description: Defaults to the original methods (cash when the bill had several).
+          description: Defaults to CREDIT for what the customer still owes on the bill, then the original money method
+            (cash when the bill had several). Refunds never exceed what was paid each way (`REFUND_EXCEEDS_PAID`), and
+            CREDIT goes only to the bill's customer.
           minItems: 1
           maxItems: 20
           items:

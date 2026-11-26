@@ -162,6 +162,16 @@ final class JpaSalesStores {
         }
 
         @Override
+        public List<CreditNote> findByBill(UUID billId) {
+            List<CreditNote> notes = em.createQuery(
+                            "select n from CreditNote n where n.billId = :billId order by n.id", CreditNote.class)
+                    .setParameter("billId", billId)
+                    .getResultList();
+            notes.forEach(CreditNote::refundTenders);
+            return notes;
+        }
+
+        @Override
         public List<CreditNote> findPage(@Nullable UUID billId, @Nullable UUID beforeId, int limit) {
             StringBuilder jpql = new StringBuilder("select n from CreditNote n where 1 = 1");
             if (billId != null) {

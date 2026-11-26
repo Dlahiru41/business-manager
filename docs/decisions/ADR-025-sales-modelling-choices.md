@@ -32,7 +32,8 @@ option that keeps bills correct and auditable (CLAUDE.md §1.3).
    `totals` are its figures. When the till's totals differ they are kept as `deviceTotals`, the tenders are checked
    against their grand total, and `SaleCompleted.totals` (and `SaleVoided.grandTotal`) carry them, because that is
    what the customer paid; a difference above 0.01 flags `TOTALS_MISMATCH`. Returns of such a bill are priced from the
-   server's line totals (open question: cap refunds at what was paid).
+   server's line totals; refunds are capped at what was paid each way (§10), so a return worth more than was paid is
+   refused (`REFUND_EXCEEDS_PAID`) and needs a smaller return.
 6. **Offline shifts.** An offline bill attaches to the shift it names (same register), else the register's shift
    running at `completedAt`, else the register's synthetic offline shift (one per register, created when first needed,
    flag `OFFLINE_SHIFT`), so every bill has a shift and drawer reconciliation (T03-06) can see what was sold outside a
@@ -48,8 +49,12 @@ option that keeps bills correct and auditable (CLAUDE.md §1.3).
    coverage test checks it). Bill lines and tenders may be deleted, but the aggregate only does so while the bill is a
    draft; a completed bill changes only through its return bookkeeping (`returned_qty/amount/tax`) and its status.
 10. **Return amounts** are the pro-rata share of the line's final total and tax; the return that takes the last of a
-   line gets what is left, so a fully returned line refunds exactly what was paid. Refunds default to the bill's only
-   tender method, or CASH when it was paid by several.
+   line gets what is left, so a fully returned line refunds exactly what was paid. A return is checked whole before
+   the bill changes; a bill line appears once in it. Refunds default to CREDIT for what the customer still owes on the
+   bill, then to the bill's only money method, or CASH when it was paid by several. Refunds never exceed what was
+   paid each way, earlier credit notes included: CREDIT up to the bill's credit tenders and only to its customer, money
+   methods up to its other tenders (`REFUND_EXCEEDS_PAID`), so payments never has a refund it cannot take from a
+   payment. Offline returns follow the same rule; a refused one is reported in the sync result.
 11. **No card data.** Tender and refund references that contain a 13–19 digit run passing the Luhn check are refused
    (`CARD_DATA_NOT_ALLOWED`) so primary account numbers never reach the database or the logs; terminal authorisation
    codes and bank references are fine.

@@ -13,5 +13,8 @@ public interface CreditNoteRepository {
 
     List<CreditNote> findPage(@Nullable UUID billId, @Nullable UUID beforeId, int limit);
 
+    /** Every credit note of a bill, with its refund tenders. */
+    List<CreditNote> findByBill(UUID billId);
+
     CreditNote saveAndFlush(CreditNote note);
 }

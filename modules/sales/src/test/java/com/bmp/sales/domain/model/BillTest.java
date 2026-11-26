@@ -17,6 +17,7 @@ import static com.bmp.sales.domain.SalesFixtures.taxed;
 import static com.bmp.sales.domain.SalesFixtures.totals;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 import com.bmp.sales.domain.error.SalesErrorCode;
 import com.bmp.shared.id.TenantId;
@@ -31,7 +32,19 @@ class BillTest {
 
     static CreditNote returnOf(Bill bill, List<Bill.ReturnLine> lines, List<RefundTender> refunds) {
         return bill.returnLines(
-                UUID.randomUUID(), "CN-000001", "Cracked", lines, refunds, TODAY, 7, false, null, AT, ROUNDING, ids());
+                UUID.randomUUID(),
+                "CN-000001",
+                "Cracked",
+                lines,
+                refunds,
+                List.of(),
+                TODAY,
+                7,
+                false,
+                null,
+                AT,
+                ROUNDING,
+                ids());
     }
 
     @Test
@@ -166,6 +179,39 @@ class BillTest {
     }
 
     @Test
+    void sal10RefundsGiveBackWhatWasPaidTheWayItWasPaid() {
+        Bill paidInCash = completed(cash("2910.00", "3000.00"));
+        UUID eggs = paidInCash.lines().getFirst().id();
+        assertViolation(
+                () -> returnOf(
+                        paidInCash,
+                        List.of(new Bill.ReturnLine(eggs, new BigDecimal("2"), true)),
+                        List.of(new RefundTender(
+                                UUID.randomUUID(), TenderMethod.CREDIT, new BigDecimal("110.00"), null, null))),
+                SalesErrorCode.REFUND_EXCEEDS_PAID);
+
+        Bill partlyOnAccount = draft(CUSTOMER, null, line("10", "55.00", "0"), line("2", "1180.00", "0"));
+        partlyOnAccount.complete(completion(
+                partlyOnAccount, Mode.ONLINE, partlyOnAccount.totals(), credit("2000.00"), cash("910.00", "910.00")));
+        UUID oil = partlyOnAccount.lines().get(1).id();
+        assertViolation(
+                () -> returnOf(
+                        partlyOnAccount,
+                        List.of(new Bill.ReturnLine(oil, new BigDecimal("2"), true)),
+                        List.of(new RefundTender(
+                                UUID.randomUUID(), TenderMethod.CASH, new BigDecimal("2360.00"), null, null))),
+                SalesErrorCode.REFUND_EXCEEDS_PAID);
+
+        CreditNote back =
+                returnOf(partlyOnAccount, List.of(new Bill.ReturnLine(oil, new BigDecimal("2"), true)), List.of());
+
+        assertThat(back.refundTenders())
+                .as("what is owed on account is reduced first, the rest comes back in cash")
+                .extracting(RefundTender::method, r -> r.amount().toPlainString())
+                .containsExactly(tuple(TenderMethod.CREDIT, "2000.00"), tuple(TenderMethod.CASH, "360.00"));
+    }
+
+    @Test
     void sal10MixedTendersAreRefundedInCashAndTheWindowNeedsAnOverride() {
         Bill bill = completed(card("2000.00", "APPR 9"), cash("910.00", "1000.00"));
         UUID eggs = bill.lines().getFirst().id();
@@ -177,6 +223,7 @@ class BillTest {
                         "CN-1",
                         "Late",
                         two,
+                        List.of(),
                         List.of(),
                         TODAY.plusDays(8),
                         7,
@@ -205,6 +252,7 @@ class BillTest {
                 "CN-1",
                 "Late",
                 two,
+                List.of(),
                 List.of(),
                 TODAY.plusDays(8),
                 7,
