@@ -20,11 +20,10 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-11 Full-day flow test
-- Next step (exact, so a new session can resume): T03-11 — `app/src/integrationTest/java/com/bmp/ShopDayFlowIT.java`
-  with `PilotShopFixture` and a `PosSimulator` (test-support) building offline records: steps 1–9 of the phase file
-  (a till device needs the iam device API with the identity provider stubbed in the test); then the Definition of
-  Done checks, the code-reviewer subagent on `git diff main...HEAD`, and the phase summary, with `/run-phase 03`.
+- Current task: phase close — all tasks, the Definition of Done and the review fixes are done
+- Next step (exact, so a new session can resume): with the user's approval, merge
+  `phase/03-sales-payments-sync-printing` into `main` once CI is green (including `print-agent-installer`), close the
+  "Phase 03 started" issue, set the phase to done in the Status table, then start phase 04 with `/run-phase 04`.
 
 ## Task checklist (current phase)
 
@@ -40,12 +39,12 @@ Phase 03:
 - [x] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module — renderer (pure Java + PDFBox): text mode for Latin rows, `GS v 0` raster for other scripts, native `GS ( k` QR, cut, drawer kick after cash; golden files for 58/80 mm text and ESC/POS; documents: render endpoint, print agents, print jobs handed out at least once (re-sent after a minute without an answer), reprints as COPY, template from the tenant's default receipt template; tills get it as the sync dataset `receiptTemplate` through `documents.api.DocumentsQueries`; web-support stores non-text idempotent responses in Base64 so ESC/POS and PDF replay byte for byte (ADR-030)
 - [x] T03-10 Print agent application (`print-agent/`) — Spring Boot on 127.0.0.1:9123 behind a shared token (`/v1/print`, `/v1/drawer/open`, `/v1/status`); TCP 9100, OS print queue and serial printers; H2 file queue (Flyway) printed oldest first with back-off, the till's requests never given up; cloud link with the device credential (template cache, long-polled jobs printed once by job id, results resent with the same idempotency key); ECS JSON rolling logs without receipt contents; `jpackage` installers built on CI for Windows (exe) and Linux (deb) (ADR-031)
 - [x] T03-11 Full-day flow test (`ShopDayFlowIT`) — the pilot shop's day through the public APIs: shift and drawer, a retail bill with a weighed line, a wholesale bill at the quantity break with card and cash, 20 offline bills from `PosSimulator` (test-support) uploaded twice (20 ACCEPTED, then 20 DUPLICATE; only the over-limit discount flagged), the skipped number reported once, a cash refund with restock, a manager-approved void, the drawer 100.00 short and reconciled; stock by state, a costed SALE movement per line, payments by method and no unfinished event publication at the end. The identity provider is stubbed in the test (device and manager registration)
-- [ ] Definition of Done
+- [x] Definition of Done
   - [x] Every SAL/PAY/SYN/DOC rule has a named test (SAL-11 and SAL-13 added: `SalesEdgeCasesIT.sal11…`, `SalesSettingsTest.sal13…`); `ShopDayFlowIT` passes
   - [x] Sync upload is idempotent under retries and partial failures: `SyncResubmissionIT` fails the third bill with a database error, the batch stops with 500, the resent batch stores each bill, payment and stock issue once
   - [x] Print agent prints to the fake printer offline and online (`PrintAgentIT`); `jpackage` app image builds locally — the Windows installer job on CI (`print-agent-installer`) is yet to be seen green
   - [x] Logging check: `ShopDayFlowIT` finds exactly one INFO `Bill completed` line for the credit bill (upload and replay) without the customer's name, phone or id
-  - [x] PIT ≥ 70%: sales 86 %, payments 80 %, sync 80 % (new `SyncDomainTest`), documents 94 %, inventory 88 %
+  - [x] PIT ≥ 70%: sales 86 %, payments 79 %, sync 80 % (new `SyncDomainTest`), documents 94 %, inventory 88 %
   - [x] Contracts, READMEs, `.http` files, PROGRESS summary updated
 
 ## Open questions
@@ -240,3 +239,74 @@ listed under open questions.
 - Finance must decide how to book `corrections` (phase 04); seeded roles follow 08-security.md §3 literally (MANAGER
   without `party:`, STOREKEEPER without `procurement:read`).
 - Deferred review items (locks, batches, metrics, invoice drafts, party search) are listed under open questions.
+
+### Phase 03 — Sales, payments, offline sync and printing (2026-11-26)
+
+**Built.**
+- `sales`: registers, shifts (one open per register; the register's offline shift outside that rule), bills from
+  draft to completion or submitted completed, priced through `pricing.api.PricingQueries` (online breaches refused,
+  offline ones accepted and flagged), totals with tax split and bill-discount allocation, tenders with change and
+  references, credit within the customer's limit, voids and returns with credit notes inside their windows, the
+  business date from completion, zone and cut-off; catalog and party replicas; `SalesCommands` for offline records
+  and `SalesQueries` for registers, bill numbers and receipts (SAL-01..SAL-15).
+- `payments`: append-only payment, refund and cash-movement ledgers, payments per tender from `SaleCompleted`,
+  account collections, refunds following returns and voids by method, drawer sessions counted by the tenant's
+  denominations and reconciled (`DrawerReconciled`), daily totals by method (PAY-01..PAY-06).
+- `inventory`: SALE, SALE_RETURN and SALE_VOID movements at current or issue cost from the sales events, published
+  as `StockIssued`; `InventoryCommands` (wastage) and `InventoryQueries` (available stock) for tills.
+- `sync`: device-only bootstrap and changes (datasets as digests: catalog, price lists, taxes, settings, receipt
+  template, customers, stock), ordered uploads of up to 1,000 records each in its own transaction with its outcome,
+  replays as DUPLICATE, dependants of a rejected record rejected, bill-number gaps reported once, clock skew and late
+  sync flagged (SYN-01..SYN-08).
+- `documents` and `libs/receipt-renderer`: receipts as ESC/POS (58/80 mm, raster for Sinhala and Tamil, native QR,
+  drawer kick), PDF and text; print agents per location; reprints as COPY jobs taken by long polling and handed out
+  again after a minute without an answer; the tenant's default template (DOC-01..DOC-06).
+- `print-agent/`: the shop PC's agent on 127.0.0.1:9123 behind a shared token; TCP, OS-queue and serial printers; an
+  on-disk queue printed in order with back-off; the cloud link with the device credential; ECS JSON logs; jpackage
+  installers on CI.
+- Platform: the tenant keeps the strongest business-activity answer (TEN-02), settings read once per transaction,
+  idempotent binary responses stored in Base64, credit exposure and activity SPIs.
+- Contracts `sales.yaml`, `payments.yaml`, `sync.yaml`, `documents.yaml` and the phase's AsyncAPI events; READMEs and
+  `http/sales.http`, `payments.http`, `sync.http`, `documents.http`, `print-agent.http`.
+- `app`: `ReturnChoreographyIT` (returns and voids end in money and stock back once, also after failed and duplicate
+  deliveries) and `ShopDayFlowIT` (the pilot shop's whole day, online and offline).
+
+**Verified.** `./gradlew build` green with every gate (see the note on memory below); a named test per
+SAL/PAY/SYN/DOC rule; `ShopDayFlowIT`; `SyncResubmissionIT` (a batch killed half-way and resent applies each record
+once); `PrintAgentIT` with a fake TCP printer and a fake cloud (printer off and on, cloud away and back, a job handed
+out twice printed once); PIT sales 86, payments 79, sync 80, documents 94, inventory 88 %; Spectral 6.15.0 clean on
+every OpenAPI contract; `jpackage` app image built locally.
+
+**ADRs.** 025 sales modelling choices · 026 sales in stock · 027 business activity and credit exposure · 028 payments
+modelling choices · 029 sync modelling choices · 030 receipts and print jobs · 031 print agent.
+
+**Review.** The `code-reviewer` agent found 1 BLOCKER and 5 MAJOR issues, all fixed: sync records
+reached other registers' shifts, drawers and bills by the ids in their payloads (the facades now hold a till to its
+own register and voids and returns to the bill's location: `SHIFT_OF_ANOTHER_REGISTER`, `DRAWER_OF_ANOTHER_REGISTER`,
+`BILL_OF_ANOTHER_LOCATION`); the upload stored any bug in an owning module as a permanent rejection (only an
+unreadable payload rejects now; anything else stops the batch); the till's price list version was accepted and
+dropped (ADR-029 §9, fields removed); refunds were not checked against how a bill was paid (`REFUND_EXCEEDS_PAID`,
+CREDIT first by default, a return checked whole before the bill changes); cash refunds left the selling register's
+drawer rather than the paying counter's (`refundRegisterId` on `SaleReturned`/`SaleVoided`, optional `registerId` on
+void and return requests); upload payloads skipped their constraints (Bean Validation on the payload records).
+Minor findings carried forward are listed below.
+
+**Limitations / carried forward.**
+- The 1,000-record sync batch takes ~100 s on Docker Desktop for Windows (1–3 ms per database round trip); 10 s holds
+  only on a local database (ADR-029 §8, open question).
+- Noto Sans Sinhala/Tamil are not bundled yet (needs approval to download); installed fonts are used (ADR-030 §1).
+- The Windows installer job on CI has not been seen green from this session (no GitHub CLI here).
+- The print agent runs per user, not as a Windows service (ADR-031 §8).
+- A full parallel build with Testcontainers can exhaust 16 GB of RAM on this machine (JVM crash dumps on
+  2026-11-26); the failing suites passed when rerun.
+- Approver presence at the till, return refunds of TOTALS_MISMATCH bills, row-level sync deltas and TEN-02 probes
+  for inventory and procurement stay open questions.
+- Minor review findings not fixed in this phase: the last partial return of a line does not take the qtyBase
+  remainder; free-text reasons are not checked for card numbers; a void approver is stored unchecked when no manager
+  is required; offline voids, returns and counts record the device, not the cashier; two concurrent uploads of one
+  register can publish one gap twice, and gap detection reads every bill number; `Bill completed` is logged before
+  commit; drafts complete at their draft-time price, and a draft PATCH without lines drops overrides; two concurrent
+  credit sales can both pass the limit; platform receipts show no cashier; print agents are not bound to devices;
+  an offline `completedAt` in the future is accepted; a refund replay with another payment's refund id and
+  concurrent duplicate submissions answer 500; `DRAWER_NOT_YOURS` is missing from two payments operations'
+  `x-error-codes`; `ShopDayFlowIT` runs on the system clock (may fail across midnight).
