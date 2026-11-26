@@ -7,6 +7,7 @@ import com.bmp.sync.domain.model.UploadRecordType;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -82,8 +83,13 @@ class RecordDispatcher {
         }
     }
 
+    /** Only reading the payload may reject it as malformed; a failure in the owning module stops the batch. */
     private <T> T read(JsonNode payload, Class<T> type) {
-        return json.treeToValue(payload, type);
+        try {
+            return json.treeToValue(payload, type);
+        } catch (JacksonException | IllegalArgumentException | NullPointerException e) {
+            throw new InvalidPayloadException(type.getSimpleName(), e);
+        }
     }
 
     private static SalesCommands.OfflineBill bill(SyncDevices.Till till, Payloads.Bill b) {

@@ -37,7 +37,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 
 /**
@@ -203,7 +202,12 @@ public class UploadService {
                             problem(
                                     PlatformErrorCode.VALIDATION_FAILED,
                                     "The record conflicts with data already stored")));
-        } catch (JacksonException | IllegalArgumentException | NullPointerException e) {
+        } catch (InvalidPayloadException e) {
+            // Only a payload that cannot be read is rejected here; any other failure stops the batch (ADR-029 §3).
+            log.atInfo()
+                    .addKeyValue("recordType", r.type())
+                    .addKeyValue("recordId", r.id())
+                    .log("Upload record rejected: unreadable payload");
             return store(
                     till,
                     RecordOutcome.rejected(

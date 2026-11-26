@@ -104,6 +104,31 @@ class SyncResubmissionIT {
                 .isEqualTo(5);
     }
 
+    @Test
+    void aFailureInsideTheOwningModuleIsNeverStoredAsARejection() {
+        SyncTill till = new SyncTill(mvc, jdbc, transactions, devices, "Bug in sales");
+        UUID shift = UUID.randomUUID();
+        UUID bill = UUID.randomUUID();
+        String[] batch = {
+            till.shiftOpen(shift, NOW.minusSeconds(3600)), till.bill(bill, 1, "1", shift, NOW.minusSeconds(3000), shift)
+        };
+        AtomicBoolean broken = new AtomicBoolean(true);
+        doAnswer(call -> {
+                    if (broken.getAndSet(false)) {
+                        throw new IllegalArgumentException("a bug, not a bad payload");
+                    }
+                    return call.callRealMethod();
+                })
+                .when(sales)
+                .submitBill(any());
+
+        assertThat(till.upload(null, batch).getResponse().getStatus()).isGreaterThanOrEqualTo(500);
+        assertThat(json(till.upload(null, batch)).path("results"))
+                .extracting(r -> r.path("status").asString())
+                .as("the bill was not rejected for good: sent again, it is accepted")
+                .containsExactly("DUPLICATE", "ACCEPTED");
+    }
+
     private static long bills(SyncTill till) {
         return till.<Long>sql(
                 j -> j.sql("SELECT count(*) FROM sales.bill").query(Long.class).single());
