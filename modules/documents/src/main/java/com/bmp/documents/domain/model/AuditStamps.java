@@ -39,7 +39,8 @@ public class AuditStamps {
         return createdAt != null ? createdAt : Instant.EPOCH;
     }
 
+    /** When the entity was last stored; {@link Instant#EPOCH} before the first save. */
     public Instant updatedAt() {
-        return updatedAt != null ? updatedAt : createdAt();
+        return updatedAt != null ? updatedAt : Instant.EPOCH;
     }
 }

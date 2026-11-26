@@ -149,7 +149,8 @@ paths:
       summary: Upload what the till did offline (SYN-04..SYN-08)
       description: Records are processed in order, each in its own transaction; the response has one result per record.
         Every record id is also that record's idempotency key, so a batch resent under a new Idempotency-Key still processes
-        each record once.
+        each record once. A technical failure stops the batch with 500; the records before it are stored with their
+        outcomes, and the till sends the whole batch again.
       x-permission: sync:upload
       x-error-codes:
       - VALIDATION_FAILED
@@ -206,6 +207,8 @@ paths:
           $ref: ./common.yaml#/components/responses/Forbidden
         '422':
           $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '500':
+          $ref: ./common.yaml#/components/responses/InternalError
   /api/v1/sync/status:
     get:
       tags:

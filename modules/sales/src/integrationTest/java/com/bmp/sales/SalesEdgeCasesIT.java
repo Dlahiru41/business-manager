@@ -451,6 +451,17 @@ class SalesEdgeCasesIT {
     }
 
     @Test
+    void sal11SalesKeepsNoCostOrMarginOfItsOwn() {
+        List<String> columns = jdbc.sql("""
+                        SELECT table_name || '.' || column_name FROM information_schema.columns
+                         WHERE table_schema = 'sales' AND (column_name LIKE '%cost%' OR column_name LIKE '%margin%')""").query(String.class).list();
+
+        assertThat(columns)
+                .as("costs are on the inventory movements (StockIssued), margins come with reporting")
+                .isEmpty();
+    }
+
+    @Test
     void aBillsReceiptCarriesItsLinesChangeAndCreditCustomerButADraftOrVoidHasNone() {
         SalesApi api = api("Receipts");
         UUID draftId = UUID.randomUUID();

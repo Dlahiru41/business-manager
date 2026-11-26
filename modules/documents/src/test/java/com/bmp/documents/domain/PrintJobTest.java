@@ -3,6 +3,7 @@ package com.bmp.documents.domain;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.bmp.documents.domain.error.DocumentsErrorCode;
 import com.bmp.documents.domain.model.PrintAgent;
 import com.bmp.documents.domain.model.PrintJob;
 import com.bmp.shared.error.BmpException;
@@ -16,9 +17,10 @@ class PrintJobTest {
 
     private static final Instant NOW = Instant.parse("2026-11-25T09:00:00Z");
     private static final TenantId TENANT = TenantId.of(UUID.randomUUID());
+    private static final UUID BILL = UUID.randomUUID();
 
     private static PrintJob job() {
-        return PrintJob.queue(UUID.randomUUID(), TENANT, UUID.randomUUID(), "RECEIPT", null, "{}", 3L);
+        return PrintJob.queue(UUID.randomUUID(), TENANT, UUID.randomUUID(), "RECEIPT", BILL, "{}", 3L);
     }
 
     private static String code(Throwable e) {
@@ -69,6 +71,12 @@ class PrintJobTest {
         assertThat(failed.error()).isEqualTo("Paper out");
         assertThat(failed.templateVersion()).isEqualTo(3L);
         assertThat(failed.documentType()).isEqualTo("RECEIPT");
+        assertThat(failed.receipt()).isEqualTo("{}");
+        assertThat(failed.sourceId()).isEqualTo(BILL);
+        failed.recordCreation(NOW, null);
+        assertThat(failed.createdAt()).isEqualTo(NOW);
+        failed.recordModification(NOW.plusSeconds(1), null);
+        assertThat(failed.createdAt()).as("created once").isEqualTo(NOW);
     }
 
     @Test
@@ -78,6 +86,14 @@ class PrintJobTest {
         agent.seen("PAPER_OUT", NOW);
         assertThat(agent.status()).isEqualTo("PAPER_OUT");
         assertThat(agent.lastSeenAt()).isEqualTo(NOW);
+        assertThat(agent.name()).isEqualTo("Counter");
+        assertThat(agent.printerModel()).isEqualTo("TM-T20");
+        assertThat(agent.paperWidthMm()).isEqualTo(80);
+        agent.recordCreation(NOW, null);
+        assertThat(agent.createdAt()).isEqualTo(NOW);
+        agent.recordModification(NOW.plusSeconds(1), null);
+        assertThat(agent.createdAt()).isEqualTo(NOW);
+        assertThat(DocumentsErrorCode.PRINT_JOB_STATE_INVALID.module()).isEqualTo("documents");
         assertThatThrownBy(() -> PrintAgent.register(UUID.randomUUID(), TENANT, UUID.randomUUID(), "Odd", null, 76))
                 .isInstanceOf(IllegalArgumentException.class);
     }
