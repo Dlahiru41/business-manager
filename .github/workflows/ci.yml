@@ -109,6 +109,45 @@ jobs:
           path: app/build/reports/cyclonedx/
           if-no-files-found: warn
 
+  # The print agent's installers (phase 03): jpackage builds for the platform it runs on, so each runs on its own OS.
+  print-agent-installer:
+    name: Print agent installer (${{ matrix.type }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            type: exe
+          - os: ubuntu-latest
+            type: deb
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: gradle/actions/setup-gradle@v5
+      # jpackage makes Windows installers with the WiX Toolset; the image may not carry it.
+      - name: WiX Toolset
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install wixtoolset --no-progress -y
+          $wix = Get-ChildItem "${env:ProgramFiles(x86)}\WiX Toolset*\bin" -Directory | Select-Object -First 1
+          $wix.FullName | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+      - name: fakeroot
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y fakeroot
+      - name: Installer
+        run: ./gradlew :print-agent:jpackage -PinstallerType=${{ matrix.type }}
+      - uses: actions/upload-artifact@v5
+        with:
+          name: print-agent-${{ matrix.type }}
+          path: print-agent/build/jpackage/out/
+          if-no-files-found: error
+
   image:
     name: Image (main only)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

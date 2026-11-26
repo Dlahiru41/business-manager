@@ -19,7 +19,12 @@ dependencyResolutionManagement {
 
 rootProject.name = "bmp-platform"
 
-include("libs:shared-kernel", "libs:web-support", "libs:persistence-support", "libs:test-support")
+include(
+    "libs:shared-kernel",
+    "libs:web-support",
+    "libs:persistence-support",
+    "libs:test-support",
+    "libs:receipt-renderer")
 
 // Every directory under modules/ with a build file is a bounded-context module (Spring Modulith application module).
 file("modules")
@@ -29,3 +34,6 @@ file("modules")
     .forEach { include("modules:${it.name}") }
 
 include("app")
+
+// The print agent on the shop PC (phase 03): a separate application, not part of the platform.
+include("print-agent")

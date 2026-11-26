@@ -18,6 +18,12 @@ bin/
 .env
 *.local.env
 http/http-client.private.env.json
+# The print agent's installed settings (local token, device secret); agent.example.yaml is the template.
+agent.yaml
+
+# JVM crash dumps of test workers
+hs_err_pid*.log
+replay_pid*.log
 
 # OS
 .DS_Store

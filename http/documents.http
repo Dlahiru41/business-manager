@@ -1,0 +1,71 @@
+# Documents module (contracts/openapi/documents.yaml). Run auth.http, tenant.http (locationId) and sales.http
+# (cardBillId) first. A print agent uses the device token of the shop PC (iam.http, auth.http) as deviceToken.
+
+### A default receipt template: shop name first, then the address (tenant module, DOC-06)
+POST {{baseUrl}}/api/v1/receipt-templates
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"name": "Counter", "paperWidthMm": 80, "language": "en", "isDefault": true,
+ "header": {"lines": ["Lanka Mart", "12 Main Street, Kandy"]},
+ "footer": {"lines": ["Thank you, come again"]},
+ "fields": {"phone": "081 222 3344", "showQr": true, "openDrawerOnCash": true}}
+
+### Preview a bill's receipt as text (DOC-01, DOC-02)
+POST {{baseUrl}}/api/v1/documents/receipts:render
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"format": "TEXT", "billId": "{{cardBillId}}", "paperWidthMm": 58}
+
+### The same receipt as a PDF
+POST {{baseUrl}}/api/v1/documents/receipts:render
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"format": "PDF", "billId": "{{cardBillId}}"}
+
+>> receipt.pdf
+
+### Register the shop PC's print agent at the location
+POST {{baseUrl}}/api/v1/print-agents
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"locationId": "{{locationId}}", "name": "Counter PC", "printerModel": "Epson TM-T20III", "paperWidthMm": 80}
+
+> {% client.global.set("agentId", response.body.id); %}
+
+### The template the agent caches to print offline (DOC-06)
+GET {{baseUrl}}/api/v1/print-agents/{{agentId}}/template
+Authorization: Bearer {{deviceToken}}
+
+### Reprint the bill: a COPY queued for the location's agent (DOC-05)
+POST {{baseUrl}}/api/v1/bills/{{cardBillId}}/reprint
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{}
+
+### The agent long-polls for its next job (204 when none arrived within waitSeconds)
+GET {{baseUrl}}/api/v1/print-agents/{{agentId}}/jobs:next?waitSeconds=25
+Authorization: Bearer {{deviceToken}}
+
+> {% client.global.set("jobId", response.body.id); %}
+
+### The agent reports the result
+POST {{baseUrl}}/api/v1/print-jobs/{{jobId}}/result
+Authorization: Bearer {{deviceToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"status": "PRINTED", "printerStatus": "ONLINE"}
+
+### Print agents of the location
+GET {{baseUrl}}/api/v1/print-agents?locationId={{locationId}}
+Authorization: Bearer {{ownerToken}}

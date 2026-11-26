@@ -1,6 +1,7 @@
 package com.bmp.tenant.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.bmp.shared.event.EventMetadata;
 import com.bmp.shared.event.EventStamp;
@@ -19,7 +20,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
-import org.springframework.core.annotation.Order;
 
 class ActivityProbeTest {
 
@@ -74,20 +74,23 @@ class ActivityProbeTest {
     }
 
     @Test
-    void aDownstreamProbeWithHigherPrecedenceWins() {
-        @Order(1)
-        class SalesProbe implements BusinessActivityProbe {
-            @Override
-            public ActivityEvidence evidenceOf(TenantId tenant) {
-                return ActivityEvidence.CONFIRMED;
-            }
-        }
+    void theStrongestAnswerOfAllProbesCounts() {
         TenantAgeActivityProbe fallback = new TenantAgeActivityProbe(tenants, clock);
+        BusinessActivityProbe hasBills = tenant -> ActivityEvidence.CONFIRMED;
+        BusinessActivityProbe noBills = tenant -> ActivityEvidence.NONE;
+        Tenant tenant = storedTenant();
 
-        BusinessActivityProbes probes = new BusinessActivityProbes(List.of(fallback, new SalesProbe()));
-
-        assertThat(probes.evidenceOf(TenantId.of(UUID.randomUUID()))).isEqualTo(ActivityEvidence.CONFIRMED);
-        assertThat(new BusinessActivityProbes(List.of(fallback)).evidenceOf(TenantId.of(UUID.randomUUID())))
+        assertThat(new BusinessActivityProbes(List.of(fallback, hasBills)).evidenceOf(tenant.id()))
+                .isEqualTo(ActivityEvidence.CONFIRMED);
+        assertThat(new BusinessActivityProbes(List.of(noBills, fallback)).evidenceOf(tenant.id()))
+                .as("a young tenant without bills")
+                .isEqualTo(ActivityEvidence.NONE);
+        clock.advance(Duration.ofHours(25));
+        assertThat(new BusinessActivityProbes(List.of(noBills, fallback)).evidenceOf(tenant.id()))
+                .as("no bills says nothing about the tenant's other documents")
                 .isEqualTo(ActivityEvidence.ASSUMED);
+        assertThat(new BusinessActivityProbes(List.of(hasBills, fallback)).evidenceOf(tenant.id()))
+                .isEqualTo(ActivityEvidence.CONFIRMED);
+        assertThatThrownBy(() -> new BusinessActivityProbes(List.of())).isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -1,0 +1,25 @@
+                   Lanka Mart
+                 12 Main Street
+                     Kandy
+               Tel: 081 222 3344
+               Tax no: VAT-123456
+                  *** COPY ***
+------------------------------------------------
+Bill R1-000042                  2026-11-25 14:30
+Cashier Nimal                        Register R1
+------------------------------------------------
+Eggs large red
+  10 piece x 55.00                        545.00
+  Discount                                 -5.00
+Cooking oil bottle 750 ml
+  1 bottle x 550.00                       550.00
+Karola loose
+  0.35 kg x 2,400.00                      840.00
+------------------------------------------------
+Discount                                   -5.00
+Tax included                               83.90
+TOTAL LKR                               1,935.00
+Cash                                    1,935.00
+Change                                     65.00
+
+             Thank you, come again

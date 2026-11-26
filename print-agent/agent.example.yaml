@@ -1,0 +1,26 @@
+# Copy to agent.yaml next to the agent (or to ~/bmp-print-agent/agent.yaml) and fill in. Never commit agent.yaml: it
+# holds the local token and the device secret.
+agent:
+  # The token the till sends as "Authorization: Bearer ..."; at least 16 characters, chosen at install.
+  local-token: change-me-at-install
+  shop-name: Lanka Mart
+  paper-width-mm: 80
+  # Browser tills calling the agent from another origin (CORS), e.g. http://localhost:5173
+  allowed-origins: []
+  printer:
+    # TCP (network printer, port 9100), QUEUE (OS print queue, USB) or SERIAL (COM port)
+    type: TCP
+    host: 192.168.1.50
+    port: 9100
+    # queue-name: EPSON TM-T20III Receipt
+    # serial-port: COM3
+    # baud-rate: 9600
+  cloud:
+    enabled: true
+    base-url: https://bmp.example.com
+    # The print agent registered for this PC (POST /api/v1/print-agents)
+    agent-id: 00000000-0000-0000-0000-000000000000
+    # Client credentials of the shop PC's device (iam.http registers it; Keycloak client device-<id>)
+    token-url: https://auth.bmp.example.com/realms/bmp/protocol/openid-connect/token
+    client-id: device-00000000-0000-0000-0000-000000000000
+    client-secret: from-the-device-registration

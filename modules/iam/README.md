@@ -57,6 +57,12 @@ role not yet seeded falls back to its documented defaults; unknown or inactive c
 
 Schemas: `contracts/asyncapi/events.yaml`.
 
+## Public API for other modules
+
+- `api.IamQueries.userHasPermission(user, permission)`: whether an active user holds a permission through an active
+  role (wildcards count); sales checks named approvers with it (ADR-025 §2).
+- `api.IamQueries.findDevice(device)`: a device's register, location and whether it is active (`DeviceBinding`).
+
 ## API (`contracts/openapi/iam.yaml`)
 
 | Method | Path | Permission |

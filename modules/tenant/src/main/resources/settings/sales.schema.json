@@ -34,6 +34,16 @@
         "LINE_HALF_UP_2"
       ],
       "default": "LINE_HALF_UP_2"
+    },
+    "wholesaleRequiresCustomer": {
+      "type": "boolean",
+      "default": false,
+      "description": "SAL-14: wholesale bills need a customer."
+    },
+    "tenderReferenceRequired": {
+      "type": "boolean",
+      "default": true,
+      "description": "SAL-06: CARD and BANK_TRANSFER tenders need a reference."
     }
   }
 }

@@ -8,5 +8,6 @@ dependencies {
     implementation(project(":modules:tenant"))
     implementation(project(":modules:catalog"))
     implementation(project(":modules:procurement"))
+    implementation(project(":modules:sales"))
     implementation("io.micrometer:micrometer-core")
 }

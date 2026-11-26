@@ -15,12 +15,15 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.InvalidMediaTypeException;
+import org.springframework.http.MediaType;
 import org.springframework.web.method.HandlerMethod;
 import org.springframework.web.servlet.HandlerInterceptor;
 import org.springframework.web.util.ContentCachingResponseWrapper;
@@ -45,6 +48,14 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
     public static final TenantId PLATFORM_SCOPE = TenantId.of(new UUID(0L, 0L));
 
     private static final String CLAIM = IdempotencyInterceptor.class.getName() + ".claim";
+
+    /**
+     * Kept with a stored binary body (ESC/POS, PDF): the body column holds text, so such bodies are stored in Base64.
+     * Never sent to the client.
+     */
+    static final String BODY_ENCODING = "X-Bmp-Stored-Body-Encoding";
+
+    private static final String BASE64 = "base64";
     private static final List<String> REPLAYED_HEADERS =
             List.of(HttpHeaders.LOCATION, HttpHeaders.ETAG, HttpHeaders.CONTENT_TYPE);
 
@@ -149,10 +160,17 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
         replays.increment();
         request.setAttribute(RequestAttributes.IDEMPOTENT_REPLAY, true);
         response.setStatus(stored.status());
-        stored.headers().forEach(response::setHeader);
+        boolean binary = BASE64.equals(stored.headers().get(BODY_ENCODING));
+        stored.headers().forEach((name, value) -> {
+            if (!BODY_ENCODING.equals(name)) {
+                response.setHeader(name, value);
+            }
+        });
         response.setHeader(REPLAYED_HEADER, "true");
         String body = stored.body();
-        if (body != null) {
+        if (body != null && binary) {
+            response.getOutputStream().write(Base64.getDecoder().decode(body));
+        } else if (body != null) {
             response.setCharacterEncoding(StandardCharsets.UTF_8.name());
             response.getOutputStream().write(body.getBytes(StandardCharsets.UTF_8));
         }
@@ -169,13 +187,36 @@ public class IdempotencyInterceptor implements HandlerInterceptor {
         ContentCachingResponseWrapper cached =
                 WebUtils.getNativeResponse(response, ContentCachingResponseWrapper.class);
         byte[] content = cached != null ? cached.getContentAsByteArray() : new byte[0];
-        String body = content.length == 0 ? null : new String(content, StandardCharsets.UTF_8);
-        return new IdempotencyStore.StoredResponse(status, headers, redacted(body, redact));
+        if (content.length == 0) {
+            return new IdempotencyStore.StoredResponse(status, headers, null);
+        }
+        if (!textual(headers.get(HttpHeaders.CONTENT_TYPE))) {
+            headers.put(BODY_ENCODING, BASE64);
+            return new IdempotencyStore.StoredResponse(
+                    status, headers, Base64.getEncoder().encodeToString(content));
+        }
+        return new IdempotencyStore.StoredResponse(
+                status, headers, redacted(new String(content, StandardCharsets.UTF_8), redact));
+    }
+
+    /** JSON, problem details and text are stored as they are; anything else (ESC/POS, PDF) as Base64. */
+    private static boolean textual(@Nullable String contentType) {
+        if (contentType == null) {
+            return true;
+        }
+        try {
+            MediaType type = MediaType.parseMediaType(contentType);
+            return type.getType().equals("text")
+                    || type.getSubtype().equals("json")
+                    || type.getSubtype().endsWith("+json");
+        } catch (InvalidMediaTypeException e) {
+            return false;
+        }
     }
 
     /** Removes one-time secrets from the copy kept for replay; the live response is unaffected. */
-    private @Nullable String redacted(@Nullable String body, List<String> fields) {
-        if (body == null || fields.isEmpty()) {
+    private @Nullable String redacted(String body, List<String> fields) {
+        if (fields.isEmpty()) {
             return body;
         }
         try {

@@ -7,8 +7,11 @@ import static com.bmp.tenant.TenantApi.token;
 import static com.bmp.test.web.ProblemAssert.assertThatProblem;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.id.TenantId;
 import com.bmp.shared.security.SystemRole;
+import com.bmp.tenant.api.TenantQueries;
+import com.bmp.tenant.api.dto.ReceiptTemplateInfo;
 import com.bmp.test.persistence.WithPostgres;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +30,9 @@ class ReceiptTemplateApiIT {
     @Autowired
     MockMvcTester mvc;
 
+    @Autowired
+    TenantQueries queries;
+
     private TenantApi api;
     private TenantId tenant;
     private String owner;
@@ -44,6 +50,28 @@ class ReceiptTemplateApiIT {
                 owner,
                 "{\"name\": \"" + name + "\", \"paperWidthMm\": 80, \"language\": \"en\", \"isDefault\": " + isDefault
                         + ", \"header\": {\"lines\": [\"Perera Stores\"]}, \"fields\": {\"showCashier\": true}}");
+    }
+
+    @Test
+    void theDefaultTemplateIsReadByOtherModulesWithItsVersionAndJson() {
+        assertThat(TenantContext.callWith(tenant, () -> queries.defaultReceiptTemplate()))
+                .as("none yet")
+                .isEmpty();
+        create("Not default", false);
+        assertThat(TenantContext.callWith(tenant, () -> queries.defaultReceiptTemplate()))
+                .isEmpty();
+        String id = json(create("Counter", true)).path("id").asString();
+
+        ReceiptTemplateInfo template = TenantContext.callWith(tenant, () -> queries.defaultReceiptTemplate())
+                .orElseThrow();
+
+        assertThat(template.id()).hasToString(id);
+        assertThat(template.paperWidthMm()).isEqualTo(80);
+        assertThat(template.language()).isEqualTo("en");
+        assertThat(template.header()).contains("Perera Stores");
+        assertThat(template.fields()).contains("showCashier");
+        assertThat(template.footer()).isEqualTo("{}");
+        assertThat(template.version()).isNotNegative();
     }
 
     @Test

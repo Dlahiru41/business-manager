@@ -3,12 +3,15 @@ package com.bmp.tenant.api.spi;
 import com.bmp.shared.id.TenantId;
 
 /**
- * Tells the tenant module whether a tenant may already have business documents, which locks its currency and time
- * zone (TEN-02). Implemented by the sales module in phase 03 (dependency inversion: tenant is upstream of sales).
+ * Tells the tenant module whether a tenant has business documents, which locks its currency and time zone (TEN-02).
+ * Downstream modules implement it for their own documents (dependency inversion: tenant is upstream of them); sales
+ * answers for bills.
  *
- * <p>The tenant module ships a conservative default ({@link ActivityEvidence#ASSUMED} once the tenant is older than
- * one day); an implementation that knows answers {@link ActivityEvidence#NONE} or {@link ActivityEvidence#CONFIRMED}. A downstream
- * implementation must declare a higher precedence ({@code @Order} below {@code Ordered.LOWEST_PRECEDENCE}).
+ * <p>Every probe is asked and the strongest answer counts ({@link ActivityEvidence#NONE} &lt;
+ * {@link ActivityEvidence#ASSUMED} &lt; {@link ActivityEvidence#CONFIRMED}, ADR-027): an implementation answers
+ * {@code CONFIRMED} when it holds documents of the tenant and {@code NONE} otherwise, and never speaks for other
+ * modules. The tenant module's conservative default ({@code ASSUMED} once the tenant is older than one day) stays as
+ * the floor for documents no probe knows about.
  */
 @FunctionalInterface
 public interface BusinessActivityProbe {

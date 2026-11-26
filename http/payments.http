@@ -1,0 +1,67 @@
+# Payments module (contracts/openapi/payments.yaml). Run auth.http, tenant.http, party.http (customerId) and
+# sales.http (registerId, bills) first. Bill payments appear by themselves when sales completes a bill.
+
+### Open the register's drawer with a float (PAY-04)
+POST {{baseUrl}}/api/v1/drawer-sessions
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"registerId": "{{registerId}}", "openingFloat": "5000.00"}
+
+> {% client.global.set("drawerId", response.body.id); %}
+
+### Payments of a bill (PAY-01: one per tender other than CREDIT)
+GET {{baseUrl}}/api/v1/payments?billId={{draftId}}
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("paymentId", response.body.items[0].id); %}
+
+### A customer pays on account in cash (PAY-02)
+POST {{baseUrl}}/api/v1/payments
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "customerId": "{{customerId}}", "method": "CASH", "amount": "2500.00", "tendered": "3000.00",
+ "registerId": "{{registerId}}"}
+
+### Refund part of a payment (PAY-03: never more than is left of it)
+POST {{baseUrl}}/api/v1/payments/{{paymentId}}/refunds
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "amount": "55.00", "reason": "Cracked egg"}
+
+### Pay out for ice from the drawer
+POST {{baseUrl}}/api/v1/drawer-sessions/{{drawerId}}/movements
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"type": "PAID_OUT", "amount": "250.00", "reason": "Ice"}
+
+### What the drawer should hold
+GET {{baseUrl}}/api/v1/drawer-sessions/{{drawerId}}/expected
+Authorization: Bearer {{ownerToken}}
+
+### Count it by denomination (LKR notes and coins by default)
+POST {{baseUrl}}/api/v1/drawer-sessions/{{drawerId}}/count
+Authorization: Bearer {{cashierToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"denominations": [{"value": "5000", "count": 1}, {"value": "1000", "count": 2}, {"value": "100", "count": 5}]}
+
+### Reconcile (a manager) → DrawerReconciled
+POST {{baseUrl}}/api/v1/drawer-sessions/{{drawerId}}/reconcile
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"note": "End of day"}
+
+### Today's totals by method (PAY-06: card total to compare with the bank)
+GET {{baseUrl}}/api/v1/payments/summary?date=2026-11-25&registerId={{registerId}}
+Authorization: Bearer {{ownerToken}}

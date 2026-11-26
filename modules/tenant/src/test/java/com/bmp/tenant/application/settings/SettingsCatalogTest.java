@@ -36,7 +36,9 @@ class SettingsCatalogTest {
                         "voidRequiresManager",
                         "allowCreditSales",
                         "offlineMaxHours",
-                        "rounding");
+                        "rounding",
+                        "wholesaleRequiresCustomer",
+                        "tenderReferenceRequired");
     }
 
     @Test

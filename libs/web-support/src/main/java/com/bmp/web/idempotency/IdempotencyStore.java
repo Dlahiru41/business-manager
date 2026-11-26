@@ -44,7 +44,7 @@ public interface IdempotencyStore {
      *
      * @param status HTTP status
      * @param headers replayed headers (Location, ETag, Content-Type)
-     * @param body JSON body, or {@code null} for empty responses
+     * @param body JSON or text body, Base64 for a binary body (see the interceptor), or {@code null} if empty
      */
     record StoredResponse(
             int status,

@@ -140,8 +140,15 @@ public final class PilotShop {
         }
         if (path.startsWith("/api/v1/settings")
                 || path.startsWith("/api/v1/tenant")
-                || path.startsWith("/api/v1/locations")) {
+                || path.startsWith("/api/v1/locations")
+                || path.startsWith("/api/v1/receipt-templates")) {
             return "tenant";
+        }
+        if (path.startsWith("/api/v1/users")
+                || path.startsWith("/api/v1/roles")
+                || path.startsWith("/api/v1/devices")
+                || path.startsWith("/api/v1/me")) {
+            return "iam";
         }
         if (path.startsWith("/api/v1/parties") || path.startsWith("/api/v1/customer-groups")) {
             return "party";
@@ -150,6 +157,21 @@ public final class PilotShop {
                 || path.startsWith("/api/v1/goods-receipts")
                 || path.startsWith("/api/v1/supplier-invoices")) {
             return "procurement";
+        }
+        if (path.startsWith("/api/v1/registers")
+                || path.startsWith("/api/v1/shifts")
+                || (path.startsWith("/api/v1/bills") && !path.endsWith("/reprint"))
+                || path.startsWith("/api/v1/credit-notes")) {
+            return "sales";
+        }
+        if (path.startsWith("/api/v1/documents") || path.startsWith("/api/v1/print-") || path.endsWith("/reprint")) {
+            return "documents";
+        }
+        if (path.startsWith("/api/v1/sync")) {
+            return "sync";
+        }
+        if (path.startsWith("/api/v1/payments") || path.startsWith("/api/v1/drawer-sessions")) {
+            return "payments";
         }
         if (path.startsWith("/api/v1/stock")
                 || path.startsWith("/api/v1/admin/stock")
