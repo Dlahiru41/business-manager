@@ -20,11 +20,15 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: T03-06 Payments module
-- Next step (exact, so a new session can resume): T03-06 — new `modules/payments` (PAY-01..06): payment, refund and
-  cash_movement ledgers, drawer sessions with denomination counts (new payments setting `cashDenominations`),
-  listeners for `SaleCompleted` / `SaleReturned` / `SaleVoided`, `PaymentCommands` / `PaymentQueries` in
-  `payments.api`; then T03-07, with `/run-phase 03`.
+- Current task: T03-08 Sync module
+- Next step (exact, so a new session can resume): T03-08 — new `modules/sync` (SYN-01..08): device principal bound to
+  an active register (`iam.api.IamQueries.findDevice`), `GET /sync/bootstrap` and `/changes` datasets (catalog, price
+  lists, tax rates, settings subset, register info, customers, stock balances; the receipt template follows T03-09),
+  `POST /sync/uploads` (≤ 1,000 records, each in its own transaction through new `sales.api.SalesCommands`,
+  `payments.api.PaymentCommands` and new `inventory.api.InventoryCommands`; `sync.upload_record` makes replays
+  DUPLICATE; dependants of a rejected record are REJECTED `DEPENDENCY_REJECTED`), number-gap detection →
+  `BillNumberGapDetected`, clock skew from `Device-Time` (> 5 min flags the device), `LATE_SYNC`; load test 1,000
+  records < 10 s; then T03-09, with `/run-phase 03`.
 
 ## Task checklist (current phase)
 
@@ -34,8 +38,8 @@ Phase 03:
 - [x] T03-03 Sales persistence, API, events, registers and shifts (catalog and party replicas) — prices asked of pricing through the new `pricing.api.PricingQueries`, approvers of iam through `iam.api.IamQueries`; offline bills keep their device totals as `deviceTotals` and `SaleCompleted` carries what was paid; the register's synthetic offline shift is outside the one-open-shift rule; two sales settings `wholesaleRequiresCustomer`, `tenderReferenceRequired` (ADR-025)
 - [x] T03-04 Inventory listeners for sales (`SaleCompleted`, `SaleReturned`, `SaleVoided` → `StockIssued`) — SALE movements per bill line at current cost; restocked returns undo the issue (balance left last first) at the issue cost; voids put back what is still out; a return or void before its sale is booked retries (ADR-026)
 - [x] T03-05 SPIs: credit exposure (SAL-07) and business activity (TEN-02) — sales confirms activity once any bill exists; tenant now keeps the strongest answer of all probes, so a module without documents never unlocks another module's (ADR-027)
-- [ ] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`)
-- [ ] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests)
+- [x] T03-06 Payments module (PAY-01..06, drawer sessions, `PaymentCommands` / `PaymentQueries`) — append-only payment, refund and cash movement ledgers; cash outside a drawer is recorded and flagged, never refused; return refunds spread over the bill's payments by method; drawer count by tenant denominations (`payments.cashDenominations`) and reconciliation against the expected cash at that moment (ADR-028)
+- [x] T03-07 Void and return process manager (choreography, partial failure and duplicate delivery tests) — `ReturnChoreographyIT` (app): a return delivered before its sale fails in payments and inventory, succeeds after resubmission, and a duplicate changes nothing (ADR-028 §5)
 - [ ] T03-08 Sync module (SYN-01..08, command facades, 1,000-record batch < 10 s)
 - [ ] T03-09 Receipt renderer (`libs/receipt-renderer`) and documents module
 - [ ] T03-10 Print agent application (`print-agent/`)
