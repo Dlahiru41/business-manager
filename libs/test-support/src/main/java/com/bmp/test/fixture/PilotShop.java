@@ -140,8 +140,15 @@ public final class PilotShop {
         }
         if (path.startsWith("/api/v1/settings")
                 || path.startsWith("/api/v1/tenant")
-                || path.startsWith("/api/v1/locations")) {
+                || path.startsWith("/api/v1/locations")
+                || path.startsWith("/api/v1/receipt-templates")) {
             return "tenant";
+        }
+        if (path.startsWith("/api/v1/users")
+                || path.startsWith("/api/v1/roles")
+                || path.startsWith("/api/v1/devices")
+                || path.startsWith("/api/v1/me")) {
+            return "iam";
         }
         if (path.startsWith("/api/v1/parties") || path.startsWith("/api/v1/customer-groups")) {
             return "party";
