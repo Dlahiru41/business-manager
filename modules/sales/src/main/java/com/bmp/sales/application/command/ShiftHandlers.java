@@ -76,6 +76,12 @@ public class ShiftHandlers {
         return shifts.saveAndFlush(shift);
     }
 
+    /** The register of a known shift. */
+    @Transactional(readOnly = true)
+    public Optional<UUID> registerOf(UUID shiftId) {
+        return shifts.findById(shiftId).map(Shift::registerId);
+    }
+
     /** Whether the shift exists and is closed (a till resending its close). */
     @Transactional(readOnly = true)
     public boolean isClosed(UUID shiftId) {

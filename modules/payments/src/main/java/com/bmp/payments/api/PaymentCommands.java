@@ -35,12 +35,19 @@ public interface PaymentCommands {
      * @param type PAID_OUT, PAID_IN or DROP
      */
     record CashMovementCommand(
-            UUID movementId, UUID sessionId, String type, BigDecimal amount, String reason, Instant occurredAt) {}
+            UUID movementId,
+            UUID sessionId,
+            UUID registerId,
+            String type,
+            BigDecimal amount,
+            String reason,
+            Instant occurredAt) {}
 
     record Denomination(BigDecimal value, int count) {}
 
     record CountDrawer(
             UUID sessionId,
+            UUID registerId,
             List<Denomination> denominations,
             Instant countedAt,
             @Nullable UUID cashierId) {

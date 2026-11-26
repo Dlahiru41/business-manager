@@ -863,6 +863,7 @@ components:
           billNumber: R1-000042
           locationId: 0193b000-0000-7000-8000-000000000401
           registerId: 0193d100-0000-7000-8000-000000000001
+          refundRegisterId: 0193d100-0000-7000-8000-000000000001
           currency: LKR
           reason: Cracked
           total: '110.00'
@@ -902,6 +903,7 @@ components:
           number: R1-000042
           locationId: 0193b000-0000-7000-8000-000000000401
           registerId: 0193d100-0000-7000-8000-000000000001
+          refundRegisterId: 0193d100-0000-7000-8000-000000000001
           currency: LKR
           reason: Wrong customer
           approvedBy: 0193a6f1-0000-7000-8000-00000000f002
@@ -2422,6 +2424,7 @@ components:
       - billId
       - locationId
       - registerId
+      - refundRegisterId
       - currency
       - reason
       - total
@@ -2457,6 +2460,10 @@ components:
           $ref: '#/components/schemas/Uuid'
         registerId:
           $ref: '#/components/schemas/Uuid'
+        refundRegisterId:
+          $ref: '#/components/schemas/Uuid'
+          description: The register the money is given back at (the bill's own unless the return or void was
+            made at another register of its location); payments takes cash refunds from its drawer.
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -2492,6 +2499,7 @@ components:
       - number
       - locationId
       - registerId
+      - refundRegisterId
       - currency
       - reason
       - grandTotal
@@ -2522,6 +2530,10 @@ components:
           $ref: '#/components/schemas/Uuid'
         registerId:
           $ref: '#/components/schemas/Uuid'
+        refundRegisterId:
+          $ref: '#/components/schemas/Uuid'
+          description: The register the money is given back at (the bill's own unless the return or void was
+            made at another register of its location); payments takes cash refunds from its drawer.
         currency:
           type: string
           pattern: ^[A-Z]{3}$

@@ -140,7 +140,8 @@ class BillsController implements BillsApi {
     @Idempotent
     @PreAuthorize("hasPermission(null, 'sales:void')")
     public ResponseEntity<Bill> voidBill(UUID billId, UUID idempotencyKey, VoidBillRequest request) {
-        return ok(handlers.voidBill(billId, request.getReason(), request.getApprovedBy(), null, Mode.ONLINE));
+        return ok(handlers.voidBill(
+                billId, request.getRegisterId(), request.getReason(), request.getApprovedBy(), null, Mode.ONLINE));
     }
 
     @Override
@@ -166,7 +167,8 @@ class BillsController implements BillsApi {
                                                 r.getReference()))
                                         .toList(),
                         request.getApprovedBy(),
-                        null),
+                        null,
+                        request.getRegisterId()),
                 Mode.ONLINE);
         String currency = queries.bill(billId).currency();
         return ResponseEntity.created(URI.create("/api/v1/credit-notes/" + note.id()))

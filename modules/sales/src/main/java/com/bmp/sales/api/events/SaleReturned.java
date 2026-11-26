@@ -25,6 +25,7 @@ public record SaleReturned(
         @Nullable UUID customerId,
         LocationId locationId,
         UUID registerId,
+        UUID refundRegisterId,
         String currency,
         String reason,
         BigDecimal total,

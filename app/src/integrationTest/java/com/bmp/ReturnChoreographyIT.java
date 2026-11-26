@@ -288,6 +288,7 @@ class ReturnChoreographyIT {
                 null,
                 LocationId.of(UUID.fromString(location)),
                 UUID.fromString(register),
+                UUID.fromString(register),
                 "LKR",
                 "Cracked",
                 new BigDecimal("110.00"),

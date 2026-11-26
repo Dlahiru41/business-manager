@@ -81,7 +81,7 @@ class PaymentsEdgeCasesIT {
                 .isEqualTo(opened.id());
         UUID movement = UUID.randomUUID();
         PaymentCommands.CashMovementCommand paidOut = new PaymentCommands.CashMovementCommand(
-                movement, session, "PAID_OUT", new BigDecimal("300.00"), "Delivery tip", NOW);
+                movement, session, shop.register, "PAID_OUT", new BigDecimal("300.00"), "Delivery tip", NOW);
         in(shop, () -> {
             commands.recordCashMovement(paidOut);
             commands.recordCashMovement(paidOut);
@@ -92,20 +92,20 @@ class PaymentsEdgeCasesIT {
                         assertThat(d.expectedCash()).as("not paid out twice").isEqualByComparingTo("1700.00"));
         assertThatThrownBy(() -> in(shop, () -> {
                     commands.recordCashMovement(new PaymentCommands.CashMovementCommand(
-                            UUID.randomUUID(), session, "BRIBE", BigDecimal.ONE, "No", NOW));
+                            UUID.randomUUID(), session, shop.register, "BRIBE", BigDecimal.ONE, "No", NOW));
                     return true;
                 }))
                 .isInstanceOf(BusinessRuleViolation.class);
         assertThatThrownBy(() -> in(shop, () -> {
                     commands.recordCashMovement(new PaymentCommands.CashMovementCommand(
-                            UUID.randomUUID(), session, "SALE", BigDecimal.ONE, "By hand", NOW));
+                            UUID.randomUUID(), session, shop.register, "SALE", BigDecimal.ONE, "By hand", NOW));
                     return true;
                 }))
                 .as("sales come from bills, not by hand")
                 .isInstanceOf(BusinessRuleViolation.class);
         assertThatThrownBy(() -> in(shop, () -> {
                     commands.recordCashMovement(new PaymentCommands.CashMovementCommand(
-                            UUID.randomUUID(), session, "DROP", BigDecimal.ZERO, "Nothing", NOW));
+                            UUID.randomUUID(), session, shop.register, "DROP", BigDecimal.ZERO, "Nothing", NOW));
                     return true;
                 }))
                 .isInstanceOf(BusinessRuleViolation.class);
@@ -114,6 +114,7 @@ class PaymentsEdgeCasesIT {
                 shop,
                 () -> commands.countDrawer(new PaymentCommands.CountDrawer(
                         session,
+                        shop.register,
                         List.of(
                                 new PaymentCommands.Denomination(new BigDecimal("1000"), 1),
                                 new PaymentCommands.Denomination(new BigDecimal("100"), 2)),
@@ -125,6 +126,13 @@ class PaymentsEdgeCasesIT {
                 .hasValueSatisfying(d -> assertThat(d.countedCash()).isEqualByComparingTo("1200"));
         assertThat(in(shop, () -> queries.findDrawer(UUID.randomUUID()))).isEmpty();
         assertThat(in(shop, () -> queries.activeDrawer(UUID.randomUUID()))).isEmpty();
+        assertThatThrownBy(() -> in(shop, () -> {
+                    commands.recordCashMovement(new PaymentCommands.CashMovementCommand(
+                            UUID.randomUUID(), session, UUID.randomUUID(), "PAID_OUT", BigDecimal.TEN, "Tip", NOW));
+                    return true;
+                }))
+                .as("SYN-01: a till reaches only its own register's drawer")
+                .hasMessageStartingWith("DRAWER_OF_ANOTHER_REGISTER");
     }
 
     @Test

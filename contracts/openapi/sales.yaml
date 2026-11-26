@@ -1800,6 +1800,11 @@ components:
           type: string
           format: uuid
           description: A manager when `voidRequiresManager` (SAL-09).
+        registerId:
+          type: string
+          format: uuid
+          description: The register the money is given back at, of the bill's location (`BILL_OF_ANOTHER_LOCATION`
+            otherwise); defaults to the bill's own register.
     ReturnLineInput:
       type: object
       additionalProperties: false
@@ -1870,6 +1875,11 @@ components:
           type: string
           format: uuid
           description: A user with `sales:return-override` after `returnWindowDays`.
+        registerId:
+          type: string
+          format: uuid
+          description: The register the money is given back at, of the bill's location (`BILL_OF_ANOTHER_LOCATION`
+            otherwise); defaults to the bill's own register.
     CreditNoteLine:
       type: object
       required:

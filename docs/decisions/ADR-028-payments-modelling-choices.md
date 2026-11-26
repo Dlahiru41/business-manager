@@ -38,6 +38,10 @@ and auditable (CLAUDE.md §1.3).
    module exists (phase 04).
 9. **Daily totals** use the business date stored with every payment and refund (tenant time zone and cut-off at the
    time), so changing the cut-off later never moves past totals.
+10. **Refunds come from the counter that pays them.** `SaleReturned` and `SaleVoided` carry `refundRegisterId`: the
+    register the return or void was made at (the bill's own unless the caller names another register of the bill's
+    location; a till's own register offline). Cash refunds are taken from that register's open drawer, so each
+    drawer's expected cash matches what left it.
 
 ## Consequences
 - Finance (phase 04) books from `PaymentCaptured`, `PaymentRefunded` and `DrawerReconciled` and never needs to read the

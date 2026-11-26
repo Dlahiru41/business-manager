@@ -3,6 +3,7 @@ package com.bmp.sales.application;
 import com.bmp.sales.api.SalesCommands;
 import com.bmp.sales.application.command.BillHandlers;
 import com.bmp.sales.application.command.ShiftHandlers;
+import com.bmp.sales.domain.error.SalesErrorCode;
 import com.bmp.sales.domain.model.Bill;
 import com.bmp.sales.domain.model.BillDiscount;
 import com.bmp.sales.domain.model.DiscountType;
@@ -39,7 +40,11 @@ class SalesCommandsImpl implements SalesCommands {
 
     @Override
     @Transactional
-    public void closeShift(UUID shiftId, Instant closedAt) {
+    public void closeShift(UUID shiftId, UUID registerId, Instant closedAt) {
+        shifts.registerOf(shiftId).filter(r -> !r.equals(registerId)).ifPresent(r -> {
+            throw new BusinessRuleViolation(
+                    SalesErrorCode.SHIFT_OF_ANOTHER_REGISTER, Map.of("shiftId", shiftId, "registerId", registerId));
+        });
         if (shifts.isClosed(shiftId)) {
             return; // a till resending its shift close
         }
@@ -101,8 +106,8 @@ class SalesCommandsImpl implements SalesCommands {
 
     @Override
     @Transactional
-    public void voidBill(UUID billId, String reason, @Nullable UUID approvedBy, Instant voidedAt) {
-        bills.voidBill(billId, reason, approvedBy, voidedAt, Mode.OFFLINE);
+    public void voidBill(UUID billId, UUID registerId, String reason, @Nullable UUID approvedBy, Instant voidedAt) {
+        bills.voidBill(billId, registerId, reason, approvedBy, voidedAt, Mode.OFFLINE);
     }
 
     @Override
@@ -123,7 +128,8 @@ class SalesCommandsImpl implements SalesCommands {
                                         f.reference()))
                                 .toList(),
                         r.approvedBy(),
-                        r.returnedAt()),
+                        r.returnedAt(),
+                        r.registerId()),
                 Mode.OFFLINE);
     }
 

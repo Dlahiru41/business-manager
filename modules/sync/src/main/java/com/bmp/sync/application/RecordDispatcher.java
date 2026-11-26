@@ -13,7 +13,7 @@ import tools.jackson.databind.json.JsonMapper;
 /**
  * Rule SYN-04: hands each uploaded record to the module that owns it, through that module's API. The record's id is
  * the id of what it creates (a shift, a drawer, a credit note, a cash movement), so the owning module recognises a
- * replay too.
+ * replay too. Every record acts for the till's register (SYN-01): its shifts and drawer, and bills of its location.
  */
 @Component
 class RecordDispatcher {
@@ -38,14 +38,14 @@ class RecordDispatcher {
             }
             case SHIFT_CLOSE -> {
                 var p = read(payload, Payloads.ShiftClose.class);
-                sales.closeShift(p.shiftId(), p.closedAt());
+                sales.closeShift(p.shiftId(), till.registerId(), p.closedAt());
             }
             case BILL -> sales.submitBill(bill(till, read(payload, Payloads.Bill.class)));
             case VOID -> {
                 var p = read(payload, Payloads.VoidBill.class);
-                sales.voidBill(p.billId(), p.reason(), p.approvedBy(), p.voidedAt());
+                sales.voidBill(p.billId(), till.registerId(), p.reason(), p.approvedBy(), p.voidedAt());
             }
-            case RETURN -> sales.returnBill(returned(id, read(payload, Payloads.ReturnBill.class)));
+            case RETURN -> sales.returnBill(returned(id, till, read(payload, Payloads.ReturnBill.class)));
             case DRAWER_OPEN -> {
                 var p = read(payload, Payloads.DrawerOpen.class);
                 payments.openDrawer(
@@ -54,12 +54,13 @@ class RecordDispatcher {
             case CASH_MOVEMENT -> {
                 var p = read(payload, Payloads.CashMovement.class);
                 payments.recordCashMovement(new PaymentCommands.CashMovementCommand(
-                        id, p.sessionId(), p.type(), p.amount(), p.reason(), p.occurredAt()));
+                        id, p.sessionId(), till.registerId(), p.type(), p.amount(), p.reason(), p.occurredAt()));
             }
             case DRAWER_COUNT -> {
                 var p = read(payload, Payloads.DrawerCount.class);
                 payments.countDrawer(new PaymentCommands.CountDrawer(
                         p.sessionId(),
+                        till.registerId(),
                         p.denominations().stream()
                                 .map(d -> new PaymentCommands.Denomination(d.value(), d.count()))
                                 .toList(),
@@ -121,11 +122,13 @@ class RecordDispatcher {
                 b.completedAt());
     }
 
-    private static SalesCommands.OfflineReturn returned(UUID creditNoteId, Payloads.ReturnBill r) {
+    private static SalesCommands.OfflineReturn returned(
+            UUID creditNoteId, SyncDevices.Till till, Payloads.ReturnBill r) {
         List<Payloads.Refund> refunds = r.refundTenders() == null ? List.of() : r.refundTenders();
         return new SalesCommands.OfflineReturn(
                 creditNoteId,
                 r.billId(),
+                till.registerId(),
                 r.reason(),
                 r.lines().stream()
                         .map(l -> new SalesCommands.OfflineReturnLine(l.billLineId(), l.qty(), l.restock()))

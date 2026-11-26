@@ -29,7 +29,10 @@ record answers, and how the load budget is met.
    `DEPENDENCY_REJECTED`. A record that clashes with stored data (an id used before) is rejected, never blocking the
    batch.
 5. **Devices.** Only device tokens sync (`DEVICE_REQUIRED`); the device must be active and bound to an active register
-   (`DEVICE_NOT_BOUND`), whose location applies to every record (SYN-01).
+   (`DEVICE_NOT_BOUND`), whose location applies to every record (SYN-01). A till acts for its own register only: it
+   closes that register's shifts (`SHIFT_OF_ANOTHER_REGISTER`), moves and counts that register's drawer
+   (`DRAWER_OF_ANOTHER_REGISTER`), and voids or returns bills of its location (`BILL_OF_ANOTHER_LOCATION`), so a
+   return at any counter of the shop is taken there.
 6. **Number gaps** (SYN-06) are the numbers below the register's highest bill that never arrived; each is stored in
    `sync.reported_gap` and published once in `BillNumberGapDetected`.
 7. **Clock skew** (SYN-07) is measured from the `Device-Time` header on every call that sends it; beyond five minutes

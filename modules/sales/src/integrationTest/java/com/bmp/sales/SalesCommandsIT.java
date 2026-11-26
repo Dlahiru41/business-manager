@@ -92,8 +92,8 @@ class SalesCommandsIT {
                 new SalesCommands.OfflineDiscount("PERCENT", BigDecimal.TEN, "Regular", null);
 
         in(api, () -> {
-            commands.closeShift(api.shift, NOW);
-            commands.closeShift(api.shift, NOW.plusSeconds(60));
+            commands.closeShift(api.shift, api.register, NOW);
+            commands.closeShift(api.shift, api.register, NOW.plusSeconds(60));
             UUID next = UUID.randomUUID();
             commands.openShift(next, api.register, null, NOW.plusSeconds(120));
             commands.openShift(next, api.register, null, NOW.plusSeconds(120));
@@ -104,7 +104,7 @@ class SalesCommandsIT {
         in(api, () -> {
             commands.submitBill(bill(api, sold, "R1-000001", "RETAIL", tenPercent));
             commands.submitBill(bill(api, voided, "R1-000003", "RETAIL", null));
-            commands.voidBill(voided, "Wrong customer", manager, NOW);
+            commands.voidBill(voided, api.register, "Wrong customer", manager, NOW);
             return true;
         });
         JsonNode bill = SalesApi.json(api.get("/api/v1/bills/" + sold));
@@ -113,6 +113,7 @@ class SalesCommandsIT {
             commands.returnBill(new SalesCommands.OfflineReturn(
                     UUID.randomUUID(),
                     sold,
+                    api.register,
                     "Cracked",
                     List.of(new SalesCommands.OfflineReturnLine(UUID.fromString(line), BigDecimal.ONE, true)),
                     List.of(new SalesCommands.OfflineRefund("CASH", new BigDecimal("49.50"), null)),
@@ -145,6 +146,7 @@ class SalesCommandsIT {
                     commands.returnBill(new SalesCommands.OfflineReturn(
                             UUID.randomUUID(),
                             sold,
+                            api.register,
                             "Odd",
                             List.of(new SalesCommands.OfflineReturnLine(UUID.fromString(line), BigDecimal.ONE, false)),
                             List.of(new SalesCommands.OfflineRefund("BITCOIN", BigDecimal.ONE, null)),
@@ -153,5 +155,17 @@ class SalesCommandsIT {
                     return true;
                 }))
                 .isInstanceOf(BusinessRuleViolation.class);
+        UUID elsewhere = UUID.randomUUID();
+        assertThatThrownBy(() -> in(api, () -> {
+                    commands.closeShift(api.shift, elsewhere, NOW);
+                    return true;
+                }))
+                .as("SYN-01: a till closes only its own register's shifts")
+                .hasMessageStartingWith("SHIFT_OF_ANOTHER_REGISTER");
+        assertThatThrownBy(() -> in(api, () -> {
+                    commands.voidBill(sold, elsewhere, "Wrong", manager, NOW);
+                    return true;
+                }))
+                .hasMessageStartingWith("UNKNOWN_REGISTER");
     }
 }

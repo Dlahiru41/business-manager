@@ -15,11 +15,11 @@ public interface SalesCommands {
 
     void openShift(UUID shiftId, UUID registerId, @Nullable UUID cashierId, Instant openedAt);
 
-    void closeShift(UUID shiftId, Instant closedAt);
+    void closeShift(UUID shiftId, UUID registerId, Instant closedAt);
 
     void submitBill(OfflineBill bill);
 
-    void voidBill(UUID billId, String reason, @Nullable UUID approvedBy, Instant voidedAt);
+    void voidBill(UUID billId, UUID registerId, String reason, @Nullable UUID approvedBy, Instant voidedAt);
 
     void returnBill(OfflineReturn returned);
 
@@ -76,10 +76,11 @@ public interface SalesCommands {
 
     record OfflineTotals(BigDecimal subtotal, BigDecimal discountTotal, BigDecimal taxTotal, BigDecimal grandTotal) {}
 
-    /** A return; {@code creditNoteId} is the till's id for it. */
+    /** A return at the till's register {@code registerId}; {@code creditNoteId} is the till's id for it. */
     record OfflineReturn(
             UUID creditNoteId,
             UUID billId,
+            UUID registerId,
             String reason,
             List<OfflineReturnLine> lines,
             List<OfflineRefund> refunds,

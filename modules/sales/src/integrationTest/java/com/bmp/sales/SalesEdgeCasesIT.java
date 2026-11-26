@@ -451,6 +451,48 @@ class SalesEdgeCasesIT {
     }
 
     @Test
+    void sal09Sal10AVoidOrReturnIsMadeAtARegisterOfTheBillsLocation() {
+        SalesApi api = api("Counters");
+        api.settings("sales", "{\"voidRequiresManager\": false}");
+        UUID counter2 = SalesApi.id(api.post(
+                "/api/v1/registers",
+                "{\"code\": \"R2\", \"locationId\": \"" + api.location + "\", \"billPrefix\": \"R2\"}"));
+        UUID warehouse = SalesApi.id(
+                api.client.post("/api/v1/locations", api.owner, "{\"name\": \"Warehouse\", \"type\": \"WAREHOUSE\"}"));
+        UUID farAway = SalesApi.id(api.post(
+                "/api/v1/registers",
+                "{\"code\": \"W1\", \"locationId\": \"" + warehouse + "\", \"billPrefix\": \"W1\"}"));
+        UUID sold = UUID.randomUUID();
+        JsonNode bill = json(api.submit(twoEggs(api, sold)));
+        String line = bill.path("lines").get(0).path("id").asString();
+
+        assertThatProblem(api.post(
+                        "/api/v1/bills/" + sold + "/void",
+                        "{\"reason\": \"Wrong\", \"registerId\": \"" + farAway + "\"}"))
+                .hasStatus(403)
+                .hasCode("BILL_OF_ANOTHER_LOCATION");
+        assertThatProblem(api.post(
+                        "/api/v1/bills/" + sold + "/returns",
+                        "{\"id\": \"" + UUID.randomUUID() + "\", \"reason\": \"Cracked\", \"registerId\": \""
+                                + UUID.randomUUID() + "\", \"lines\": [{\"billLineId\": \"" + line
+                                + "\", \"qty\": \"1\", \"restock\": true}]}"))
+                .hasStatus(422)
+                .hasCode("UNKNOWN_REGISTER");
+        assertThat(api.post(
+                        "/api/v1/bills/" + sold + "/returns",
+                        "{\"id\": \"" + UUID.randomUUID() + "\", \"reason\": \"Cracked\", \"registerId\": \""
+                                + counter2 + "\", \"lines\": [{\"billLineId\": \"" + line
+                                + "\", \"qty\": \"1\", \"restock\": true}]}"))
+                .as("another counter of the same shop takes the return")
+                .hasStatus(201);
+        assertThat(api.post(
+                        "/api/v1/bills/" + sold + "/void",
+                        "{\"reason\": \"Wrong\", \"registerId\": \"" + counter2 + "\"}"))
+                .as("returned already: voids are for untouched bills")
+                .hasStatus(409);
+    }
+
+    @Test
     void sal11SalesKeepsNoCostOrMarginOfItsOwn() {
         List<String> columns = jdbc.sql("""
                         SELECT table_name || '.' || column_name FROM information_schema.columns
@@ -605,7 +647,8 @@ class SalesEdgeCasesIT {
                         api,
                         () -> bills.returnBill(
                                 lastMonth.id(),
-                                new BillHandlers.ReturnBill(UUID.randomUUID(), "Stale", stale, List.of(), null, null),
+                                new BillHandlers.ReturnBill(
+                                        UUID.randomUUID(), "Stale", stale, List.of(), null, null, null),
                                 Mode.ONLINE)))
                 .isInstanceOf(BusinessRuleViolation.class)
                 .hasMessageStartingWith("RETURN_WINDOW_PASSED");
@@ -614,7 +657,7 @@ class SalesEdgeCasesIT {
                                 () -> bills.returnBill(
                                         lastMonth.id(),
                                         new BillHandlers.ReturnBill(
-                                                UUID.randomUUID(), "Stale", stale, List.of(), manager, null),
+                                                UUID.randomUUID(), "Stale", stale, List.of(), manager, null, null),
                                         Mode.ONLINE))
                         .total())
                 .isEqualByComparingTo("55.00");

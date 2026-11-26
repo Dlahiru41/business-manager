@@ -23,6 +23,7 @@ public record SaleVoided(
         @Nullable UUID customerId,
         LocationId locationId,
         UUID registerId,
+        UUID refundRegisterId,
         String currency,
         String reason,
         @Nullable UUID approvedBy,

@@ -12,11 +12,13 @@ import com.bmp.test.persistence.WithPostgres;
 import com.bmp.test.security.JwtTestTokens;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -255,6 +257,76 @@ class SyncApiIT {
         assertThat(results(again).get(0).path("problem").path("code").asString())
                 .as("rejected in an earlier batch")
                 .isEqualTo("DEPENDENCY_REJECTED");
+    }
+
+    @Test
+    void syn01ATillActsForItsOwnRegisterAndRefundsAReturnFromItsOwnDrawer() {
+        SyncTill counter1 = till("Two counters");
+        UUID register2 = UUID.fromString(json(counter1.client.post(
+                        "/api/v1/registers",
+                        counter1.owner,
+                        "{\"code\": \"R2\", \"locationId\": \"" + counter1.location + "\", \"billPrefix\": \"R2\"}"))
+                .path("id")
+                .asString());
+        String till2 = JwtTestTokens.builder()
+                .tenant(counter1.tenant)
+                .device(devices.bind(register2, counter1.location))
+                .roles("DEVICE")
+                .build();
+        UUID shift1 = UUID.randomUUID();
+        UUID drawer1 = UUID.randomUUID();
+        UUID bill1 = UUID.randomUUID();
+        UUID line1 = UUID.randomUUID();
+        json(counter1.upload(
+                null,
+                counter1.shiftOpen(shift1, NOW.minusSeconds(3600)),
+                counter1.drawerOpen(drawer1, "1000.00", NOW.minusSeconds(3600)),
+                counter1.bill(bill1, line1, 1, "4", shift1, NOW.minusSeconds(3000), shift1)));
+        UUID drawer2 = UUID.randomUUID();
+        String fromCounter2 = String.join(
+                ", ",
+                counter1.drawerOpen(drawer2, "500.00", NOW.minusSeconds(1800)),
+                record(
+                        "SHIFT_CLOSE",
+                        UUID.randomUUID(),
+                        "{\"shiftId\": \"" + shift1 + "\", \"closedAt\": \"" + NOW + "\"}"),
+                record(
+                        "DRAWER_COUNT",
+                        UUID.randomUUID(),
+                        "{\"sessionId\": \"" + drawer1 + "\", \"denominations\": [{\"value\": \"1000\", \"count\": 1}],"
+                                + " \"countedAt\": \"" + NOW + "\"}"),
+                record(
+                        "RETURN",
+                        UUID.randomUUID(),
+                        "{\"billId\": \"" + bill1 + "\", \"reason\": \"Cracked\", \"lines\": [{\"billLineId\": \""
+                                + line1 + "\", \"qty\": \"1\", \"restock\": true}], \"refundTenders\": [{\"method\":"
+                                + " \"CASH\", \"amount\": \"55.00\"}], \"returnedAt\": \"" + NOW.minusSeconds(60)
+                                + "\"}"));
+
+        JsonNode results = results(json(SyncTill.checked(mvc.post()
+                .uri("/api/v1/sync/uploads")
+                .header("Authorization", "Bearer " + till2)
+                .header("Idempotency-Key", UUID.randomUUID().toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"records\": [" + fromCounter2 + "]}")
+                .exchange())));
+
+        assertThat(results)
+                .extracting(r -> r.path("status").asString() + " "
+                        + r.path("problem").path("code").asString(""))
+                .containsExactly(
+                        "ACCEPTED ",
+                        "REJECTED SHIFT_OF_ANOTHER_REGISTER",
+                        "REJECTED DRAWER_OF_ANOTHER_REGISTER",
+                        "ACCEPTED ");
+        await().atMost(Duration.ofSeconds(30))
+                .untilAsserted(() -> assertThat(counter1.<Map<String, Object>>sql(
+                                j -> j.sql("""
+                                        SELECT register_id::text AS register, drawer_session_id::text AS drawer, amount
+                                          FROM payments.refund""").query().singleRow()))
+                        .as("the return at counter 2 is paid from counter 2's drawer")
+                        .containsEntry("register", register2.toString())
+                        .containsEntry("drawer", drawer2.toString()));
     }
 
     @Test

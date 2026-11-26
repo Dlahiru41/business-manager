@@ -19,6 +19,7 @@ import com.bmp.shared.id.PackagingUnitId;
 import com.bmp.shared.id.VariantId;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
@@ -83,7 +84,8 @@ public class SalesEvents {
                 tenders(bill)));
     }
 
-    public void voided(Bill bill) {
+    /** A void at {@code refundRegister}, which gives the money back. */
+    public void voided(Bill bill, UUID refundRegister) {
         EventStamp stamp = stamps.next();
         publisher.publishEvent(new SaleVoided(
                 stamp.eventId(),
@@ -97,6 +99,7 @@ public class SalesEvents {
                 bill.customerId(),
                 LocationId.of(bill.locationId()),
                 bill.registerId(),
+                refundRegister,
                 bill.currency(),
                 Objects.requireNonNull(bill.voidReason()),
                 bill.voidApprovedBy(),
@@ -105,7 +108,8 @@ public class SalesEvents {
                 Objects.requireNonNull(bill.voidedAt())));
     }
 
-    public void returned(Bill bill, CreditNote note) {
+    /** A return at {@code refundRegister}, which pays the refund out. */
+    public void returned(Bill bill, CreditNote note, UUID refundRegister) {
         EventStamp stamp = stamps.next();
         publisher.publishEvent(new SaleReturned(
                 stamp.eventId(),
@@ -121,6 +125,7 @@ public class SalesEvents {
                 bill.customerId(),
                 LocationId.of(bill.locationId()),
                 bill.registerId(),
+                refundRegister,
                 bill.currency(),
                 note.reason(),
                 note.total(),

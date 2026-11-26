@@ -64,7 +64,7 @@ class SalePaymentsListener {
                 event.eventId(),
                 event.creditNoteId(),
                 event.billId(),
-                event.registerId(),
+                event.refundRegisterId(),
                 event.reason(),
                 event.returnedAt(),
                 event.refundTenders().stream()
@@ -80,7 +80,7 @@ class SalePaymentsListener {
         payments.refundVoid(new SaleVoid(
                 event.eventId(),
                 event.billId(),
-                event.registerId(),
+                event.refundRegisterId(),
                 event.reason(),
                 event.voidedAt(),
                 event.tenders().stream().anyMatch(t -> !t.method().equals("CREDIT"))));

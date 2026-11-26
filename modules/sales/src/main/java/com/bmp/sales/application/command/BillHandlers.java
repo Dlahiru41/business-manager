@@ -424,7 +424,24 @@ public class BillHandlers {
     @Transactional
     @Observed(name = "bmp.sales.void-bill")
     public Bill voidBill(UUID billId, String reason, @Nullable UUID approvedBy, @Nullable Instant voidedAt, Mode mode) {
+        return voidBill(billId, null, reason, approvedBy, voidedAt, mode);
+    }
+
+    /**
+     * Rule SAL-09 at a counter: {@code atRegister} (default: the bill's own) gives the money back and must be at the
+     * bill's location.
+     */
+    @Transactional
+    @Observed(name = "bmp.sales.void-bill")
+    public Bill voidBill(
+            UUID billId,
+            @Nullable UUID atRegister,
+            String reason,
+            @Nullable UUID approvedBy,
+            @Nullable Instant voidedAt,
+            Mode mode) {
         Bill bill = bills.lock(billId).orElseThrow(() -> notFound(billId));
+        UUID counter = counter(bill, atRegister);
         if (bill.status() == BillStatus.VOIDED && !mode.online()) {
             return bill; // a till resending its void
         }
@@ -442,12 +459,31 @@ public class BillHandlers {
         Bill saved = bills.saveAndFlush(bill);
         saved.lines();
         saved.tenders();
-        events.voided(saved);
+        events.voided(saved, counter);
         log.atInfo()
                 .addKeyValue("billId", saved.id())
                 .addKeyValue("number", saved.number())
                 .log("Bill voided");
         return saved;
+    }
+
+    /**
+     * The register a void or return is made at, which pays the money back: the bill's own by default, or another one
+     * of the bill's location ({@code BILL_OF_ANOTHER_LOCATION} otherwise; a till syncs for its own register only).
+     */
+    private UUID counter(Bill bill, @Nullable UUID atRegister) {
+        if (atRegister == null || atRegister.equals(bill.registerId())) {
+            return bill.registerId();
+        }
+        Register register = registers
+                .findById(atRegister)
+                .orElseThrow(() ->
+                        new BusinessRuleViolation(SalesErrorCode.UNKNOWN_REGISTER, Map.of("registerId", atRegister)));
+        if (!register.locationId().equals(bill.locationId())) {
+            throw new BusinessRuleViolation(
+                    SalesErrorCode.BILL_OF_ANOTHER_LOCATION, Map.of("billId", bill.id(), "registerId", atRegister));
+        }
+        return atRegister;
     }
 
     /** A refund the caller asked for (SAL-10). */
@@ -463,7 +499,8 @@ public class BillHandlers {
             List<Bill.ReturnLine> lines,
             List<RefundInput> refunds,
             @Nullable UUID approvedBy,
-            @Nullable Instant returnedAt) {
+            @Nullable Instant returnedAt,
+            @Nullable UUID registerId) {
 
         public ReturnBill {
             lines = List.copyOf(lines);
@@ -487,6 +524,7 @@ public class BillHandlers {
             }
         }
         Bill bill = bills.lock(billId).orElseThrow(() -> notFound(billId));
+        UUID counter = counter(bill, r.registerId());
         Instant at = r.returnedAt() != null && !mode.online() ? r.returnedAt() : clock.instant();
         LocalDate today = settings.businessDate(at);
         int window = settings.returnWindowDays();
@@ -513,7 +551,7 @@ public class BillHandlers {
         CreditNote saved = creditNotes.saveAndFlush(note);
         saved.lines();
         saved.refundTenders();
-        events.returned(bill, saved);
+        events.returned(bill, saved, counter);
         log.atInfo()
                 .addKeyValue("billId", bill.id())
                 .addKeyValue("creditNoteId", saved.id())
