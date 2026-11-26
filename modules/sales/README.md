@@ -66,7 +66,9 @@ Events in: catalog `VariantCreated`/`VariantUpdated`/`VariantDeactivated` (with 
 - `api.events.*`: the events above.
 - `api.SalesQueries`: registers for sync and documents.
 - `api.spi.CreditExposureProvider`: finance replaces sales' own fallback (Σ CREDIT tenders less CREDIT refunds) in
-  phase 04.
+  phase 04 (ADR-027).
+- Sales implements tenant's `BusinessActivityProbe` (TEN-02): CONFIRMED once the tenant has any bill, which locks
+  its currency and time zone for everyone (ADR-027).
 
 Sales reads `tenant::api` (settings, locations, numbering), `iam::api` (approvers, devices), `catalog::api`,
 `party::api` and `pricing::api`. It never calls payments, inventory or finance.

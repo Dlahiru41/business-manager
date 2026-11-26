@@ -120,9 +120,9 @@ final class JpaSalesStores {
         }
 
         @Override
-        public boolean anyCompleted() {
+        public boolean anyBill() {
             return Boolean.TRUE.equals(jdbc.sql("""
-                            SELECT EXISTS (SELECT 1 FROM sales.bill WHERE tenant_id = :tenantId AND status <> 'DRAFT')
+                            SELECT EXISTS (SELECT 1 FROM sales.bill WHERE tenant_id = :tenantId)
                             """)
                     .param("tenantId", TenantContext.require().value())
                     .query(Boolean.class)

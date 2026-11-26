@@ -3,27 +3,37 @@ package com.bmp.tenant.application;
 import com.bmp.shared.id.TenantId;
 import com.bmp.tenant.api.spi.ActivityEvidence;
 import com.bmp.tenant.api.spi.BusinessActivityProbe;
-import java.util.ArrayList;
 import java.util.List;
-import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Component;
 
 /**
- * Picks the {@link BusinessActivityProbe} with the highest precedence: a downstream implementation (sales, phase 03)
- * when present, otherwise the conservative default {@link TenantAgeActivityProbe}.
+ * Asks every {@link BusinessActivityProbe} and keeps the strongest answer (TEN-02, ADR-027): each downstream module
+ * knows only its own documents (sales its bills), so one module's {@link ActivityEvidence#NONE} never overrules another
+ * module's documents or the conservative default {@link TenantAgeActivityProbe}.
  */
 @Component
 public class BusinessActivityProbes {
 
-    private final BusinessActivityProbe probe;
+    private final List<BusinessActivityProbe> probes;
 
     public BusinessActivityProbes(List<BusinessActivityProbe> probes) {
-        List<BusinessActivityProbe> ordered = new ArrayList<>(probes);
-        AnnotationAwareOrderComparator.sort(ordered);
-        this.probe = ordered.getFirst();
+        if (probes.isEmpty()) {
+            throw new IllegalArgumentException("TEN-02 needs at least the default activity probe");
+        }
+        this.probes = List.copyOf(probes);
     }
 
     public ActivityEvidence evidenceOf(TenantId tenant) {
-        return probe.evidenceOf(tenant);
+        ActivityEvidence strongest = ActivityEvidence.NONE;
+        for (BusinessActivityProbe probe : probes) {
+            ActivityEvidence evidence = probe.evidenceOf(tenant);
+            if (evidence == ActivityEvidence.CONFIRMED) {
+                return evidence;
+            }
+            if (evidence.compareTo(strongest) > 0) {
+                strongest = evidence;
+            }
+        }
+        return strongest;
     }
 }

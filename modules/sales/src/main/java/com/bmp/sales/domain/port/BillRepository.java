@@ -32,8 +32,8 @@ public interface BillRepository {
     /** Σ CREDIT tenders of the customer's completed bills less what credit notes credited back (SAL-07 default). */
     BigDecimal creditExposure(UUID customerId);
 
-    /** Whether the tenant has any completed bill (TEN-02). */
-    boolean anyCompleted();
+    /** Rule TEN-02: whether the tenant has any bill, a draft included. */
+    boolean anyBill();
 
     Bill saveAndFlush(Bill bill);
 }
