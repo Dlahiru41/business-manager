@@ -9,7 +9,7 @@ Agents update this file at the end of every task and every phase. Keep it short 
 | 00 | Foundation | done | phase/00-foundation | 2026-11-22 |
 | 01 | Catalog and pricing | done | phase/01-catalog-and-pricing | 2026-11-22 |
 | 02 | Inventory and procurement | done | phase/02-inventory-and-procurement | 2026-11-23 |
-| 03 | Sales, payments, sync and printing | in progress | phase/03-sales-payments-sync-printing | |
+| 03 | Sales, payments, sync and printing | done | phase/03-sales-payments-sync-printing | 2026-11-27 |
 | 04 | Finance and reporting | not started | | |
 | 05 | Multi-business onboarding | not started | | |
 | 06 | Scale-out to microservices | not started | | |
@@ -20,10 +20,10 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 
 - Phase: 03 — Sales, payments, offline sync and printing (started 2026-11-25, branch
   `phase/03-sales-payments-sync-printing`)
-- Current task: phase close — all tasks, the Definition of Done and the review fixes are done
-- Next step (exact, so a new session can resume): with the user's approval, merge
-  `phase/03-sales-payments-sync-printing` into `main` once CI is green (including `print-agent-installer`), close the
-  "Phase 03 started" issue, set the phase to done in the Status table, then start phase 04 with `/run-phase 04`.
+- Current task: none — phase 03 closed; CI was green on the branch head (all jobs, both print-agent installers) and
+  the branch was merged into `main` on 2026-11-27
+- Next step (exact, so a new session can resume): close the "Phase 03 started" issue on GitHub, then start phase 04
+  with `/run-phase 04`.
 
 ## Task checklist (current phase)
 
