@@ -1,0 +1,61 @@
+# Print agent defaults. The installation's own settings go in agent.yaml (see agent.example.yaml), next to the agent
+# or in ~/bmp-print-agent/; at least agent.local-token must be set there.
+spring:
+  application:
+    name: print-agent
+  config:
+    import:
+      - optional:file:${user.home}/bmp-print-agent/agent.yaml
+      - optional:file:./agent.yaml
+  main:
+    banner-mode: off
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:h2:file:${agent.data-dir}/print-agent
+    username: agent
+  flyway:
+    locations: classpath:db/migration
+  mvc:
+    problemdetails:
+      enabled: true
+
+server:
+  # Only the till on this PC may call the agent.
+  address: 127.0.0.1
+  port: 9123
+
+agent:
+  data-dir: ${user.home}/bmp-print-agent
+  shop-name: Receipt
+  paper-width-mm: 80
+  allowed-origins: []
+  printer:
+    type: TCP
+    host: 127.0.0.1
+    port: 9100
+    baud-rate: 9600
+    timeout: 2s
+  queue:
+    poll-interval: 2s
+    max-backoff: 60s
+    cloud-max-attempts: 5
+    retention: 7d
+  cloud:
+    enabled: false
+    wait-seconds: 25
+    max-backoff: 60s
+    template-refresh: 5m
+
+# JSON lines (ECS) in rolling files; receipts are never logged (05-logging-and-observability.md).
+logging:
+  file:
+    name: ${agent.data-dir}/logs/print-agent.log
+  structured:
+    format:
+      file: ecs
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 14

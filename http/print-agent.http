@@ -1,0 +1,22 @@
+# Print agent on the shop PC (print-agent/README.md): http://127.0.0.1:9123, with the local token of agent.yaml as
+# agentToken in http-client.private.env.json.
+
+### How the agent is: printer, queue, cloud link, template version
+GET http://127.0.0.1:9123/v1/status
+Authorization: Bearer {{agentToken}}
+
+### Print a receipt (documents.yaml ReceiptModel): 200 PRINTED, or 202 QUEUED while the printer is away
+POST http://127.0.0.1:9123/v1/print
+Authorization: Bearer {{agentToken}}
+Content-Type: application/json
+
+{"billId": "{{$uuid}}", "billNumber": "R1-000042", "issuedAt": "2026-11-25T14:30:00", "cashier": "Nimal",
+ "register": "R1",
+ "lines": [{"name": "Eggs Red L", "qty": "10", "unit": "piece", "unitPrice": "55.00", "lineTotal": "550.00"},
+           {"name": "Karola dried fish", "qty": "0.35", "unit": "kg", "unitPrice": "2400.00", "lineTotal": "840.00"}],
+ "total": "1390.00", "tenders": [{"method": "CASH", "amount": "1390.00"}], "change": "110.00",
+ "currency": "LKR", "cashTendered": true}
+
+### Open the cash drawer now (503 while the printer is away)
+POST http://127.0.0.1:9123/v1/drawer/open
+Authorization: Bearer {{agentToken}}

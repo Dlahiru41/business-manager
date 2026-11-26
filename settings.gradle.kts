@@ -34,3 +34,6 @@ file("modules")
     .forEach { include("modules:${it.name}") }
 
 include("app")
+
+// The print agent on the shop PC (phase 03): a separate application, not part of the platform.
+include("print-agent")
