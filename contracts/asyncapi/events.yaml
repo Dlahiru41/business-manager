@@ -3048,22 +3048,25 @@ components:
       - lines
       - postedAt
       properties:
-        eventId: &id001
+        eventId:
           $ref: '#/components/schemas/Uuid'
-        tenantId: *id001
-        occurredAt: &id003
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
           type: string
           format: date-time
-        aggregateId: *id001
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
         aggregateVersion:
           type: integer
           minimum: 0
         metadata:
           $ref: '#/components/schemas/EventMetadata'
-        journalId: *id001
+        journalId:
+          $ref: '#/components/schemas/Uuid'
         number:
           type: string
-        entryDate: &id005
+        entryDate:
           type: string
           format: date
         period:
@@ -3071,12 +3074,15 @@ components:
           pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
         sourceType:
           type: string
-        sourceId: *id001
-        sourceEventId: *id001
-        reversesId: *id001
+        sourceId:
+          $ref: '#/components/schemas/Uuid'
+        sourceEventId:
+          $ref: '#/components/schemas/Uuid'
+        reversesId:
+          $ref: '#/components/schemas/Uuid'
         memo:
           type: string
-        currency: &id004
+        currency:
           type: string
           pattern: ^[A-Z]{3}$
         lines:
@@ -3091,21 +3097,26 @@ components:
             - debit
             - credit
             properties:
-              accountId: *id001
+              accountId:
+                $ref: '#/components/schemas/Uuid'
               accountCode:
                 type: string
               systemKey:
                 type: string
-              debit: &id002
+              debit:
                 $ref: '#/components/schemas/Decimal'
-              credit: *id002
+              credit:
+                $ref: '#/components/schemas/Decimal'
               partyType:
                 type: string
                 enum:
                 - CUSTOMER
                 - SUPPLIER
-              partyId: *id001
-        postedAt: *id003
+              partyId:
+                $ref: '#/components/schemas/Uuid'
+        postedAt:
+          type: string
+          format: date-time
     ExpenseRecorded:
       type: object
       additionalProperties: false
@@ -3125,30 +3136,46 @@ components:
       - expenseDate
       - journalId
       properties:
-        eventId: *id001
-        tenantId: *id001
-        occurredAt: *id003
-        aggregateId: *id001
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
         aggregateVersion:
           type: integer
           minimum: 0
         metadata:
           $ref: '#/components/schemas/EventMetadata'
-        expenseId: *id001
-        categoryId: *id001
-        accountId: *id001
-        amount: *id002
-        currency: *id004
+        expenseId:
+          $ref: '#/components/schemas/Uuid'
+        categoryId:
+          $ref: '#/components/schemas/Uuid'
+        accountId:
+          $ref: '#/components/schemas/Uuid'
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
         paidFrom:
           type: string
           enum:
           - CASH_DRAWER
           - BANK
           - PAYABLE
-        expenseDate: *id005
-        drawerSessionId: *id001
-        supplierId: *id001
-        journalId: *id001
+        expenseDate:
+          type: string
+          format: date
+        drawerSessionId:
+          $ref: '#/components/schemas/Uuid'
+        supplierId:
+          $ref: '#/components/schemas/Uuid'
+        journalId:
+          $ref: '#/components/schemas/Uuid'
     ReceivableOverdue:
       type: object
       additionalProperties: false
@@ -3166,23 +3193,35 @@ components:
       - currency
       - asOf
       properties:
-        eventId: *id001
-        tenantId: *id001
-        occurredAt: *id003
-        aggregateId: *id001
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
         aggregateVersion:
           type: integer
           minimum: 0
         metadata:
           $ref: '#/components/schemas/EventMetadata'
-        customerId: *id001
-        balance: *id002
-        overdueAmount: *id002
+        customerId:
+          $ref: '#/components/schemas/Uuid'
+        balance:
+          $ref: '#/components/schemas/Decimal'
+        overdueAmount:
+          $ref: '#/components/schemas/Decimal'
         daysOverdue:
           type: integer
           minimum: 0
-        currency: *id004
-        asOf: *id005
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        asOf:
+          type: string
+          format: date
     PeriodClosed:
       type: object
       additionalProperties: false
@@ -3197,10 +3236,15 @@ components:
       - yearEnd
       - closedAt
       properties:
-        eventId: *id001
-        tenantId: *id001
-        occurredAt: *id003
-        aggregateId: *id001
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
         aggregateVersion:
           type: integer
           minimum: 0
@@ -3211,8 +3255,11 @@ components:
           pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
         yearEnd:
           type: boolean
-        closingJournalId: *id001
-        closedAt: *id003
+        closingJournalId:
+          $ref: '#/components/schemas/Uuid'
+        closedAt:
+          type: string
+          format: date-time
     DataQualityIssueFound:
       type: object
       additionalProperties: false
@@ -3228,23 +3275,35 @@ components:
       - sourceId
       - detectedAt
       properties:
-        eventId: *id001
-        tenantId: *id001
-        occurredAt: *id003
-        aggregateId: *id001
+        eventId:
+          $ref: '#/components/schemas/Uuid'
+        tenantId:
+          $ref: '#/components/schemas/Uuid'
+        occurredAt:
+          type: string
+          format: date-time
+        aggregateId:
+          $ref: '#/components/schemas/Uuid'
         aggregateVersion:
           type: integer
           minimum: 0
         metadata:
           $ref: '#/components/schemas/EventMetadata'
-        issueId: *id001
+        issueId:
+          $ref: '#/components/schemas/Uuid'
         kind:
           type: string
           enum:
           - RETURN_WITHOUT_REFUND
           - BILL_WITHOUT_STOCK_ISSUE
           - POS_CLEARING_NOT_ZERO
-        sourceId: *id001
-        amount: *id002
-        currency: *id004
-        detectedAt: *id003
+        sourceId:
+          $ref: '#/components/schemas/Uuid'
+        amount:
+          $ref: '#/components/schemas/Decimal'
+        currency:
+          type: string
+          pattern: ^[A-Z]{3}$
+        detectedAt:
+          type: string
+          format: date-time

@@ -39,30 +39,29 @@ paths:
       - INVALID_PARAMETER
       - INVALID_DATE_RANGE
       parameters:
-      - &id003
-        name: from
+      - name: from
         in: query
         required: true
-        schema: &id001
+        schema:
           type: string
           format: date
         description: First business date.
-      - &id004
-        name: to
+      - name: to
         in: query
         required: true
-        schema: *id001
+        schema:
+          type: string
+          format: date
         description: Last business date (at most 366 days after `from`).
       - name: groupBy
         in: query
         required: true
         schema:
           $ref: '#/components/schemas/ProfitGroupBy'
-      - &id005
-        name: locationId
+      - name: locationId
         in: query
         required: false
-        schema: &id013
+        schema:
           type: string
           format: uuid
       - name: channel
@@ -73,8 +72,7 @@ paths:
           enum:
           - RETAIL
           - WHOLESALE
-      - &id009
-        $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Limit
       - $ref: ./common.yaml#/components/parameters/Cursor
       responses:
         '200':
@@ -219,14 +217,17 @@ paths:
       - name: from
         in: query
         required: true
-        schema: &id002
+        schema:
           type: string
           pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
           example: 2026-11
       - name: to
         in: query
         required: true
-        schema: *id002
+        schema:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          example: 2026-11
       responses:
         '200':
           description: OK.
@@ -289,14 +290,31 @@ paths:
       - INVALID_PARAMETER
       - INVALID_DATE_RANGE
       parameters:
-      - *id003
-      - *id004
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        description: First business date.
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        description: Last business date (at most 366 days after `from`).
       - name: groupBy
         in: query
         required: true
         schema:
           $ref: '#/components/schemas/SalesGroupBy'
-      - *id005
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK.
@@ -345,7 +363,7 @@ paths:
       - name: asOf
         in: query
         required: false
-        schema: &id017
+        schema:
           type: string
           format: date-time
         description: Default now.
@@ -354,7 +372,12 @@ paths:
         required: false
         schema:
           $ref: '#/components/schemas/ValuationGroupBy'
-      - *id005
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK.
@@ -394,14 +417,31 @@ paths:
       - INVALID_PARAMETER
       - INVALID_DATE_RANGE
       parameters:
-      - *id003
-      - *id004
+      - name: from
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        description: First business date.
+      - name: to
+        in: query
+        required: true
+        schema:
+          type: string
+          format: date
+        description: Last business date (at most 366 days after `from`).
       - name: groupBy
         in: query
         required: true
         schema:
           $ref: '#/components/schemas/WastageGroupBy'
-      - *id005
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK.
@@ -448,7 +488,9 @@ paths:
       - name: date
         in: query
         required: false
-        schema: *id001
+        schema:
+          type: string
+          format: date
         description: Business date of the reconciliation; default today.
       responses:
         '200':
@@ -503,7 +545,9 @@ paths:
       - name: asOf
         in: query
         required: false
-        schema: *id001
+        schema:
+          type: string
+          format: date
       responses:
         '200':
           description: OK.
@@ -513,14 +557,14 @@ paths:
                 $ref: '#/components/schemas/AgingReport'
               example:
                 dataFreshAsOf: '2026-11-25T18:02:11Z'
-                filters: &id007
+                filters:
                   asOf: '2026-11-30'
                 rows:
                 - partyId: 0193d000-0000-7000-8000-000000000102
                   balance:
                     amount: '1300.00'
                     currency: LKR
-                  buckets: &id006
+                  buckets:
                     days0To30:
                       amount: '800.00'
                       currency: LKR
@@ -533,11 +577,23 @@ paths:
                     days90Plus:
                       amount: '0.00'
                       currency: LKR
-                totals: &id008
+                totals:
                   balance:
                     amount: '1300.00'
                     currency: LKR
-                  buckets: *id006
+                  buckets:
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
         '400':
           $ref: ./common.yaml#/components/responses/BadRequest
         '401':
@@ -557,7 +613,9 @@ paths:
       - name: asOf
         in: query
         required: false
-        schema: *id001
+        schema:
+          type: string
+          format: date
       responses:
         '200':
           description: OK.
@@ -567,14 +625,43 @@ paths:
                 $ref: '#/components/schemas/AgingReport'
               example:
                 dataFreshAsOf: '2026-11-25T18:02:11Z'
-                filters: *id007
+                filters:
+                  asOf: '2026-11-30'
                 rows:
                 - partyId: 0193c000-0000-7000-8000-000000000201
                   balance:
                     amount: '1300.00'
                     currency: LKR
-                  buckets: *id006
-                totals: *id008
+                  buckets:
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
+                totals:
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets:
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
         '400':
           $ref: ./common.yaml#/components/responses/BadRequest
         '401':
@@ -596,9 +683,16 @@ paths:
       - name: date
         in: query
         required: false
-        schema: *id001
+        schema:
+          type: string
+          format: date
         description: Business date; default today.
-      - *id005
+      - name: locationId
+        in: query
+        required: false
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK.
@@ -667,7 +761,7 @@ paths:
           - OPEN
           - RESOLVED
           default: OPEN
-      - *id009
+      - $ref: ./common.yaml#/components/parameters/Limit
       responses:
         '200':
           description: OK.
@@ -708,8 +802,7 @@ paths:
       - IDEMPOTENCY_KEY_REUSED
       - REQUEST_IN_PROGRESS
       parameters:
-      - &id010
-        $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
       requestBody:
         required: true
         content:
@@ -892,7 +985,7 @@ paths:
       - IDEMPOTENCY_KEY_REUSED
       - REQUEST_IN_PROGRESS
       parameters:
-      - *id010
+      - $ref: ./common.yaml#/components/parameters/IdempotencyKey
       responses:
         '202':
           description: 'Accepted: the operation runs in the background.'
@@ -972,20 +1065,24 @@ components:
           description: 'The group: an id, a channel, a date or a month.'
         label:
           type: string
-        qty: &id014
+        qty:
           type: string
           pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
           example: '30'
-        bills: &id016
+        bills:
           type: integer
           format: int32
-        revenue: &id011
+        revenue:
           $ref: ./common.yaml#/components/schemas/Money
-        discount: *id011
-        tax: *id011
-        cost: *id011
-        margin: *id011
-        marginPct: &id012
+        discount:
+          $ref: ./common.yaml#/components/schemas/Money
+        tax:
+          $ref: ./common.yaml#/components/schemas/Money
+        cost:
+          $ref: ./common.yaml#/components/schemas/Money
+        margin:
+          $ref: ./common.yaml#/components/schemas/Money
+        marginPct:
           type: string
           pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
           example: '30'
@@ -999,12 +1096,21 @@ components:
       - cost
       - margin
       properties:
-        revenue: *id011
-        discount: *id011
-        tax: *id011
-        cost: *id011
-        margin: *id011
-        marginPct: *id012
+        revenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        discount:
+          $ref: ./common.yaml#/components/schemas/Money
+        tax:
+          $ref: ./common.yaml#/components/schemas/Money
+        cost:
+          $ref: ./common.yaml#/components/schemas/Money
+        margin:
+          $ref: ./common.yaml#/components/schemas/Money
+        marginPct:
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
+          description: margin / revenue × 100, 2 decimals; absent when revenue is 0.
     ProfitReport:
       type: object
       required:
@@ -1013,7 +1119,7 @@ components:
       - totals
       - page
       properties:
-        dataFreshAsOf: &id015
+        dataFreshAsOf:
           type: string
           format: date-time
           description: When the last event reflected here was processed (REP-03); absent before the first.
@@ -1037,12 +1143,22 @@ components:
       - cost
       - margin
       properties:
-        billLineId: *id013
-        variantId: *id013
-        qty: *id014
-        revenue: *id011
-        cost: *id011
-        margin: *id011
+        billLineId:
+          type: string
+          format: uuid
+        variantId:
+          type: string
+          format: uuid
+        qty:
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
+        revenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        cost:
+          $ref: ./common.yaml#/components/schemas/Money
+        margin:
+          $ref: ./common.yaml#/components/schemas/Money
     BillProfit:
       type: object
       required:
@@ -1058,15 +1174,26 @@ components:
       - lines
       - returns
       properties:
-        dataFreshAsOf: *id015
-        billId: *id013
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
+        billId:
+          type: string
+          format: uuid
         number:
           type: string
-        businessDate: *id001
-        grandTotal: *id011
-        taxTotal: *id011
-        cost: *id011
-        margin: *id011
+        businessDate:
+          type: string
+          format: date
+        grandTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        taxTotal:
+          $ref: ./common.yaml#/components/schemas/Money
+        cost:
+          $ref: ./common.yaml#/components/schemas/Money
+        margin:
+          $ref: ./common.yaml#/components/schemas/Money
         costComplete:
           type: boolean
           description: False until every line's stock issue arrived.
@@ -1085,8 +1212,10 @@ components:
           - revenue
           - cost
           properties:
-            revenue: *id011
-            cost: *id011
+            revenue:
+              $ref: ./common.yaml#/components/schemas/Money
+            cost:
+              $ref: ./common.yaml#/components/schemas/Money
     ProfitAndLossReport:
       type: object
       required:
@@ -1103,20 +1232,34 @@ components:
       - operatingExpenses
       - profit
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
-        revenue: *id011
-        returns: *id011
-        discounts: *id011
-        netRevenue: *id011
-        costOfGoodsSold: *id011
-        wastage: *id011
-        countVariance: *id011
-        purchasePriceVariance: *id011
-        cashOverShort: *id011
-        operatingExpenses: *id011
-        profit: *id011
+        revenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        returns:
+          $ref: ./common.yaml#/components/schemas/Money
+        discounts:
+          $ref: ./common.yaml#/components/schemas/Money
+        netRevenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        costOfGoodsSold:
+          $ref: ./common.yaml#/components/schemas/Money
+        wastage:
+          $ref: ./common.yaml#/components/schemas/Money
+        countVariance:
+          $ref: ./common.yaml#/components/schemas/Money
+        purchasePriceVariance:
+          $ref: ./common.yaml#/components/schemas/Money
+        cashOverShort:
+          $ref: ./common.yaml#/components/schemas/Money
+        operatingExpenses:
+          $ref: ./common.yaml#/components/schemas/Money
+        profit:
+          $ref: ./common.yaml#/components/schemas/Money
     SalesRow:
       type: object
       required:
@@ -1132,11 +1275,15 @@ components:
           type: integer
           format: int32
           description: Bills, or payments for PAYMENT_METHOD.
-        qty: *id014
+        qty:
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
         net:
           $ref: ./common.yaml#/components/schemas/Money
           description: Net of discounts and tax.
-        tax: *id011
+        tax:
+          $ref: ./common.yaml#/components/schemas/Money
         gross:
           $ref: ./common.yaml#/components/schemas/Money
           description: What customers paid (net of refunds for PAYMENT_METHOD).
@@ -1147,7 +1294,10 @@ components:
       - rows
       - totals
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         rows:
@@ -1160,10 +1310,15 @@ components:
           - count
           - gross
           properties:
-            count: *id016
-            net: *id011
-            tax: *id011
-            gross: *id011
+            count:
+              type: integer
+              format: int32
+            net:
+              $ref: ./common.yaml#/components/schemas/Money
+            tax:
+              $ref: ./common.yaml#/components/schemas/Money
+            gross:
+              $ref: ./common.yaml#/components/schemas/Money
     StockValuationReport:
       type: object
       required:
@@ -1171,7 +1326,10 @@ components:
       - rows
       - total
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         rows:
@@ -1186,9 +1344,14 @@ components:
                 type: string
               label:
                 type: string
-              qtyBase: *id014
-              value: *id011
-        total: *id011
+              qtyBase:
+                type: string
+                pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+                example: '30'
+              value:
+                $ref: ./common.yaml#/components/schemas/Money
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
     WastageReport:
       type: object
       required:
@@ -1196,7 +1359,10 @@ components:
       - rows
       - total
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         rows:
@@ -1212,9 +1378,14 @@ components:
                 type: string
               label:
                 type: string
-              qtyBase: *id014
-              cost: *id011
-        total: *id011
+              qtyBase:
+                type: string
+                pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+                example: '30'
+              cost:
+                $ref: ./common.yaml#/components/schemas/Money
+        total:
+          $ref: ./common.yaml#/components/schemas/Money
     CashPositionReport:
       type: object
       required:
@@ -1222,7 +1393,10 @@ components:
       - rows
       - totals
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         rows:
@@ -1237,12 +1411,21 @@ components:
             - variance
             - reconciledAt
             properties:
-              sessionId: *id013
-              registerId: *id013
-              expected: *id011
-              counted: *id011
-              variance: *id011
-              reconciledAt: *id017
+              sessionId:
+                type: string
+                format: uuid
+              registerId:
+                type: string
+                format: uuid
+              expected:
+                $ref: ./common.yaml#/components/schemas/Money
+              counted:
+                $ref: ./common.yaml#/components/schemas/Money
+              variance:
+                $ref: ./common.yaml#/components/schemas/Money
+              reconciledAt:
+                type: string
+                format: date-time
         totals:
           type: object
           required:
@@ -1250,9 +1433,12 @@ components:
           - counted
           - variance
           properties:
-            expected: *id011
-            counted: *id011
-            variance: *id011
+            expected:
+              $ref: ./common.yaml#/components/schemas/Money
+            counted:
+              $ref: ./common.yaml#/components/schemas/Money
+            variance:
+              $ref: ./common.yaml#/components/schemas/Money
     AgingBuckets:
       type: object
       required:
@@ -1261,10 +1447,14 @@ components:
       - days61To90
       - days90Plus
       properties:
-        days0To30: *id011
-        days31To60: *id011
-        days61To90: *id011
-        days90Plus: *id011
+        days0To30:
+          $ref: ./common.yaml#/components/schemas/Money
+        days31To60:
+          $ref: ./common.yaml#/components/schemas/Money
+        days61To90:
+          $ref: ./common.yaml#/components/schemas/Money
+        days90Plus:
+          $ref: ./common.yaml#/components/schemas/Money
     AgingReport:
       type: object
       required:
@@ -1272,7 +1462,10 @@ components:
       - rows
       - totals
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         rows:
@@ -1284,8 +1477,11 @@ components:
             - balance
             - buckets
             properties:
-              partyId: *id013
-              balance: *id011
+              partyId:
+                type: string
+                format: uuid
+              balance:
+                $ref: ./common.yaml#/components/schemas/Money
               buckets:
                 $ref: '#/components/schemas/AgingBuckets'
         totals:
@@ -1294,7 +1490,8 @@ components:
           - balance
           - buckets
           properties:
-            balance: *id011
+            balance:
+              $ref: ./common.yaml#/components/schemas/Money
             buckets:
               $ref: '#/components/schemas/AgingBuckets'
     OwnerDashboard:
@@ -1313,18 +1510,31 @@ components:
       - negativeStockItems
       - unsyncedDevices
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
-        date: *id001
+        date:
+          type: string
+          format: date
         sales:
           $ref: ./common.yaml#/components/schemas/Money
           description: Revenue net of discounts and tax.
-        grossMargin: *id011
-        marginPct: *id014
-        bills: *id016
-        cashExpected: *id011
-        cashCounted: *id011
+        grossMargin:
+          $ref: ./common.yaml#/components/schemas/Money
+        marginPct:
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
+        bills:
+          type: integer
+          format: int32
+        cashExpected:
+          $ref: ./common.yaml#/components/schemas/Money
+        cashCounted:
+          $ref: ./common.yaml#/components/schemas/Money
         topProducts:
           type: array
           maxItems: 5
@@ -1335,15 +1545,26 @@ components:
             - revenue
             - margin
             properties:
-              variantId: *id013
+              variantId:
+                type: string
+                format: uuid
               label:
                 type: string
-              revenue: *id011
-              margin: *id011
-        lowStockItems: *id016
-        overdueReceivables: *id011
-        negativeStockItems: *id016
-        unsyncedDevices: *id016
+              revenue:
+                $ref: ./common.yaml#/components/schemas/Money
+              margin:
+                $ref: ./common.yaml#/components/schemas/Money
+        lowStockItems:
+          type: integer
+          format: int32
+        overdueReceivables:
+          $ref: ./common.yaml#/components/schemas/Money
+        negativeStockItems:
+          type: integer
+          format: int32
+        unsyncedDevices:
+          type: integer
+          format: int32
     DataQualityKind:
       type: string
       enum:
@@ -1359,7 +1580,9 @@ components:
       - status
       - detectedAt
       properties:
-        id: *id013
+        id:
+          type: string
+          format: uuid
         kind:
           $ref: '#/components/schemas/DataQualityKind'
         sourceId:
@@ -1371,16 +1594,24 @@ components:
           enum:
           - OPEN
           - RESOLVED
-        amount: *id011
-        detectedAt: *id017
-        resolvedAt: *id017
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        detectedAt:
+          type: string
+          format: date-time
+        resolvedAt:
+          type: string
+          format: date-time
     DataQualityReport:
       type: object
       required:
       - filters
       - items
       properties:
-        dataFreshAsOf: *id015
+        dataFreshAsOf:
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
         filters:
           $ref: '#/components/schemas/Filters'
         items:
@@ -1437,8 +1668,12 @@ components:
             asOf:
               type: string
               maxLength: 30
-            date: *id001
-            locationId: *id013
+            date:
+              type: string
+              format: date
+            locationId:
+              type: string
+              format: uuid
             channel:
               type: string
               maxLength: 20
@@ -1451,7 +1686,9 @@ components:
       - status
       - createdAt
       properties:
-        id: *id013
+        id:
+          type: string
+          format: uuid
         report:
           $ref: '#/components/schemas/ReportName'
         format:
@@ -1464,8 +1701,12 @@ components:
           - SUCCEEDED
           - FAILED
           - EXPIRED
-        createdAt: *id017
-        expiresAt: *id017
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
         sizeBytes:
           type: integer
           format: int64
