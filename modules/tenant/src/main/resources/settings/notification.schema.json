@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Notification",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "ownerEmail": {
+      "description": "Where owner e-mails go; empty for none. Personal data: never logged.",
+      "type": "string",
+      "maxLength": 254,
+      "pattern": "^$|^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+      "default": ""
+    },
+    "ownerPhone": {
+      "description": "Where owner SMS go (E.164); empty for none. Personal data: never logged.",
+      "type": "string",
+      "pattern": "^$|^\\+[1-9][0-9]{7,14}$",
+      "default": ""
+    },
+    "language": {
+      "description": "Language of the owner's messages.",
+      "enum": [
+        "en",
+        "si",
+        "ta"
+      ],
+      "default": "en"
+    },
+    "stockLevelLow": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "EMAIL",
+          "SMS"
+        ]
+      },
+      "default": [],
+      "description": "Channels for StockLevelLow (opt-in)."
+    },
+    "receivableOverdue": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "EMAIL",
+          "SMS"
+        ]
+      },
+      "default": [],
+      "description": "Channels for ReceivableOverdue (opt-in)."
+    },
+    "drawerVariance": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "EMAIL",
+          "SMS"
+        ]
+      },
+      "default": [],
+      "description": "Channels for a drawer variance above payments.drawerVarianceAlertAmount (opt-in)."
+    },
+    "billNumberGap": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "EMAIL",
+          "SMS"
+        ]
+      },
+      "default": [],
+      "description": "Channels for BillNumberGapDetected (opt-in)."
+    },
+    "dataQuality": {
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 2,
+      "items": {
+        "enum": [
+          "EMAIL",
+          "SMS"
+        ]
+      },
+      "default": [],
+      "description": "Channels for DataQualityIssueFound (opt-in)."
+    }
+  }
+}

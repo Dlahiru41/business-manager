@@ -13,7 +13,8 @@ public enum SettingGroup {
     TAX,
     FINANCE,
     PAYMENTS,
-    NUMBERING;
+    NUMBERING,
+    NOTIFICATION;
 
     /** The group name used in URLs, storage and events, e.g. {@code general}. */
     public String code() {

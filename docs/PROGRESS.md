@@ -19,14 +19,14 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 04 — Finance and reporting (started 2026-11-27, branch `phase/04-finance-and-reporting`)
-- Current task: T04-01 Contracts
-- Next step (exact, so a new session can resume): write `contracts/openapi/finance.yaml`, `reporting.yaml` and the
-  phase's AsyncAPI events, then T04-02.
+- Current task: T04-02 Finance domain
+- Next step (exact, so a new session can resume): create `modules/finance` (build file, package-info with allowed
+  dependencies tenant, party, catalog, procurement, inventory, sales, payments), then TDD the domain per ADR-032.
 
 ## Task checklist (current phase)
 
 Phase 04:
-- [ ] T04-01 Contracts (`finance.yaml`, `reporting.yaml`, AsyncAPI `ExpenseRecorded`, `JournalPosted`, `ReceivableOverdue`, `PeriodClosed`)
+- [x] T04-01 Contracts — `finance.yaml` (accounts, journals, trial balance, P&L, expense categories, expenses, receivables and payables aging and statements, supplier payments, cash drops, periods with close checks and the 202 close, party-balance rebuild), `reporting.yaml` (REP-02..REP-07 reports, owner dashboard, data quality, exports with signed links, `/operations/{id}`, read-model rebuild), `Operation` in `common.yaml`; AsyncAPI `JournalPosted`, `ExpenseRecorded`, `ReceivableOverdue`, `PeriodClosed`, `DataQualityIssueFound` and the additive `PaymentCaptured.allocations`; settings `finance.fiscalYearStartMonth`, `overdueGraceDays`, `inputTaxReclaimable` and the `notification` group (ADR-032)
 - [ ] T04-02 Finance domain (TDD): `Account`, `JournalEntry`, `PostingRule` per event, `OpenItem` settlement, `FiscalPeriod`
 - [ ] T04-03 Finance listeners and persistence (inbox-guarded listeners, `JdbcClient` journal writer, `party_balance` and its rebuild)
 - [ ] T04-04 Expenses, receivables, payables, supplier payments, periods; `CreditExposureProvider` (FIN-06..FIN-11)

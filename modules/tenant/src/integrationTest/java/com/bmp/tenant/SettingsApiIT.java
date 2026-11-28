@@ -65,7 +65,7 @@ class SettingsApiIT {
     void shouldServeEveryGroupWithDefaults() {
         MvcTestResult all = api.get("/api/v1/settings", owner);
         CONTRACT.assertConforms(all);
-        assertThat(json(all).path("groups").size()).isEqualTo(8);
+        assertThat(json(all).path("groups").size()).isEqualTo(9);
 
         MvcTestResult sales = api.get("/api/v1/settings/sales", owner);
         CONTRACT.assertConforms(sales);

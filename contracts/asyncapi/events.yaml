@@ -122,6 +122,31 @@ channels:
     messages:
       BillNumberGapDetected:
         $ref: '#/components/messages/BillNumberGapDetected'
+  financeJournal:
+    address: bmp.finance.journal
+    messages:
+      JournalPosted:
+        $ref: '#/components/messages/JournalPosted'
+  financeExpense:
+    address: bmp.finance.expense
+    messages:
+      ExpenseRecorded:
+        $ref: '#/components/messages/ExpenseRecorded'
+  financeReceivable:
+    address: bmp.finance.receivable
+    messages:
+      ReceivableOverdue:
+        $ref: '#/components/messages/ReceivableOverdue'
+  financePeriod:
+    address: bmp.finance.period
+    messages:
+      PeriodClosed:
+        $ref: '#/components/messages/PeriodClosed'
+  reportingDataQuality:
+    address: bmp.reporting.data-quality
+    messages:
+      DataQualityIssueFound:
+        $ref: '#/components/messages/DataQualityIssueFound'
 
 operations:
   publishTenantEvents:
@@ -195,6 +220,26 @@ operations:
     action: send
     channel:
       $ref: '#/channels/syncRegister'
+  publishJournalEvents:
+    action: send
+    channel:
+      $ref: '#/channels/financeJournal'
+  publishExpenseEvents:
+    action: send
+    channel:
+      $ref: '#/channels/financeExpense'
+  publishReceivableEvents:
+    action: send
+    channel:
+      $ref: '#/channels/financeReceivable'
+  publishPeriodEvents:
+    action: send
+    channel:
+      $ref: '#/channels/financePeriod'
+  publishDataQualityEvents:
+    action: send
+    channel:
+      $ref: '#/channels/reportingDataQuality'
 
 components:
   messages:
@@ -1043,6 +1088,124 @@ components:
           billPrefix: R1
           missingNumbers:
           - R1-000043
+    JournalPosted:
+      name: bmp.finance.journal-posted.v1
+      title: Journal posted
+      summary: A balanced journal entry was posted, automatically from another module's event or by hand (FIN-02, FIN-04).
+      payload:
+        $ref: '#/components/schemas/JournalPosted'
+      examples:
+      - payload:
+          eventId: 0194a9a0-0000-7000-8000-00000000e201
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T10:15:01Z'
+          aggregateId: 0194a100-0000-7000-8000-000000000001
+          aggregateVersion: 0
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          journalId: 0194a100-0000-7000-8000-000000000001
+          number: JE-000042
+          entryDate: '2026-11-25'
+          period: 2026-11
+          sourceType: EXPENSE
+          sourceId: 0194a200-0000-7000-8000-000000000001
+          memo: 200 empty bottles
+          currency: LKR
+          lines:
+          - accountId: 0194a000-0000-7000-8000-000000006400
+            accountCode: '6400'
+            systemKey: EXP_PACKING
+            debit: '2000.00'
+            credit: '0.00'
+          - accountId: 0194a000-0000-7000-8000-000000001000
+            accountCode: '1000'
+            systemKey: CASH_DRAWER
+            debit: '0.00'
+            credit: '2000.00'
+          postedAt: '2026-11-25T10:15:00Z'
+    ExpenseRecorded:
+      name: bmp.finance.expense-recorded.v1
+      title: Expense recorded
+      summary: An expense was recorded and posted (FIN-09).
+      payload:
+        $ref: '#/components/schemas/ExpenseRecorded'
+      examples:
+      - payload:
+          eventId: 0194a9a0-0000-7000-8000-00000000e201
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T10:15:01Z'
+          aggregateId: 0194a200-0000-7000-8000-000000000001
+          aggregateVersion: 0
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          expenseId: 0194a200-0000-7000-8000-000000000001
+          categoryId: 0194a300-0000-7000-8000-000000000064
+          accountId: 0194a000-0000-7000-8000-000000006400
+          amount: '2000.00'
+          currency: LKR
+          paidFrom: CASH_DRAWER
+          expenseDate: '2026-11-25'
+          drawerSessionId: 0193d300-0000-7000-8000-000000000001
+          journalId: 0194a100-0000-7000-8000-000000000001
+    ReceivableOverdue:
+      name: bmp.finance.receivable-overdue.v1
+      title: Receivable overdue
+      summary: A customer has items more than a week past due; at most once a week per customer (FIN-08).
+      payload:
+        $ref: '#/components/schemas/ReceivableOverdue'
+      examples:
+      - payload:
+          eventId: 0194a9a0-0000-7000-8000-00000000e201
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T10:15:01Z'
+          aggregateId: 0193d000-0000-7000-8000-000000000102
+          aggregateVersion: 0
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          customerId: 0193d000-0000-7000-8000-000000000102
+          balance: '1300.00'
+          overdueAmount: '500.00'
+          daysOverdue: 12
+          currency: LKR
+          asOf: '2026-11-30'
+    PeriodClosed:
+      name: bmp.finance.period-closed.v1
+      title: Period closed
+      summary: A fiscal period was closed; a year-end close carries its closing journal (FIN-06).
+      payload:
+        $ref: '#/components/schemas/PeriodClosed'
+      examples:
+      - payload:
+          eventId: 0194a9a0-0000-7000-8000-00000000e201
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T10:15:01Z'
+          aggregateId: 0194a600-0000-7000-8000-000000000001
+          aggregateVersion: 0
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          period: 2026-11
+          yearEnd: false
+          closedAt: '2026-12-02T08:00:03Z'
+    DataQualityIssueFound:
+      name: bmp.reporting.data-quality-issue-found.v1
+      title: Data-quality issue found
+      summary: 'A data-quality monitor found a new issue: a return without its refund, a bill without its stock issue or POS clearing
+        not at zero (REP-07).'
+      payload:
+        $ref: '#/components/schemas/DataQualityIssueFound'
+      examples:
+      - payload:
+          eventId: 0194a9a0-0000-7000-8000-00000000e201
+          tenantId: 01934f5a-6d1c-7000-8000-000000000a01
+          occurredAt: '2026-11-25T10:15:01Z'
+          aggregateId: 0194b200-0000-7000-8000-000000000001
+          aggregateVersion: 0
+          metadata:
+            actorId: 0193a6f1-0000-7000-8000-00000000f001
+          issueId: 0194b200-0000-7000-8000-000000000001
+          kind: BILL_WITHOUT_STOCK_ISSUE
+          sourceId: 0193f100-0000-7000-8000-000000000001
+          detectedAt: '2026-11-25T10:20:00Z'
 
   schemas:
     Uuid:
@@ -2698,6 +2861,21 @@ components:
           $ref: '#/components/schemas/Uuid'
         drawerSessionId:
           $ref: '#/components/schemas/Uuid'
+        allocations:
+          type: array
+          description: Bills an account collection pays, as the cashier chose; finance settles the rest oldest first
+            (FIN-07). Empty for bill payments.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - billId
+            - amount
+            properties:
+              billId:
+                $ref: '#/components/schemas/Uuid'
+              amount:
+                $ref: '#/components/schemas/Decimal'
         currency:
           type: string
           pattern: ^[A-Z]{3}$
@@ -2851,3 +3029,222 @@ components:
           minItems: 1
           items:
             type: string
+    JournalPosted:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - journalId
+      - number
+      - entryDate
+      - period
+      - sourceType
+      - currency
+      - lines
+      - postedAt
+      properties:
+        eventId: &id001
+          $ref: '#/components/schemas/Uuid'
+        tenantId: *id001
+        occurredAt: &id003
+          type: string
+          format: date-time
+        aggregateId: *id001
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        journalId: *id001
+        number:
+          type: string
+        entryDate: &id005
+          type: string
+          format: date
+        period:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+        sourceType:
+          type: string
+        sourceId: *id001
+        sourceEventId: *id001
+        reversesId: *id001
+        memo:
+          type: string
+        currency: &id004
+          type: string
+          pattern: ^[A-Z]{3}$
+        lines:
+          type: array
+          minItems: 2
+          items:
+            type: object
+            additionalProperties: false
+            required:
+            - accountId
+            - accountCode
+            - debit
+            - credit
+            properties:
+              accountId: *id001
+              accountCode:
+                type: string
+              systemKey:
+                type: string
+              debit: &id002
+                $ref: '#/components/schemas/Decimal'
+              credit: *id002
+              partyType:
+                type: string
+                enum:
+                - CUSTOMER
+                - SUPPLIER
+              partyId: *id001
+        postedAt: *id003
+    ExpenseRecorded:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - expenseId
+      - categoryId
+      - accountId
+      - amount
+      - currency
+      - paidFrom
+      - expenseDate
+      - journalId
+      properties:
+        eventId: *id001
+        tenantId: *id001
+        occurredAt: *id003
+        aggregateId: *id001
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        expenseId: *id001
+        categoryId: *id001
+        accountId: *id001
+        amount: *id002
+        currency: *id004
+        paidFrom:
+          type: string
+          enum:
+          - CASH_DRAWER
+          - BANK
+          - PAYABLE
+        expenseDate: *id005
+        drawerSessionId: *id001
+        supplierId: *id001
+        journalId: *id001
+    ReceivableOverdue:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - customerId
+      - balance
+      - overdueAmount
+      - daysOverdue
+      - currency
+      - asOf
+      properties:
+        eventId: *id001
+        tenantId: *id001
+        occurredAt: *id003
+        aggregateId: *id001
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        customerId: *id001
+        balance: *id002
+        overdueAmount: *id002
+        daysOverdue:
+          type: integer
+          minimum: 0
+        currency: *id004
+        asOf: *id005
+    PeriodClosed:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - period
+      - yearEnd
+      - closedAt
+      properties:
+        eventId: *id001
+        tenantId: *id001
+        occurredAt: *id003
+        aggregateId: *id001
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        period:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+        yearEnd:
+          type: boolean
+        closingJournalId: *id001
+        closedAt: *id003
+    DataQualityIssueFound:
+      type: object
+      additionalProperties: false
+      required:
+      - eventId
+      - tenantId
+      - occurredAt
+      - aggregateId
+      - aggregateVersion
+      - metadata
+      - issueId
+      - kind
+      - sourceId
+      - detectedAt
+      properties:
+        eventId: *id001
+        tenantId: *id001
+        occurredAt: *id003
+        aggregateId: *id001
+        aggregateVersion:
+          type: integer
+          minimum: 0
+        metadata:
+          $ref: '#/components/schemas/EventMetadata'
+        issueId: *id001
+        kind:
+          type: string
+          enum:
+          - RETURN_WITHOUT_REFUND
+          - BILL_WITHOUT_STOCK_ISSUE
+          - POS_CLEARING_NOT_ZERO
+        sourceId: *id001
+        amount: *id002
+        currency: *id004
+        detectedAt: *id003

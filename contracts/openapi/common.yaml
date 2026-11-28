@@ -159,6 +159,38 @@ components:
           type: string
           pattern: "^[A-Z]{3}$"
           example: LKR
+    Operation:
+      type: object
+      description: A long-running job started with 202 Accepted (03-api-standards.md §11), read at /api/v1/operations/{id}.
+      required: [id, type, status, progress, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          description: What runs, e.g. PERIOD_CLOSE, REPORT_EXPORT, REPORTING_REBUILD.
+          example: PERIOD_CLOSE
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCEEDED, FAILED]
+        progress:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 100
+        resultUrl:
+          type: string
+          description: Where the result can be read once SUCCEEDED.
+          example: /api/v1/periods/2026-11
+        problem:
+          $ref: "#/components/schemas/Problem"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
     PageInfo:
       type: object
       required: [limit, hasMore]

@@ -9,6 +9,25 @@
       "minimum": 0,
       "maximum": 31,
       "default": 5
+    },
+    "fiscalYearStartMonth": {
+      "description": "FIN-06: the first month of the fiscal year; closing the month before it is the year-end close.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 12,
+      "default": 1
+    },
+    "overdueGraceDays": {
+      "description": "FIN-08: days past the due date before a customer is reported overdue.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 60,
+      "default": 7
+    },
+    "inputTaxReclaimable": {
+      "description": "Whether tax on supplier invoices is reclaimed (Dr TAX_PAYABLE); otherwise it is a purchase cost (PPV).",
+      "type": "boolean",
+      "default": false
     }
   }
 }

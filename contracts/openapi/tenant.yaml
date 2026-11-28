@@ -687,7 +687,7 @@ components:
       name: group
       in: path
       required: true
-      description: general, inventory, sales, pricing, tax, finance, payments or numbering.
+      description: general, inventory, sales, pricing, tax, finance, payments, numbering or notification.
       schema:
         type: string
         pattern: "^[a-z]{2,20}$"

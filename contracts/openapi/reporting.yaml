@@ -1,0 +1,1474 @@
+openapi: 3.1.0
+info:
+  title: BMP Reporting API
+  version: 1.0.0
+  description: |
+    Reports, the owner dashboard and exports (phase 04, rules REP-01..REP-07).
+
+    Reporting owns only read models built from events (facts and daily summaries) and rebuilds them by replaying
+    the events it recorded (REP-01). Gross margin per bill and per line joins each sale with the cost of the stock
+    it issued; overall profit is read from finance's ledger (REP-02). Every report says how fresh its data is and
+    which filters it applied (REP-03). Operations of every module are read at `/api/v1/operations/{id}`.
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Reports
+  description: Profit, sales, stock, wastage, cash and aging reports (REP-02..REP-04, REP-07).
+- name: Dashboards
+  description: The owner dashboard (REP-06).
+- name: Exports
+  description: CSV, XLSX and PDF exports (REP-05).
+- name: Operations
+  description: Background operations (03-api-standards.md §11).
+- name: Administration
+  description: Read model rebuilds (REP-01).
+paths:
+  /api/v1/reports/profit:
+    get:
+      tags:
+      - Reports
+      operationId: getProfitReport
+      summary: Gross margin by bill, product, variant, channel, location, day or month (REP-02)
+      description: Revenue is net of discounts and tax; cost comes from the stock issued for each bill line; returns and voids
+        count against the day they happened. Rows without cost yet are counted at zero cost and listed by the data-quality
+        monitor.
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      - INVALID_DATE_RANGE
+      parameters:
+      - &id003
+        name: from
+        in: query
+        required: true
+        schema: &id001
+          type: string
+          format: date
+        description: First business date.
+      - &id004
+        name: to
+        in: query
+        required: true
+        schema: *id001
+        description: Last business date (at most 366 days after `from`).
+      - name: groupBy
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/ProfitGroupBy'
+      - &id005
+        name: locationId
+        in: query
+        required: false
+        schema: &id013
+          type: string
+          format: uuid
+      - name: channel
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - RETAIL
+          - WHOLESALE
+      - &id009
+        $ref: ./common.yaml#/components/parameters/Limit
+      - $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfitReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  from: '2026-11-01'
+                  to: '2026-11-30'
+                  groupBy: VARIANT
+                rows:
+                - key: 0193b200-0000-7000-8000-000000000011
+                  label: Cooking oil 750 ml bottle
+                  qty: '40'
+                  bills: 31
+                  revenue:
+                    amount: '26000.00'
+                    currency: LKR
+                  discount:
+                    amount: '200.00'
+                    currency: LKR
+                  tax:
+                    amount: '3966.10'
+                    currency: LKR
+                  cost:
+                    amount: '21180.00'
+                    currency: LKR
+                  margin:
+                    amount: '4820.00'
+                    currency: LKR
+                  marginPct: '18.54'
+                totals:
+                  revenue:
+                    amount: '26000.00'
+                    currency: LKR
+                  discount:
+                    amount: '200.00'
+                    currency: LKR
+                  tax:
+                    amount: '3966.10'
+                    currency: LKR
+                  cost:
+                    amount: '21180.00'
+                    currency: LKR
+                  margin:
+                    amount: '4820.00'
+                    currency: LKR
+                  marginPct: '18.54'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/bills/{billId}/profit:
+    get:
+      tags:
+      - Reports
+      operationId: getBillProfit
+      summary: Margin of one bill (REP-02)
+      description: grand total − tax total − Σ line cost (posting-rules.md §4), returns shown apart.
+      x-permission: reports:read
+      x-error-codes:
+      - BILL_NOT_REPORTED
+      parameters:
+      - name: billId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillProfit'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                billId: 0193f100-0000-7000-8000-000000000001
+                number: R1-000123
+                businessDate: '2026-11-25'
+                grandTotal:
+                  amount: '1550.00'
+                  currency: LKR
+                taxTotal:
+                  amount: '0.00'
+                  currency: LKR
+                cost:
+                  amount: '1210.40'
+                  currency: LKR
+                margin:
+                  amount: '339.60'
+                  currency: LKR
+                costComplete: true
+                status: COMPLETED
+                lines:
+                - billLineId: 0193f100-0000-7000-8000-000000000011
+                  variantId: 0193b200-0000-7000-8000-000000000011
+                  qty: '1'
+                  revenue:
+                    amount: '650.00'
+                    currency: LKR
+                  cost:
+                    amount: '529.50'
+                    currency: LKR
+                  margin:
+                    amount: '120.50'
+                    currency: LKR
+                returns:
+                  revenue:
+                    amount: '0.00'
+                    currency: LKR
+                  cost:
+                    amount: '0.00'
+                    currency: LKR
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/reports/profit-and-loss:
+    get:
+      tags:
+      - Reports
+      operationId: getProfitAndLossReport
+      summary: Overall profit from the ledger (REP-02)
+      description: Read from finance's journals; reporting never recomputes accounting.
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema: &id002
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          example: 2026-11
+      - name: to
+        in: query
+        required: true
+        schema: *id002
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfitAndLossReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  from: 2026-11
+                  to: 2026-11
+                revenue:
+                  amount: '152000.00'
+                  currency: LKR
+                returns:
+                  amount: '1500.00'
+                  currency: LKR
+                discounts:
+                  amount: '800.00'
+                  currency: LKR
+                netRevenue:
+                  amount: '149700.00'
+                  currency: LKR
+                costOfGoodsSold:
+                  amount: '118250.40'
+                  currency: LKR
+                wastage:
+                  amount: '620.00'
+                  currency: LKR
+                countVariance:
+                  amount: '0.00'
+                  currency: LKR
+                purchasePriceVariance:
+                  amount: '150.00'
+                  currency: LKR
+                cashOverShort:
+                  amount: '100.00'
+                  currency: LKR
+                operatingExpenses:
+                  amount: '32000.00'
+                  currency: LKR
+                profit:
+                  amount: '-1420.40'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/sales:
+    get:
+      tags:
+      - Reports
+      operationId: getSalesReport
+      summary: Sales by product, channel, payment method, cashier or hour (REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      - INVALID_DATE_RANGE
+      parameters:
+      - *id003
+      - *id004
+      - name: groupBy
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/SalesGroupBy'
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  from: '2026-11-25'
+                  to: '2026-11-25'
+                  groupBy: PAYMENT_METHOD
+                rows:
+                - key: CASH
+                  count: 42
+                  gross:
+                    amount: '61250.00'
+                    currency: LKR
+                - key: CARD
+                  count: 3
+                  gross:
+                    amount: '13800.00'
+                    currency: LKR
+                totals:
+                  count: 45
+                  gross:
+                    amount: '75050.00'
+                    currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/stock-valuation:
+    get:
+      tags:
+      - Reports
+      operationId: getStockValuationReport
+      summary: Stock value (delegates to inventory, REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: asOf
+        in: query
+        required: false
+        schema: &id017
+          type: string
+          format: date-time
+        description: Default now.
+      - name: groupBy
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/ValuationGroupBy'
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StockValuationReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  asOf: '2026-11-30T18:30:00Z'
+                  groupBy: PRODUCT
+                rows:
+                - key: 0193b100-0000-7000-8000-000000000002
+                  label: Cooking oil
+                  qtyBase: '176022.24'
+                  value:
+                    amount: '176022.2400'
+                    currency: LKR
+                total:
+                  amount: '176022.2400'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/wastage:
+    get:
+      tags:
+      - Reports
+      operationId: getWastageReport
+      summary: Wastage by reason, product or variant, at cost (REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      - INVALID_DATE_RANGE
+      parameters:
+      - *id003
+      - *id004
+      - name: groupBy
+        in: query
+        required: true
+        schema:
+          $ref: '#/components/schemas/WastageGroupBy'
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WastageReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  from: '2026-11-01'
+                  to: '2026-11-30'
+                  groupBy: REASON
+                rows:
+                - key: BREAKAGE
+                  qtyBase: '12'
+                  cost:
+                    amount: '540.00'
+                    currency: LKR
+                - key: SPILLAGE
+                  qtyBase: '120'
+                  cost:
+                    amount: '80.00'
+                    currency: LKR
+                total:
+                  amount: '620.00'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/cash-position:
+    get:
+      tags:
+      - Reports
+      operationId: getCashPositionReport
+      summary: Expected against counted cash per drawer (REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: date
+        in: query
+        required: false
+        schema: *id001
+        description: Business date of the reconciliation; default today.
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashPositionReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  date: '2026-11-25'
+                rows:
+                - sessionId: 0193d300-0000-7000-8000-000000000001
+                  registerId: 0193d100-0000-7000-8000-000000000001
+                  expected:
+                    amount: '23050.00'
+                    currency: LKR
+                  counted:
+                    amount: '22950.00'
+                    currency: LKR
+                  variance:
+                    amount: '-100.00'
+                    currency: LKR
+                  reconciledAt: '2026-11-25T18:00:00Z'
+                totals:
+                  expected:
+                    amount: '23050.00'
+                    currency: LKR
+                  counted:
+                    amount: '22950.00'
+                    currency: LKR
+                  variance:
+                    amount: '-100.00'
+                    currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/receivables-aging:
+    get:
+      tags:
+      - Reports
+      operationId: getReceivablesAgingReport
+      summary: Receivables aging (from finance, REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: asOf
+        in: query
+        required: false
+        schema: *id001
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters: &id007
+                  asOf: '2026-11-30'
+                rows:
+                - partyId: 0193d000-0000-7000-8000-000000000102
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets: &id006
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
+                totals: &id008
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets: *id006
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/payables-aging:
+    get:
+      tags:
+      - Reports
+      operationId: getPayablesAgingReport
+      summary: Payables aging (from finance, REP-04)
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: asOf
+        in: query
+        required: false
+        schema: *id001
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgingReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters: *id007
+                rows:
+                - partyId: 0193c000-0000-7000-8000-000000000201
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets: *id006
+                totals: *id008
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/dashboards/owner:
+    get:
+      tags:
+      - Dashboards
+      operationId: getOwnerDashboard
+      summary: The owner's day at a glance (REP-06)
+      description: 'One call from the daily summary: sales, gross margin, bills, cash expected and counted, the top five products
+        by margin, low-stock and negative-stock items, overdue receivables and devices that have not synced for an hour.'
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: date
+        in: query
+        required: false
+        schema: *id001
+        description: Business date; default today.
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OwnerDashboard'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  date: '2026-11-25'
+                date: '2026-11-25'
+                sales:
+                  amount: '75050.00'
+                  currency: LKR
+                grossMargin:
+                  amount: '9120.30'
+                  currency: LKR
+                marginPct: '13.84'
+                bills: 45
+                cashExpected:
+                  amount: '23050.00'
+                  currency: LKR
+                cashCounted:
+                  amount: '22950.00'
+                  currency: LKR
+                topProducts:
+                - variantId: 0193b200-0000-7000-8000-000000000011
+                  label: Cooking oil 750 ml bottle
+                  revenue:
+                    amount: '26000.00'
+                    currency: LKR
+                  margin:
+                    amount: '4820.00'
+                    currency: LKR
+                lowStockItems: 3
+                overdueReceivables:
+                  amount: '500.00'
+                  currency: LKR
+                negativeStockItems: 0
+                unsyncedDevices: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/data-quality:
+    get:
+      tags:
+      - Reports
+      operationId: getDataQualityReport
+      summary: Data-quality monitors (REP-07)
+      description: Returns without their refund after an hour, bills without stock issued after ten minutes and POS clearing
+        not at zero after a business day. Each new issue notifies the owner once.
+      x-permission: reports:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+          default: OPEN
+      - *id009
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DataQualityReport'
+              example:
+                dataFreshAsOf: '2026-11-25T18:02:11Z'
+                filters:
+                  status: OPEN
+                items:
+                - id: 0194b200-0000-7000-8000-000000000001
+                  kind: BILL_WITHOUT_STOCK_ISSUE
+                  sourceId: 0193f100-0000-7000-8000-000000000001
+                  status: OPEN
+                  detectedAt: '2026-11-25T10:20:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/reports/exports:
+    post:
+      tags:
+      - Exports
+      operationId: createExport
+      summary: Export a report as CSV, XLSX or PDF (REP-05)
+      description: Runs in the background (202 with an operation). The file is kept for seven days behind a signed link; CSV
+        cells starting with = + - @ are escaped.
+      x-permission: reports:export
+      x-error-codes:
+      - VALIDATION_FAILED
+      - INVALID_PARAMETER
+      - INVALID_DATE_RANGE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - &id010
+        $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExportRequest'
+            example:
+              id: 0194b100-0000-7000-8000-000000000001
+              report: PROFIT
+              format: XLSX
+              parameters:
+                from: '2026-11-01'
+                to: '2026-11-30'
+                groupBy: VARIANT
+      responses:
+        '202':
+          description: 'Accepted: the operation runs in the background.'
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/Operation
+              example:
+                id: 0194a600-0000-7000-8000-000000000002
+                type: REPORT_EXPORT
+                status: PENDING
+                progress: 0
+                createdAt: '2026-11-30T19:00:00Z'
+                updatedAt: '2026-11-30T19:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/reports/exports/{exportId}:
+    get:
+      tags:
+      - Exports
+      operationId: getExport
+      summary: An export and, once ready, its signed download link
+      x-permission: reports:read
+      x-error-codes:
+      - EXPORT_NOT_FOUND
+      parameters:
+      - name: exportId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Export'
+              example:
+                id: 0194b100-0000-7000-8000-000000000001
+                report: PROFIT
+                format: XLSX
+                status: SUCCEEDED
+                createdAt: '2026-11-30T19:00:00Z'
+                expiresAt: '2026-12-07T19:00:04Z'
+                sizeBytes: 18433
+                downloadUrl: /api/v1/reports/exports/0194b100-0000-7000-8000-000000000001/file?expires=1796670004&signature=Zm9v
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/reports/exports/{exportId}/file:
+    get:
+      tags:
+      - Exports
+      operationId: downloadExport
+      summary: Download an export through its signed link (REP-05)
+      description: 'No bearer token: the link''s HMAC signature covers the tenant, the export and the expiry, so it can be
+        opened from an e-mail. Invalid or expired links are 403.'
+      x-permission: signed-link
+      x-error-codes:
+      - EXPORT_LINK_INVALID
+      - EXPORT_NOT_FOUND
+      parameters:
+      - name: exportId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: expires
+        in: query
+        required: true
+        schema:
+          type: integer
+          format: int64
+        description: Expiry, epoch seconds.
+      - name: signature
+        in: query
+        required: true
+        schema:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{16,128}$
+      responses:
+        '200':
+          description: OK.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+      security: []
+  /api/v1/operations/{operationId}:
+    get:
+      tags:
+      - Operations
+      operationId: getOperation
+      summary: A background operation of the tenant (period close, export, rebuild)
+      x-permission: authenticated
+      x-error-codes:
+      - OPERATION_NOT_FOUND
+      parameters:
+      - name: operationId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/Operation
+              example:
+                id: 0194a600-0000-7000-8000-000000000002
+                type: REPORT_EXPORT
+                status: SUCCEEDED
+                progress: 100
+                resultUrl: /api/v1/reports/exports/0194b100-0000-7000-8000-000000000001
+                createdAt: '2026-11-30T19:00:00Z'
+                updatedAt: '2026-11-30T19:00:04Z'
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/admin/reporting/rebuild:
+    post:
+      tags:
+      - Administration
+      operationId: rebuildReadModels
+      summary: Rebuild the tenant's read models from the events (REP-01)
+      description: Replays the events reporting has recorded, in order, into fresh facts and daily summaries.
+      x-permission: reports:admin
+      x-error-codes:
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id010
+      responses:
+        '202':
+          description: 'Accepted: the operation runs in the background.'
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/Operation
+              example:
+                id: 0194a600-0000-7000-8000-000000000002
+                type: REPORTING_REBUILD
+                status: PENDING
+                progress: 0
+                createdAt: '2026-11-30T19:00:00Z'
+                updatedAt: '2026-11-30T19:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    Filters:
+      type: object
+      description: The filters applied, defaults included (REP-03).
+      additionalProperties:
+        type: string
+    ProfitGroupBy:
+      type: string
+      enum:
+      - BILL
+      - PRODUCT
+      - VARIANT
+      - CHANNEL
+      - LOCATION
+      - DAY
+      - MONTH
+    SalesGroupBy:
+      type: string
+      enum:
+      - PRODUCT
+      - CHANNEL
+      - PAYMENT_METHOD
+      - CASHIER
+      - HOUR
+    ValuationGroupBy:
+      type: string
+      enum:
+      - VARIANT
+      - PRODUCT
+      - CATEGORY
+      - LOCATION
+    WastageGroupBy:
+      type: string
+      enum:
+      - REASON
+      - PRODUCT
+      - VARIANT
+    ProfitRow:
+      type: object
+      required:
+      - key
+      - revenue
+      - discount
+      - tax
+      - cost
+      - margin
+      properties:
+        key:
+          type: string
+          description: 'The group: an id, a channel, a date or a month.'
+        label:
+          type: string
+        qty: &id014
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
+        bills: &id016
+          type: integer
+          format: int32
+        revenue: &id011
+          $ref: ./common.yaml#/components/schemas/Money
+        discount: *id011
+        tax: *id011
+        cost: *id011
+        margin: *id011
+        marginPct: &id012
+          type: string
+          pattern: ^-?(0|[1-9][0-9]{0,15})(\.[0-9]{1,6})?$
+          example: '30'
+          description: margin / revenue × 100, 2 decimals; absent when revenue is 0.
+    MarginTotals:
+      type: object
+      required:
+      - revenue
+      - discount
+      - tax
+      - cost
+      - margin
+      properties:
+        revenue: *id011
+        discount: *id011
+        tax: *id011
+        cost: *id011
+        margin: *id011
+        marginPct: *id012
+    ProfitReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - totals
+      - page
+      properties:
+        dataFreshAsOf: &id015
+          type: string
+          format: date-time
+          description: When the last event reflected here was processed (REP-03); absent before the first.
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfitRow'
+        totals:
+          $ref: '#/components/schemas/MarginTotals'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    BillProfitLine:
+      type: object
+      required:
+      - billLineId
+      - variantId
+      - qty
+      - revenue
+      - cost
+      - margin
+      properties:
+        billLineId: *id013
+        variantId: *id013
+        qty: *id014
+        revenue: *id011
+        cost: *id011
+        margin: *id011
+    BillProfit:
+      type: object
+      required:
+      - billId
+      - number
+      - businessDate
+      - grandTotal
+      - taxTotal
+      - cost
+      - margin
+      - costComplete
+      - status
+      - lines
+      - returns
+      properties:
+        dataFreshAsOf: *id015
+        billId: *id013
+        number:
+          type: string
+        businessDate: *id001
+        grandTotal: *id011
+        taxTotal: *id011
+        cost: *id011
+        margin: *id011
+        costComplete:
+          type: boolean
+          description: False until every line's stock issue arrived.
+        status:
+          type: string
+          enum:
+          - COMPLETED
+          - VOIDED
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillProfitLine'
+        returns:
+          type: object
+          required:
+          - revenue
+          - cost
+          properties:
+            revenue: *id011
+            cost: *id011
+    ProfitAndLossReport:
+      type: object
+      required:
+      - filters
+      - revenue
+      - returns
+      - discounts
+      - netRevenue
+      - costOfGoodsSold
+      - wastage
+      - countVariance
+      - purchasePriceVariance
+      - cashOverShort
+      - operatingExpenses
+      - profit
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        revenue: *id011
+        returns: *id011
+        discounts: *id011
+        netRevenue: *id011
+        costOfGoodsSold: *id011
+        wastage: *id011
+        countVariance: *id011
+        purchasePriceVariance: *id011
+        cashOverShort: *id011
+        operatingExpenses: *id011
+        profit: *id011
+    SalesRow:
+      type: object
+      required:
+      - key
+      - count
+      - gross
+      properties:
+        key:
+          type: string
+        label:
+          type: string
+        count:
+          type: integer
+          format: int32
+          description: Bills, or payments for PAYMENT_METHOD.
+        qty: *id014
+        net:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Net of discounts and tax.
+        tax: *id011
+        gross:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: What customers paid (net of refunds for PAYMENT_METHOD).
+    SalesReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - totals
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/SalesRow'
+        totals:
+          type: object
+          required:
+          - count
+          - gross
+          properties:
+            count: *id016
+            net: *id011
+            tax: *id011
+            gross: *id011
+    StockValuationReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - total
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - value
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              qtyBase: *id014
+              value: *id011
+        total: *id011
+    WastageReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - total
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - key
+            - qtyBase
+            - cost
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              qtyBase: *id014
+              cost: *id011
+        total: *id011
+    CashPositionReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - totals
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - sessionId
+            - registerId
+            - expected
+            - counted
+            - variance
+            - reconciledAt
+            properties:
+              sessionId: *id013
+              registerId: *id013
+              expected: *id011
+              counted: *id011
+              variance: *id011
+              reconciledAt: *id017
+        totals:
+          type: object
+          required:
+          - expected
+          - counted
+          - variance
+          properties:
+            expected: *id011
+            counted: *id011
+            variance: *id011
+    AgingBuckets:
+      type: object
+      required:
+      - days0To30
+      - days31To60
+      - days61To90
+      - days90Plus
+      properties:
+        days0To30: *id011
+        days31To60: *id011
+        days61To90: *id011
+        days90Plus: *id011
+    AgingReport:
+      type: object
+      required:
+      - filters
+      - rows
+      - totals
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        rows:
+          type: array
+          items:
+            type: object
+            required:
+            - partyId
+            - balance
+            - buckets
+            properties:
+              partyId: *id013
+              balance: *id011
+              buckets:
+                $ref: '#/components/schemas/AgingBuckets'
+        totals:
+          type: object
+          required:
+          - balance
+          - buckets
+          properties:
+            balance: *id011
+            buckets:
+              $ref: '#/components/schemas/AgingBuckets'
+    OwnerDashboard:
+      type: object
+      required:
+      - filters
+      - date
+      - sales
+      - grossMargin
+      - bills
+      - cashExpected
+      - cashCounted
+      - topProducts
+      - lowStockItems
+      - overdueReceivables
+      - negativeStockItems
+      - unsyncedDevices
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        date: *id001
+        sales:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Revenue net of discounts and tax.
+        grossMargin: *id011
+        marginPct: *id014
+        bills: *id016
+        cashExpected: *id011
+        cashCounted: *id011
+        topProducts:
+          type: array
+          maxItems: 5
+          items:
+            type: object
+            required:
+            - variantId
+            - revenue
+            - margin
+            properties:
+              variantId: *id013
+              label:
+                type: string
+              revenue: *id011
+              margin: *id011
+        lowStockItems: *id016
+        overdueReceivables: *id011
+        negativeStockItems: *id016
+        unsyncedDevices: *id016
+    DataQualityKind:
+      type: string
+      enum:
+      - RETURN_WITHOUT_REFUND
+      - BILL_WITHOUT_STOCK_ISSUE
+      - POS_CLEARING_NOT_ZERO
+    DataQualityIssue:
+      type: object
+      required:
+      - id
+      - kind
+      - sourceId
+      - status
+      - detectedAt
+      properties:
+        id: *id013
+        kind:
+          $ref: '#/components/schemas/DataQualityKind'
+        sourceId:
+          type: string
+          format: uuid
+          description: The credit note or the bill.
+        status:
+          type: string
+          enum:
+          - OPEN
+          - RESOLVED
+        amount: *id011
+        detectedAt: *id017
+        resolvedAt: *id017
+    DataQualityReport:
+      type: object
+      required:
+      - filters
+      - items
+      properties:
+        dataFreshAsOf: *id015
+        filters:
+          $ref: '#/components/schemas/Filters'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DataQualityIssue'
+    ReportName:
+      type: string
+      enum:
+      - PROFIT
+      - SALES
+      - STOCK_VALUATION
+      - WASTAGE
+      - CASH_POSITION
+      - RECEIVABLES_AGING
+      - PAYABLES_AGING
+      - PROFIT_AND_LOSS
+    ExportFormat:
+      type: string
+      enum:
+      - CSV
+      - XLSX
+      - PDF
+    ExportRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - report
+      - format
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        report:
+          $ref: '#/components/schemas/ReportName'
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        parameters:
+          type: object
+          additionalProperties: false
+          description: The report's query parameters.
+          properties:
+            from:
+              type: string
+              maxLength: 10
+            to:
+              type: string
+              maxLength: 10
+            groupBy:
+              type: string
+              maxLength: 20
+            asOf:
+              type: string
+              maxLength: 30
+            date: *id001
+            locationId: *id013
+            channel:
+              type: string
+              maxLength: 20
+    Export:
+      type: object
+      required:
+      - id
+      - report
+      - format
+      - status
+      - createdAt
+      properties:
+        id: *id013
+        report:
+          $ref: '#/components/schemas/ReportName'
+        format:
+          $ref: '#/components/schemas/ExportFormat'
+        status:
+          type: string
+          enum:
+          - PENDING
+          - RUNNING
+          - SUCCEEDED
+          - FAILED
+          - EXPIRED
+        createdAt: *id017
+        expiresAt: *id017
+        sizeBytes:
+          type: integer
+          format: int64
+        downloadUrl:
+          type: string
+          description: Signed, valid until expiresAt.

@@ -1,0 +1,2658 @@
+openapi: 3.1.0
+info:
+  title: BMP Finance API
+  version: 1.0.0
+  description: |
+    Double-entry ledger, expenses, receivables, payables and periods (phase 04, rules FIN-01..FIN-11).
+
+    Every money effect of the other modules becomes one balanced journal, posted automatically from their events
+    (posting-rules.md §2) and idempotent on the source event (FIN-02, FIN-03). Journals never change: corrections
+    are reversing journals (FIN-04). Postings dated in a closed period land in the first open one (FIN-05). Credit
+    bills open receivables and supplier invoices open payables; collections and supplier payments settle them
+    oldest first unless allocated (FIN-07). Amounts in requests are decimal strings; in responses `Money`.
+servers:
+- url: http://localhost:8080
+security:
+- bearerAuth: []
+tags:
+- name: Accounts
+  description: Chart of accounts (FIN-01).
+- name: Journals
+  description: 'Journal entries: automatic, manual and reversals (FIN-02..FIN-04).'
+- name: Ledger
+  description: Trial balance and profit and loss.
+- name: Expenses
+  description: Expense categories and expenses (FIN-09).
+- name: Receivables
+  description: Customer open items and statements (FIN-07, FIN-08, FIN-10).
+- name: Payables
+  description: Supplier open items, statements and payments (FIN-07, FIN-11).
+- name: CashDrops
+  description: Cash taken from drawers to the bank.
+- name: Periods
+  description: Fiscal periods and their close (FIN-05, FIN-06).
+- name: Administration
+  description: Projection rebuilds.
+paths:
+  /api/v1/accounts:
+    get:
+      tags:
+      - Accounts
+      operationId: listAccounts
+      summary: The chart of accounts, by code (FIN-01)
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: type
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/AccountType'
+      - name: status
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/AccountStatus'
+      - &id004
+        $ref: ./common.yaml#/components/parameters/Limit
+      - &id005
+        $ref: ./common.yaml#/components/parameters/Cursor
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Account'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id001
+                  id: 0194a000-0000-7000-8000-000000006400
+                  code: '6400'
+                  name: Packing materials
+                  type: EXPENSE
+                  systemKey: EXP_PACKING
+                  status: ACTIVE
+                  version: 0
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Accounts
+      operationId: createAccount
+      summary: Add an account to the chart
+      x-permission: finance:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - ACCOUNT_CODE_TAKEN
+      - UNKNOWN_PARENT_ACCOUNT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - &id006
+        $ref: ./common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+            example:
+              id: 0194a000-0000-7000-8000-000000006410
+              code: '6410'
+              name: Bottles and caps
+              type: EXPENSE
+              parentId: 0194a000-0000-7000-8000-000000006400
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 0194a000-0000-7000-8000-000000006410
+                code: '6410'
+                name: Bottles and caps
+                type: EXPENSE
+                parentId: 0194a000-0000-7000-8000-000000006400
+                status: ACTIVE
+                version: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/accounts/{accountId}:
+    get:
+      tags:
+      - Accounts
+      operationId: getAccount
+      summary: One account
+      x-permission: finance:read
+      x-error-codes:
+      - ACCOUNT_NOT_FOUND
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example: *id001
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+    patch:
+      tags:
+      - Accounts
+      operationId: updateAccount
+      summary: Rename, renumber or deactivate an account (FIN-01)
+      description: Accounts with a `systemKey` keep their type and stay active; they may be renamed and renumbered.
+      x-permission: finance:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - ACCOUNT_NOT_FOUND
+      - ACCOUNT_CODE_TAKEN
+      - SYSTEM_ACCOUNT_LOCKED
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - name: accountId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - &id012
+        $ref: ./common.yaml#/components/parameters/IfMatch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateAccountRequest'
+            example:
+              name: Packing materials (bottles, caps, bags)
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+              example:
+                id: 0194a000-0000-7000-8000-000000006400
+                code: '6400'
+                name: Packing materials (bottles, caps, bags)
+                type: EXPENSE
+                systemKey: EXP_PACKING
+                status: ACTIVE
+                version: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/journals:
+    get:
+      tags:
+      - Journals
+      operationId: listJournals
+      summary: Journal entries, newest first
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: period
+        in: query
+        required: false
+        schema: &id011
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+          example: 2026-11
+      - name: sourceType
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/SourceType'
+      - name: sourceId
+        in: query
+        required: false
+        schema: &id002
+          type: string
+          format: uuid
+      - name: accountId
+        in: query
+        required: false
+        schema: *id002
+        description: Entries with a line on this account.
+      - name: from
+        in: query
+        required: false
+        schema: &id003
+          type: string
+          format: date
+        description: First entry date.
+      - name: to
+        in: query
+        required: false
+        schema: *id003
+        description: Last entry date.
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JournalEntry'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id010
+                  id: 0194a100-0000-7000-8000-000000000001
+                  number: JE-000042
+                  entryDate: '2026-11-25'
+                  period: 2026-11
+                  sourceType: EXPENSE
+                  sourceId: 0194a200-0000-7000-8000-000000000001
+                  memo: 200 empty bottles
+                  postedAt: '2026-11-25T10:15:00Z'
+                  postedBy: 0193a6f1-0000-7000-8000-00000000f001
+                  lines: &id007
+                  - id: 0194a110-0000-7000-8000-000000000001
+                    accountId: 0194a000-0000-7000-8000-000000006400
+                    accountCode: '6400'
+                    systemKey: EXP_PACKING
+                    debit:
+                      amount: '2000.00'
+                      currency: LKR
+                    credit:
+                      amount: '0.00'
+                      currency: LKR
+                  - id: 0194a110-0000-7000-8000-000000000002
+                    accountId: 0194a000-0000-7000-8000-000000001000
+                    accountCode: '1000'
+                    systemKey: CASH_DRAWER
+                    debit:
+                      amount: '0.00'
+                      currency: LKR
+                    credit:
+                      amount: '2000.00'
+                      currency: LKR
+                  totalDebit: &id008
+                    amount: '2000.00'
+                    currency: LKR
+                  totalCredit: &id009
+                    amount: '2000.00'
+                    currency: LKR
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Journals
+      operationId: createJournal
+      summary: Post a manual journal (FIN-04)
+      description: Needs a memo; debits must equal credits. A date in a closed period is posted to the first open period with
+        the memo `late posting for <date>` (FIN-05).
+      x-permission: finance:journal
+      x-error-codes:
+      - VALIDATION_FAILED
+      - JOURNAL_UNBALANCED
+      - UNKNOWN_ACCOUNT
+      - ACCOUNT_INACTIVE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ManualJournalRequest'
+            example:
+              id: 0194a100-0000-7000-8000-000000000099
+              entryDate: '2026-11-30'
+              memo: Owner's capital paid into the bank
+              lines:
+              - accountId: 0194a000-0000-7000-8000-000000001010
+                debit: '100000.00'
+              - accountId: 0194a000-0000-7000-8000-000000003000
+                credit: '100000.00'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+              example:
+                id: 0194a100-0000-7000-8000-000000000099
+                number: JE-000043
+                entryDate: '2026-11-30'
+                period: 2026-11
+                sourceType: MANUAL
+                sourceId: 0194a100-0000-7000-8000-000000000099
+                memo: Owner's capital paid into the bank
+                postedAt: '2026-11-25T10:15:00Z'
+                postedBy: 0193a6f1-0000-7000-8000-00000000f001
+                lines: *id007
+                totalDebit: *id008
+                totalCredit: *id009
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/journals/{journalId}:
+    get:
+      tags:
+      - Journals
+      operationId: getJournal
+      summary: One journal entry with its lines
+      x-permission: finance:read
+      x-error-codes:
+      - JOURNAL_NOT_FOUND
+      parameters:
+      - name: journalId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+              example: *id010
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/journals/{journalId}/reverse:
+    post:
+      tags:
+      - Journals
+      operationId: reverseJournal
+      summary: Reverse a journal with a new entry (FIN-04)
+      description: 'Journals never change: the reversal swaps every line''s debit and credit and points back with `reversesId`.'
+      x-permission: finance:journal
+      x-error-codes:
+      - VALIDATION_FAILED
+      - JOURNAL_NOT_FOUND
+      - JOURNAL_ALREADY_REVERSED
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - name: journalId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReverseJournalRequest'
+            example:
+              id: 0194a100-0000-7000-8000-000000000100
+              memo: Posted to the wrong account
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+              example:
+                id: 0194a100-0000-7000-8000-000000000100
+                number: JE-000044
+                entryDate: '2026-11-25'
+                period: 2026-11
+                sourceType: REVERSAL
+                sourceId: 0194a100-0000-7000-8000-000000000001
+                memo: Posted to the wrong account
+                postedAt: '2026-11-25T10:15:00Z'
+                postedBy: 0193a6f1-0000-7000-8000-00000000f001
+                lines:
+                - id: 0194a110-0000-7000-8000-000000000001
+                  accountId: 0194a000-0000-7000-8000-000000006400
+                  accountCode: '6400'
+                  systemKey: EXP_PACKING
+                  debit:
+                    amount: '0.00'
+                    currency: LKR
+                  credit:
+                    amount: '2000.00'
+                    currency: LKR
+                - id: 0194a110-0000-7000-8000-000000000002
+                  accountId: 0194a000-0000-7000-8000-000000001000
+                  accountCode: '1000'
+                  systemKey: CASH_DRAWER
+                  debit:
+                    amount: '2000.00'
+                    currency: LKR
+                  credit:
+                    amount: '0.00'
+                    currency: LKR
+                totalDebit: *id008
+                totalCredit: *id009
+                reversesId: 0194a100-0000-7000-8000-000000000001
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/ledger/trial-balance:
+    get:
+      tags:
+      - Ledger
+      operationId: getTrialBalance
+      summary: Trial balance of every account
+      description: Balances up to and including `asOf` (default today), or of the journals of one `period`. Σ debit = Σ credit
+        always.
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: asOf
+        in: query
+        required: false
+        schema: *id003
+      - name: period
+        in: query
+        required: false
+        schema: *id011
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TrialBalance'
+              example:
+                asOf: '2026-11-30'
+                rows:
+                - accountId: 0194a000-0000-7000-8000-000000001000
+                  code: '1000'
+                  name: Cash in drawer
+                  type: ASSET
+                  systemKey: CASH_DRAWER
+                  debit:
+                    amount: '52300.00'
+                    currency: LKR
+                  credit:
+                    amount: '41200.00'
+                    currency: LKR
+                  balance:
+                    amount: '11100.00'
+                    currency: LKR
+                - accountId: 0194a000-0000-7000-8000-000000006400
+                  code: '6400'
+                  name: Packing materials
+                  type: EXPENSE
+                  systemKey: EXP_PACKING
+                  debit:
+                    amount: '2000.00'
+                    currency: LKR
+                  credit:
+                    amount: '0.00'
+                    currency: LKR
+                  balance:
+                    amount: '2000.00'
+                    currency: LKR
+                totalDebit:
+                  amount: '54300.00'
+                  currency: LKR
+                totalCredit:
+                  amount: '54300.00'
+                  currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/ledger/profit-and-loss:
+    get:
+      tags:
+      - Ledger
+      operationId: getProfitAndLoss
+      summary: Profit and loss over periods (posting-rules.md §4)
+      description: (SALES − SALES_RETURNS − SALES_DISCOUNTS) − COGS − WASTAGE − COUNT_VARIANCE − PPV − CASH_OVER_SHORT − operating
+        expenses, from the journals of the periods `from` to `to` (inclusive). Year-end closing entries are left out.
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: from
+        in: query
+        required: true
+        schema: *id011
+      - name: to
+        in: query
+        required: true
+        schema: *id011
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfitAndLoss'
+              example:
+                from: 2026-11
+                to: 2026-11
+                revenue:
+                  amount: '152000.00'
+                  currency: LKR
+                returns:
+                  amount: '1500.00'
+                  currency: LKR
+                discounts:
+                  amount: '800.00'
+                  currency: LKR
+                netRevenue:
+                  amount: '149700.00'
+                  currency: LKR
+                costOfGoodsSold:
+                  amount: '118250.40'
+                  currency: LKR
+                wastage:
+                  amount: '620.00'
+                  currency: LKR
+                countVariance:
+                  amount: '0.00'
+                  currency: LKR
+                purchasePriceVariance:
+                  amount: '150.00'
+                  currency: LKR
+                cashOverShort:
+                  amount: '100.00'
+                  currency: LKR
+                operatingExpenses:
+                  amount: '32000.00'
+                  currency: LKR
+                profit:
+                  amount: '-1420.40'
+                  currency: LKR
+                accounts:
+                - accountId: 0194a000-0000-7000-8000-000000006000
+                  code: '6000'
+                  name: Rent
+                  type: EXPENSE
+                  systemKey: EXP_RENT
+                  amount:
+                    amount: '25000.00'
+                    currency: LKR
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/expense-categories:
+    get:
+      tags:
+      - Expenses
+      operationId: listExpenseCategories
+      summary: Expense categories
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ExpenseCategory'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - id: 0194a300-0000-7000-8000-000000000064
+                  code: PACKING
+                  name: Packing materials
+                  accountId: 0194a000-0000-7000-8000-000000006400
+                  status: ACTIVE
+                  version: 0
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Expenses
+      operationId: createExpenseCategory
+      summary: Add an expense category (FIN-09)
+      x-permission: finance:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - EXPENSE_CATEGORY_CODE_TAKEN
+      - UNKNOWN_ACCOUNT
+      - ACCOUNT_NOT_EXPENSE
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExpenseCategoryRequest'
+            example:
+              id: 0194a300-0000-7000-8000-000000000065
+              code: BOTTLES
+              name: Empty bottles
+              accountId: 0194a000-0000-7000-8000-000000006410
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+              example:
+                id: 0194a300-0000-7000-8000-000000000065
+                code: BOTTLES
+                name: Empty bottles
+                accountId: 0194a000-0000-7000-8000-000000006410
+                status: ACTIVE
+                version: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/expense-categories/{categoryId}:
+    patch:
+      tags:
+      - Expenses
+      operationId: updateExpenseCategory
+      summary: Rename, re-point or deactivate a category
+      x-permission: finance:write
+      x-error-codes:
+      - VALIDATION_FAILED
+      - EXPENSE_CATEGORY_NOT_FOUND
+      - UNKNOWN_ACCOUNT
+      - ACCOUNT_NOT_EXPENSE
+      - PRECONDITION_REQUIRED
+      - VERSION_CONFLICT
+      parameters:
+      - name: categoryId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - *id012
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateExpenseCategoryRequest'
+            example:
+              name: Packing (bottles, caps, bags)
+      responses:
+        '200':
+          description: OK.
+          headers:
+            ETag:
+              $ref: ./common.yaml#/components/headers/ETag
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExpenseCategory'
+              example:
+                id: 0194a300-0000-7000-8000-000000000064
+                code: PACKING
+                name: Packing (bottles, caps, bags)
+                accountId: 0194a000-0000-7000-8000-000000006400
+                status: ACTIVE
+                version: 1
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+        '412':
+          $ref: ./common.yaml#/components/responses/PreconditionFailed
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+        '428':
+          $ref: ./common.yaml#/components/responses/PreconditionRequired
+  /api/v1/expenses:
+    get:
+      tags:
+      - Expenses
+      operationId: listExpenses
+      summary: Expenses, newest first
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: from
+        in: query
+        required: false
+        schema: *id003
+      - name: to
+        in: query
+        required: false
+        schema: *id003
+      - name: categoryId
+        in: query
+        required: false
+        schema: *id002
+      - name: paidFrom
+        in: query
+        required: false
+        schema:
+          $ref: '#/components/schemas/PaidFrom'
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Expense'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id013
+                  id: 0194a200-0000-7000-8000-000000000001
+                  categoryId: 0194a300-0000-7000-8000-000000000064
+                  expenseDate: '2026-11-25'
+                  amount:
+                    amount: '2000.00'
+                    currency: LKR
+                  paidFrom: CASH_DRAWER
+                  drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                  description: 200 empty bottles
+                  attachmentKeys: []
+                  journalId: 0194a100-0000-7000-8000-000000000001
+                  createdAt: '2026-11-25T10:15:00Z'
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Expenses
+      operationId: recordExpense
+      summary: Record an expense (FIN-09)
+      description: CASH_DRAWER needs an open drawer session and records a PAID_OUT there; PAYABLE needs a supplier and opens
+        a payable. Posts Dr the category's account and publishes `ExpenseRecorded`.
+      x-permission: finance:expense
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_EXPENSE_CATEGORY
+      - DRAWER_SESSION_REQUIRED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_NOT_OPEN
+      - SUPPLIER_REQUIRED
+      - UNKNOWN_SUPPLIER
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordExpenseRequest'
+            example:
+              id: 0194a200-0000-7000-8000-000000000001
+              categoryId: 0194a300-0000-7000-8000-000000000064
+              expenseDate: '2026-11-25'
+              amount: '2000.00'
+              paidFrom: CASH_DRAWER
+              drawerSessionId: 0193d300-0000-7000-8000-000000000001
+              description: 200 empty bottles
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+              example: *id013
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/expenses/{expenseId}:
+    get:
+      tags:
+      - Expenses
+      operationId: getExpense
+      summary: One expense
+      x-permission: finance:read
+      x-error-codes:
+      - EXPENSE_NOT_FOUND
+      parameters:
+      - name: expenseId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Expense'
+              example: *id013
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/receivables:
+    get:
+      tags:
+      - Receivables
+      operationId: listReceivables
+      summary: What customers owe, aged by due date (FIN-07)
+      description: 'Buckets count days past the due date: 0–30 (not yet due included), 31–60, 61–90, 90+. Credits not yet
+        applied count in 0–30.'
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - &id014
+        name: asOf
+        in: query
+        required: false
+        schema: *id003
+        description: Aging date (default today).
+      - &id015
+        name: overdueOnly
+        in: query
+        required: false
+        schema:
+          type: boolean
+          default: false
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Aging'
+              example:
+                asOf: '2026-11-30'
+                partyType: CUSTOMER
+                rows:
+                - partyId: 0193d000-0000-7000-8000-000000000102
+                  balance: &id016
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets: &id017
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
+                  oldestOpenDate: '2026-10-20'
+                  openItems: 2
+                totals: &id018
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                  buckets:
+                    days0To30:
+                      amount: '800.00'
+                      currency: LKR
+                    days31To60:
+                      amount: '500.00'
+                      currency: LKR
+                    days61To90:
+                      amount: '0.00'
+                      currency: LKR
+                    days90Plus:
+                      amount: '0.00'
+                      currency: LKR
+                page: &id019
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/receivables/{customerId}/statement:
+    get:
+      tags:
+      - Receivables
+      operationId: getCustomerStatement
+      summary: A customer's account statement and open items
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      - PARTY_NOT_KNOWN
+      parameters:
+      - name: customerId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema: *id003
+      - name: to
+        in: query
+        required: false
+        schema: *id003
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statement'
+              example:
+                partyId: 0193d000-0000-7000-8000-000000000102
+                partyType: CUSTOMER
+                from: '2026-11-01'
+                to: '2026-11-30'
+                openingBalance:
+                  amount: '500.00'
+                  currency: LKR
+                entries:
+                - date: '2026-11-25'
+                  documentType: BILL
+                  documentId: 0193f100-0000-7000-8000-000000000001
+                  debit:
+                    amount: '1300.00'
+                    currency: LKR
+                  credit:
+                    amount: '0.00'
+                    currency: LKR
+                  balance:
+                    amount: '1800.00'
+                    currency: LKR
+                - date: '2026-11-28'
+                  documentType: COLLECTION
+                  documentId: 0193d400-0000-7000-8000-000000000001
+                  debit:
+                    amount: '0.00'
+                    currency: LKR
+                  credit:
+                    amount: '500.00'
+                    currency: LKR
+                  balance:
+                    amount: '1300.00'
+                    currency: LKR
+                closingBalance:
+                  amount: '1300.00'
+                  currency: LKR
+                openItems:
+                - id: 0194a700-0000-7000-8000-000000000001
+                  documentType: BILL
+                  documentId: 0193f100-0000-7000-8000-000000000001
+                  documentDate: '2026-11-25'
+                  dueDate: '2026-12-25'
+                  amount:
+                    amount: '1300.00'
+                    currency: LKR
+                  settled:
+                    amount: '0.00'
+                    currency: LKR
+                  open:
+                    amount: '1300.00'
+                    currency: LKR
+                  daysOverdue: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/payables:
+    get:
+      tags:
+      - Payables
+      operationId: listPayables
+      summary: What is owed to suppliers, aged by due date (FIN-07)
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - *id014
+      - *id015
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Aging'
+              example:
+                asOf: '2026-11-30'
+                partyType: SUPPLIER
+                rows:
+                - partyId: 0193c000-0000-7000-8000-000000000201
+                  balance: *id016
+                  buckets: *id017
+                  oldestOpenDate: '2026-10-20'
+                  openItems: 2
+                totals: *id018
+                page: *id019
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/payables/{supplierId}/statement:
+    get:
+      tags:
+      - Payables
+      operationId: getSupplierStatement
+      summary: A supplier's account statement and open items
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      - PARTY_NOT_KNOWN
+      parameters:
+      - name: supplierId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: from
+        in: query
+        required: false
+        schema: *id003
+      - name: to
+        in: query
+        required: false
+        schema: *id003
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statement'
+              example:
+                partyId: 0193c000-0000-7000-8000-000000000201
+                partyType: SUPPLIER
+                from: '2026-11-01'
+                to: '2026-11-30'
+                openingBalance:
+                  amount: '0.00'
+                  currency: LKR
+                entries:
+                - date: '2026-11-26'
+                  documentType: SUPPLIER_INVOICE
+                  documentId: 0193c400-0000-7000-8000-000000000001
+                  debit:
+                    amount: '0.00'
+                    currency: LKR
+                  credit:
+                    amount: '48500.00'
+                    currency: LKR
+                  balance:
+                    amount: '48500.00'
+                    currency: LKR
+                closingBalance:
+                  amount: '48500.00'
+                  currency: LKR
+                openItems:
+                - id: 0194a700-0000-7000-8000-000000000002
+                  documentType: SUPPLIER_INVOICE
+                  documentId: 0193c400-0000-7000-8000-000000000001
+                  documentDate: '2026-11-26'
+                  dueDate: '2026-12-26'
+                  amount:
+                    amount: '48500.00'
+                    currency: LKR
+                  settled:
+                    amount: '0.00'
+                    currency: LKR
+                  open:
+                    amount: '48500.00'
+                    currency: LKR
+                  daysOverdue: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/supplier-payments:
+    get:
+      tags:
+      - Payables
+      operationId: listSupplierPayments
+      summary: Supplier payments, newest first
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: supplierId
+        in: query
+        required: false
+        schema: *id002
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SupplierPayment'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id020
+                  id: 0194a400-0000-7000-8000-000000000001
+                  supplierId: 0193c000-0000-7000-8000-000000000201
+                  amount:
+                    amount: '48500.00'
+                    currency: LKR
+                  paidFrom: BANK
+                  reference: TT 445512
+                  paidAt: '2026-11-29T09:00:00Z'
+                  allocations:
+                  - documentId: 0193c400-0000-7000-8000-000000000001
+                    amount:
+                      amount: '48500.00'
+                      currency: LKR
+                  journalId: 0194a100-0000-7000-8000-000000000001
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - Payables
+      operationId: paySupplier
+      summary: Pay a supplier (FIN-11)
+      description: 'Posts Dr AP / Cr BANK or CASH_DRAWER (a PAID_OUT on the drawer) and settles the supplier''s payables:
+        the allocated documents first, then oldest first (FIN-07).'
+      x-permission: finance:pay-supplier
+      x-error-codes:
+      - VALIDATION_FAILED
+      - UNKNOWN_SUPPLIER
+      - DRAWER_SESSION_REQUIRED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_NOT_OPEN
+      - UNKNOWN_OPEN_ITEM
+      - ALLOCATION_EXCEEDS_OPEN
+      - ALLOCATION_EXCEEDS_PAYMENT
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SupplierPaymentRequest'
+            example:
+              id: 0194a400-0000-7000-8000-000000000001
+              supplierId: 0193c000-0000-7000-8000-000000000201
+              amount: '48500.00'
+              paidFrom: BANK
+              reference: TT 445512
+              allocations:
+              - documentId: 0193c400-0000-7000-8000-000000000001
+                amount: '48500.00'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPayment'
+              example: *id020
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/supplier-payments/{paymentId}:
+    get:
+      tags:
+      - Payables
+      operationId: getSupplierPayment
+      summary: One supplier payment
+      x-permission: finance:read
+      x-error-codes:
+      - SUPPLIER_PAYMENT_NOT_FOUND
+      parameters:
+      - name: paymentId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SupplierPayment'
+              example: *id020
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ./common.yaml#/components/responses/NotFound
+  /api/v1/cash-drops:
+    get:
+      tags:
+      - CashDrops
+      operationId: listCashDrops
+      summary: Cash taken from drawers to the bank, newest first
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - name: drawerSessionId
+        in: query
+        required: false
+        schema: *id002
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CashDrop'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id021
+                  id: 0194a500-0000-7000-8000-000000000001
+                  drawerSessionId: 0193d300-0000-7000-8000-000000000001
+                  registerId: 0193d100-0000-7000-8000-000000000001
+                  amount:
+                    amount: '40000.00'
+                    currency: LKR
+                  reference: Deposit slip 0912
+                  droppedAt: '2026-11-25T17:00:00Z'
+                  journalId: 0194a100-0000-7000-8000-000000000001
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+    post:
+      tags:
+      - CashDrops
+      operationId: recordCashDrop
+      summary: Take cash from a drawer to the bank
+      description: Records a DROP on the open drawer and posts Dr BANK / Cr CASH_DRAWER.
+      x-permission: finance:cash-drop
+      x-error-codes:
+      - VALIDATION_FAILED
+      - DRAWER_SESSION_NOT_FOUND
+      - DRAWER_NOT_OPEN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CashDropRequest'
+            example:
+              id: 0194a500-0000-7000-8000-000000000001
+              drawerSessionId: 0193d300-0000-7000-8000-000000000001
+              amount: '40000.00'
+              reference: Deposit slip 0912
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CashDrop'
+              example: *id021
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/periods:
+    get:
+      tags:
+      - Periods
+      operationId: listPeriods
+      summary: Fiscal periods with postings, newest first (FIN-05)
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PARAMETER
+      parameters:
+      - *id004
+      - *id005
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - items
+                - page
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FiscalPeriod'
+                  page:
+                    $ref: ./common.yaml#/components/schemas/PageInfo
+              example:
+                items:
+                - &id022
+                  period: 2026-11
+                  status: CLOSED
+                  closedAt: '2026-12-02T08:00:00Z'
+                  closedBy: 0193a6f1-0000-7000-8000-00000000f001
+                  yearEnd: false
+                - period: 2026-12
+                  status: OPEN
+                  yearEnd: true
+                page:
+                  limit: 50
+                  hasMore: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+  /api/v1/periods/{period}:
+    get:
+      tags:
+      - Periods
+      operationId: getPeriod
+      summary: One period (OPEN when nothing was closed)
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PERIOD
+      parameters:
+      - &id023
+        name: period
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[0-9]{4}-(0[1-9]|1[0-2])$
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FiscalPeriod'
+              example: *id022
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/periods/{period}/close-checks:
+    get:
+      tags:
+      - Periods
+      operationId: getCloseChecks
+      summary: What stands in the way of closing a period (FIN-06)
+      x-permission: finance:read
+      x-error-codes:
+      - INVALID_PERIOD
+      parameters:
+      - *id023
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CloseChecks'
+              example:
+                period: 2026-11
+                failedEvents: 0
+                posClearingDifferences:
+                - billId: 0193f100-0000-7000-8000-000000000001
+                  amount:
+                    amount: '-0.01'
+                    currency: LKR
+                unreconciledDrawers: []
+                ready: false
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/periods/{period}/close:
+    post:
+      tags:
+      - Periods
+      operationId: closePeriod
+      summary: Close a period (FIN-06)
+      description: |
+        Runs in the background (202 with an operation, `GET /api/v1/operations/{id}`). The close
+        needs no parked failed events of the tenant, POS clearing at zero for every bill of the
+        period (or the bills listed in `acknowledgedBillIds`) and every drawer session opened in
+        the period reconciled; otherwise the operation fails with `FAILED_EVENTS_PENDING`,
+        `POS_CLEARING_NOT_ZERO` or `DRAWERS_NOT_RECONCILED` and the period stays open. Closing the
+        last period of the fiscal year (`finance.fiscalYearStartMonth`) first moves the year's
+        income and expenses to retained earnings. Publishes `PeriodClosed`.
+      x-permission: finance:close-period
+      x-error-codes:
+      - VALIDATION_FAILED
+      - INVALID_PERIOD
+      - PERIOD_NOT_ENDED
+      - PERIOD_ALREADY_CLOSED
+      - PERIOD_CLOSE_IN_PROGRESS
+      - EARLIER_PERIOD_OPEN
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id023
+      - *id006
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClosePeriodRequest'
+            example:
+              acknowledgedBillIds:
+              - 0193f100-0000-7000-8000-000000000001
+              note: 0.01 rounding on one offline bill
+      responses:
+        '202':
+          description: 'Accepted: the operation runs in the background.'
+          headers:
+            Location:
+              $ref: ./common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: ./common.yaml#/components/schemas/Operation
+              example:
+                id: 0194a600-0000-7000-8000-000000000001
+                type: PERIOD_CLOSE
+                status: PENDING
+                progress: 0
+                createdAt: '2026-12-02T08:00:00Z'
+                updatedAt: '2026-12-02T08:00:00Z'
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ./common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ./common.yaml#/components/responses/UnprocessableContent
+  /api/v1/admin/finance/party-balances/rebuild:
+    post:
+      tags:
+      - Administration
+      operationId: rebuildPartyBalances
+      summary: Recompute party balances from the open items
+      description: The projection is kept in the posting transaction; this recomputes it (06 §6).
+      x-permission: finance:admin
+      x-error-codes:
+      - IDEMPOTENCY_KEY_REQUIRED
+      - IDEMPOTENCY_KEY_REUSED
+      - REQUEST_IN_PROGRESS
+      parameters:
+      - *id006
+      responses:
+        '200':
+          description: OK.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RebuildResult'
+              example:
+                parties: 42
+                changed: 0
+        '400':
+          $ref: ./common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ./common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ./common.yaml#/components/responses/Forbidden
+components:
+  securitySchemes:
+    bearerAuth:
+      $ref: ./common.yaml#/components/securitySchemes/bearerAuth
+  schemas:
+    Amount:
+      type: string
+      description: A non-negative money amount with up to 4 decimals, in the tenant currency.
+      pattern: ^(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '2000.00'
+    SignedAmount:
+      type: string
+      description: A signed money amount with up to 4 decimals.
+      pattern: ^-?(0|[1-9][0-9]{0,14})(\.[0-9]{1,4})?$
+      example: '-150.00'
+    AccountType:
+      type: string
+      enum:
+      - ASSET
+      - LIABILITY
+      - EQUITY
+      - INCOME
+      - EXPENSE
+    AccountStatus:
+      type: string
+      enum:
+      - ACTIVE
+      - INACTIVE
+    SystemKey:
+      type: string
+      description: Fixed meaning of a seeded account (posting-rules.md §1).
+      enum:
+      - CASH_DRAWER
+      - BANK
+      - CARD_CLEARING
+      - TRANSFER_CLEARING
+      - CHEQUES
+      - AR
+      - POS_CLEARING
+      - INVENTORY
+      - AP
+      - GRNI
+      - TAX_PAYABLE
+      - CUSTOMER_CREDIT
+      - EQUITY
+      - RETAINED_EARNINGS
+      - SALES
+      - SALES_RETURNS
+      - SALES_DISCOUNTS
+      - COGS
+      - WASTAGE
+      - COUNT_VARIANCE
+      - PPV
+      - CASH_OVER_SHORT
+      - EXP_RENT
+      - EXP_UTILITIES
+      - EXP_WAGES
+      - EXP_TRANSPORT
+      - EXP_PACKING
+      - EXP_REPAIRS
+      - EXP_OTHER
+    SourceType:
+      type: string
+      description: What a journal was posted for.
+      enum:
+      - SALE
+      - BILL_PAYMENT
+      - COLLECTION
+      - STOCK_ISSUE
+      - SALE_RETURN
+      - PAYMENT_REFUND
+      - SALE_VOID
+      - GOODS_RECEIPT
+      - STOCK_RECEIPT
+      - SUPPLIER_INVOICE
+      - SUPPLIER_PAYMENT
+      - STOCK_ADJUSTMENT
+      - STOCK_COUNT
+      - STOCK_TRANSFORMATION
+      - EXPENSE
+      - DRAWER_RECONCILIATION
+      - CASH_DROP
+      - YEAR_END_CLOSE
+      - MANUAL
+      - REVERSAL
+    Account:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - type
+      - status
+      - version
+      properties:
+        id: *id002
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/AccountType'
+        subtype:
+          type: string
+        parentId: *id002
+        systemKey:
+          $ref: '#/components/schemas/SystemKey'
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        version:
+          type: integer
+          format: int64
+    CreateAccountRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - code
+      - name
+      - type
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        code: &id024
+          type: string
+          pattern: ^[0-9A-Z][0-9A-Z-]{0,19}$
+          example: '6410'
+        name: &id025
+          type: string
+          minLength: 1
+          maxLength: 100
+        type:
+          $ref: '#/components/schemas/AccountType'
+        subtype:
+          type: string
+          maxLength: 40
+        parentId: *id002
+    UpdateAccountRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        code: *id024
+        name: *id025
+        type:
+          $ref: '#/components/schemas/AccountType'
+        subtype:
+          type: string
+          maxLength: 40
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    Dimensions:
+      type: object
+      additionalProperties: false
+      description: Analysis dimensions of a line.
+      properties:
+        variantId: *id002
+        productId: *id002
+        channel:
+          type: string
+          maxLength: 20
+        locationId: *id002
+        billId: *id002
+    PartyType:
+      type: string
+      enum:
+      - CUSTOMER
+      - SUPPLIER
+    JournalLine:
+      type: object
+      required:
+      - id
+      - accountId
+      - accountCode
+      - debit
+      - credit
+      properties:
+        id: *id002
+        accountId: *id002
+        accountCode:
+          type: string
+        systemKey:
+          $ref: '#/components/schemas/SystemKey'
+        debit:
+          $ref: ./common.yaml#/components/schemas/Money
+        credit:
+          $ref: ./common.yaml#/components/schemas/Money
+        partyType:
+          $ref: '#/components/schemas/PartyType'
+        partyId: *id002
+        dimensions:
+          $ref: '#/components/schemas/Dimensions'
+    JournalEntry:
+      type: object
+      required:
+      - id
+      - number
+      - entryDate
+      - period
+      - sourceType
+      - postedAt
+      - lines
+      - totalDebit
+      - totalCredit
+      properties:
+        id: *id002
+        number:
+          type: string
+          example: JE-000042
+        entryDate: *id003
+        period: *id011
+        sourceType:
+          $ref: '#/components/schemas/SourceType'
+        sourceId: *id002
+        sourceEventId: *id002
+        memo:
+          type: string
+        reversesId: *id002
+        reversedById: *id002
+        postedAt: &id028
+          type: string
+          format: date-time
+        postedBy: *id002
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalLine'
+        totalDebit:
+          $ref: ./common.yaml#/components/schemas/Money
+        totalCredit:
+          $ref: ./common.yaml#/components/schemas/Money
+    ManualJournalLine:
+      type: object
+      additionalProperties: false
+      required:
+      - accountId
+      description: Exactly one of debit and credit, above zero.
+      properties:
+        accountId: *id002
+        debit: &id026
+          $ref: '#/components/schemas/Amount'
+        credit: *id026
+        partyType:
+          $ref: '#/components/schemas/PartyType'
+        partyId: *id002
+        dimensions:
+          $ref: '#/components/schemas/Dimensions'
+    ManualJournalRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - entryDate
+      - memo
+      - lines
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        entryDate: *id003
+        memo: &id027
+          type: string
+          minLength: 1
+          maxLength: 500
+        lines:
+          type: array
+          minItems: 2
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/ManualJournalLine'
+    ReverseJournalRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - memo
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The reversing journal's id.
+        memo: *id027
+        entryDate:
+          type: string
+          format: date
+          description: 'Default: today.'
+    TrialBalanceRow:
+      type: object
+      required:
+      - accountId
+      - code
+      - name
+      - type
+      - debit
+      - credit
+      - balance
+      properties:
+        accountId: *id002
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/AccountType'
+        systemKey:
+          $ref: '#/components/schemas/SystemKey'
+        debit:
+          $ref: ./common.yaml#/components/schemas/Money
+        credit:
+          $ref: ./common.yaml#/components/schemas/Money
+        balance:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Debit − credit.
+    TrialBalance:
+      type: object
+      required:
+      - rows
+      - totalDebit
+      - totalCredit
+      properties:
+        asOf: *id003
+        period: *id011
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/TrialBalanceRow'
+        totalDebit:
+          $ref: ./common.yaml#/components/schemas/Money
+        totalCredit:
+          $ref: ./common.yaml#/components/schemas/Money
+    ProfitAndLossAccount:
+      type: object
+      required:
+      - accountId
+      - code
+      - name
+      - type
+      - amount
+      properties:
+        accountId: *id002
+        code:
+          type: string
+        name:
+          type: string
+        type:
+          $ref: '#/components/schemas/AccountType'
+        systemKey:
+          $ref: '#/components/schemas/SystemKey'
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Credit − debit for income, debit − credit for expenses.
+    ProfitAndLoss:
+      type: object
+      required:
+      - from
+      - to
+      - revenue
+      - returns
+      - discounts
+      - netRevenue
+      - costOfGoodsSold
+      - wastage
+      - countVariance
+      - purchasePriceVariance
+      - cashOverShort
+      - operatingExpenses
+      - profit
+      - accounts
+      properties:
+        from: *id011
+        to: *id011
+        revenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        returns:
+          $ref: ./common.yaml#/components/schemas/Money
+        discounts:
+          $ref: ./common.yaml#/components/schemas/Money
+        netRevenue:
+          $ref: ./common.yaml#/components/schemas/Money
+        costOfGoodsSold:
+          $ref: ./common.yaml#/components/schemas/Money
+        wastage:
+          $ref: ./common.yaml#/components/schemas/Money
+        countVariance:
+          $ref: ./common.yaml#/components/schemas/Money
+        purchasePriceVariance:
+          $ref: ./common.yaml#/components/schemas/Money
+        cashOverShort:
+          $ref: ./common.yaml#/components/schemas/Money
+        operatingExpenses:
+          $ref: ./common.yaml#/components/schemas/Money
+        profit:
+          $ref: ./common.yaml#/components/schemas/Money
+        accounts:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProfitAndLossAccount'
+    ExpenseCategory:
+      type: object
+      required:
+      - id
+      - code
+      - name
+      - accountId
+      - status
+      - version
+      properties:
+        id: *id002
+        code:
+          type: string
+        name:
+          type: string
+        accountId: *id002
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        version:
+          type: integer
+          format: int64
+    CreateExpenseCategoryRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - code
+      - name
+      - accountId
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        code: *id024
+        name: *id025
+        accountId:
+          type: string
+          format: uuid
+          description: An EXPENSE account.
+    UpdateExpenseCategoryRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: *id025
+        accountId: *id002
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+    PaidFrom:
+      type: string
+      enum:
+      - CASH_DRAWER
+      - BANK
+      - PAYABLE
+    Expense:
+      type: object
+      required:
+      - id
+      - categoryId
+      - expenseDate
+      - amount
+      - paidFrom
+      - description
+      - attachmentKeys
+      - journalId
+      - createdAt
+      properties:
+        id: *id002
+        categoryId: *id002
+        expenseDate: *id003
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        paidFrom:
+          $ref: '#/components/schemas/PaidFrom'
+        drawerSessionId: *id002
+        supplierId: *id002
+        dueDate: *id003
+        description:
+          type: string
+        attachmentKeys:
+          type: array
+          items:
+            type: string
+        journalId: *id002
+        createdAt: *id028
+    RecordExpenseRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - categoryId
+      - expenseDate
+      - amount
+      - paidFrom
+      - description
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        categoryId: *id002
+        expenseDate: *id003
+        amount: *id026
+        paidFrom:
+          $ref: '#/components/schemas/PaidFrom'
+        drawerSessionId:
+          type: string
+          format: uuid
+          description: Needed for CASH_DRAWER.
+        supplierId:
+          type: string
+          format: uuid
+          description: Needed for PAYABLE.
+        dueDate:
+          type: string
+          format: date
+          description: PAYABLE only; default the expense date plus the supplier's payment terms.
+        description:
+          type: string
+          minLength: 1
+          maxLength: 500
+        attachmentKeys:
+          type: array
+          maxItems: 10
+          items:
+            type: string
+            description: An object storage key of an uploaded receipt or invoice.
+            pattern: ^[A-Za-z0-9][A-Za-z0-9/._-]{0,199}$
+    AgingBuckets:
+      type: object
+      required:
+      - days0To30
+      - days31To60
+      - days61To90
+      - days90Plus
+      properties:
+        days0To30:
+          $ref: ./common.yaml#/components/schemas/Money
+        days31To60:
+          $ref: ./common.yaml#/components/schemas/Money
+        days61To90:
+          $ref: ./common.yaml#/components/schemas/Money
+        days90Plus:
+          $ref: ./common.yaml#/components/schemas/Money
+    AgingRow:
+      type: object
+      required:
+      - partyId
+      - balance
+      - buckets
+      - openItems
+      properties:
+        partyId: *id002
+        balance:
+          $ref: ./common.yaml#/components/schemas/Money
+        buckets:
+          $ref: '#/components/schemas/AgingBuckets'
+        oldestOpenDate: *id003
+        openItems:
+          type: integer
+          format: int32
+    Aging:
+      type: object
+      required:
+      - asOf
+      - partyType
+      - rows
+      - totals
+      - page
+      properties:
+        asOf: *id003
+        partyType:
+          $ref: '#/components/schemas/PartyType'
+        rows:
+          type: array
+          items:
+            $ref: '#/components/schemas/AgingRow'
+        totals:
+          type: object
+          required:
+          - balance
+          - buckets
+          properties:
+            balance:
+              $ref: ./common.yaml#/components/schemas/Money
+            buckets:
+              $ref: '#/components/schemas/AgingBuckets'
+        page:
+          $ref: ./common.yaml#/components/schemas/PageInfo
+    DocumentType:
+      type: string
+      enum:
+      - BILL
+      - COLLECTION
+      - RETURN
+      - VOID
+      - REFUND
+      - SUPPLIER_INVOICE
+      - SUPPLIER_PAYMENT
+      - EXPENSE
+      - SUPPLIER_RETURN
+    StatementEntry:
+      type: object
+      required:
+      - date
+      - documentType
+      - documentId
+      - debit
+      - credit
+      - balance
+      properties:
+        date: *id003
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+        documentId: *id002
+        debit:
+          $ref: ./common.yaml#/components/schemas/Money
+        credit:
+          $ref: ./common.yaml#/components/schemas/Money
+        balance:
+          $ref: ./common.yaml#/components/schemas/Money
+    OpenItem:
+      type: object
+      required:
+      - id
+      - documentType
+      - documentId
+      - documentDate
+      - dueDate
+      - amount
+      - settled
+      - open
+      - daysOverdue
+      properties:
+        id: *id002
+        documentType:
+          $ref: '#/components/schemas/DocumentType'
+        documentId: *id002
+        documentDate: *id003
+        dueDate: *id003
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+          description: Negative for a credit not yet applied.
+        settled:
+          $ref: ./common.yaml#/components/schemas/Money
+        open:
+          $ref: ./common.yaml#/components/schemas/Money
+        daysOverdue:
+          type: integer
+          format: int32
+    Statement:
+      type: object
+      required:
+      - partyId
+      - partyType
+      - openingBalance
+      - entries
+      - closingBalance
+      - openItems
+      properties:
+        partyId: *id002
+        partyType:
+          $ref: '#/components/schemas/PartyType'
+        from: *id003
+        to: *id003
+        openingBalance:
+          $ref: ./common.yaml#/components/schemas/Money
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatementEntry'
+        closingBalance:
+          $ref: ./common.yaml#/components/schemas/Money
+        openItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpenItem'
+    Allocation:
+      type: object
+      required:
+      - documentId
+      - amount
+      properties:
+        documentId: *id002
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+    AllocationRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - documentId
+      - amount
+      properties:
+        documentId:
+          type: string
+          format: uuid
+          description: A supplier invoice or expense.
+        amount: *id026
+    SupplierPaidFrom:
+      type: string
+      enum:
+      - BANK
+      - CASH_DRAWER
+    SupplierPayment:
+      type: object
+      required:
+      - id
+      - supplierId
+      - amount
+      - paidFrom
+      - paidAt
+      - allocations
+      - journalId
+      properties:
+        id: *id002
+        supplierId: *id002
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        paidFrom:
+          $ref: '#/components/schemas/SupplierPaidFrom'
+        drawerSessionId: *id002
+        reference:
+          type: string
+        paidAt: *id028
+        allocations:
+          type: array
+          items:
+            $ref: '#/components/schemas/Allocation'
+        journalId: *id002
+    SupplierPaymentRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - supplierId
+      - amount
+      - paidFrom
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        supplierId: *id002
+        amount: *id026
+        paidFrom:
+          $ref: '#/components/schemas/SupplierPaidFrom'
+        drawerSessionId:
+          type: string
+          format: uuid
+          description: Needed for CASH_DRAWER.
+        reference: &id029
+          type: string
+          minLength: 1
+          maxLength: 60
+        paidAt:
+          type: string
+          format: date-time
+          description: Default now.
+        allocations:
+          type: array
+          maxItems: 100
+          items:
+            $ref: '#/components/schemas/AllocationRequest'
+    CashDrop:
+      type: object
+      required:
+      - id
+      - drawerSessionId
+      - registerId
+      - amount
+      - droppedAt
+      - journalId
+      properties:
+        id: *id002
+        drawerSessionId: *id002
+        registerId: *id002
+        amount:
+          $ref: ./common.yaml#/components/schemas/Money
+        reference:
+          type: string
+        droppedAt: *id028
+        journalId: *id002
+    CashDropRequest:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - drawerSessionId
+      - amount
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Generated by the caller.
+        drawerSessionId: *id002
+        amount: *id026
+        reference: *id029
+        droppedAt:
+          type: string
+          format: date-time
+          description: Default now.
+    PeriodStatus:
+      type: string
+      enum:
+      - OPEN
+      - CLOSING
+      - CLOSED
+    FiscalPeriod:
+      type: object
+      required:
+      - period
+      - status
+      - yearEnd
+      properties:
+        period: *id011
+        status:
+          $ref: '#/components/schemas/PeriodStatus'
+        closedAt: *id028
+        closedBy: *id002
+        yearEnd:
+          type: boolean
+          description: The last period of the fiscal year.
+    CloseChecks:
+      type: object
+      required:
+      - period
+      - failedEvents
+      - posClearingDifferences
+      - unreconciledDrawers
+      - ready
+      properties:
+        period: *id011
+        failedEvents:
+          type: integer
+          format: int32
+          description: Parked failed events of the tenant.
+        posClearingDifferences:
+          type: array
+          items:
+            type: object
+            required:
+            - billId
+            - amount
+            properties:
+              billId: *id002
+              amount:
+                $ref: ./common.yaml#/components/schemas/Money
+        unreconciledDrawers:
+          type: array
+          items:
+            type: object
+            required:
+            - sessionId
+            - registerId
+            - openedAt
+            properties:
+              sessionId: *id002
+              registerId: *id002
+              openedAt: *id028
+        ready:
+          type: boolean
+          description: True when nothing stands in the way.
+    ClosePeriodRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        acknowledgedBillIds:
+          type: array
+          maxItems: 500
+          items: *id002
+          description: Bills whose POS clearing difference is accepted as it is.
+        note:
+          type: string
+          maxLength: 500
+    RebuildResult:
+      type: object
+      required:
+      - parties
+      - changed
+      properties:
+        parties:
+          type: integer
+          format: int32
+        changed:
+          type: integer
+          format: int32
+          description: Balances that differed from the recomputation.
