@@ -1281,12 +1281,10 @@ components:
           example: '30'
         net:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Net of discounts and tax.
         tax:
           $ref: ./common.yaml#/components/schemas/Money
         gross:
           $ref: ./common.yaml#/components/schemas/Money
-          description: What customers paid (net of refunds for PAYMENT_METHOD).
     SalesReport:
       type: object
       required:
@@ -1521,7 +1519,6 @@ components:
           format: date
         sales:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Revenue net of discounts and tax.
         grossMargin:
           $ref: ./common.yaml#/components/schemas/Money
         marginPct:

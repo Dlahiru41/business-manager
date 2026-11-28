@@ -2,7 +2,7 @@ package com.bmp.persistence.event;
 
 import com.bmp.persistence.jdbc.Jsonb;
 import com.bmp.shared.context.TenantContext;
-import com.bmp.shared.error.DomainException;
+import com.bmp.shared.error.BmpException;
 import com.bmp.shared.event.DomainEvent;
 import com.bmp.shared.id.IdGenerator;
 import com.bmp.shared.id.TenantId;
@@ -43,7 +43,7 @@ public class FailedEventStore {
         this.clock = clock;
     }
 
-    public void park(String consumer, DomainEvent event, DomainException failure) {
+    public void park(String consumer, DomainEvent event, BmpException failure) {
         Map<String, Object> problem = new LinkedHashMap<>();
         problem.put("code", failure.errorCode().code());
         problem.put("category", failure.errorCode().category().name());

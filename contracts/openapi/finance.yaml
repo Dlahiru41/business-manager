@@ -2350,7 +2350,6 @@ components:
           $ref: ./common.yaml#/components/schemas/Money
         balance:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Debit − credit.
     TrialBalance:
       type: object
       required:
@@ -2395,7 +2394,6 @@ components:
           $ref: '#/components/schemas/SystemKey'
         amount:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Credit − debit for income, debit − credit for expenses.
     ProfitAndLoss:
       type: object
       required:
@@ -2745,7 +2743,6 @@ components:
           format: date
         amount:
           $ref: ./common.yaml#/components/schemas/Money
-          description: Negative for a credit not yet applied.
         settled:
           $ref: ./common.yaml#/components/schemas/Money
         open:

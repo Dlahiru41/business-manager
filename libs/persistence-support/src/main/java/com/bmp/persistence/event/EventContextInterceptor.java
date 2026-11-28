@@ -1,6 +1,8 @@
 package com.bmp.persistence.event;
 
+import com.bmp.shared.error.BmpException;
 import com.bmp.shared.error.DomainException;
+import com.bmp.shared.error.TechnicalException;
 import com.bmp.shared.event.DomainEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,8 +16,10 @@ import org.springframework.transaction.event.TransactionalApplicationListenerMet
 
 /**
  * Wraps every {@code @ApplicationModuleListener} invocation, outside its transaction so the transaction starts with
- * the event's tenant bound: restores context through {@link EventContext} and parks non-retryable failures
- * ({@link DomainException}) in {@link FailedEventStore} with metric {@code bmp.events.failed} and one ERROR log.
+ * the event's tenant bound: restores context through {@link EventContext} and parks non-retryable failures — a
+ * {@link DomainException} (a rule said no) or a {@link TechnicalException} (a broken invariant such as
+ * {@code LEDGER_IMBALANCE}, ADR-032 §13) — in {@link FailedEventStore} with metric {@code bmp.events.failed} and one
+ * ERROR log.
  * Any other failure propagates, leaving the publication incomplete for the resubmission job.
  */
 public class EventContextInterceptor implements MethodInterceptor {
@@ -42,14 +46,15 @@ public class EventContextInterceptor implements MethodInterceptor {
         return context.call(event, listener, () -> {
             try {
                 return invocation.proceed();
-            } catch (DomainException rejected) {
+            } catch (DomainException | TechnicalException rejected) {
+                // A rule said no, or an invariant broke (e.g. LEDGER_IMBALANCE, FIN-03): retrying cannot help.
                 park(listenerId(invocation.getMethod()), listener, event, rejected);
                 return null;
             }
         });
     }
 
-    private void park(String consumer, Class<?> listener, DomainEvent event, DomainException rejected) {
+    private void park(String consumer, Class<?> listener, DomainEvent event, BmpException rejected) {
         failedEvents.park(consumer, event, rejected);
         Counter.builder("bmp.events.failed")
                 .description("Events a listener rejected or gave up on")
