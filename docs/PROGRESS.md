@@ -19,11 +19,12 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
 ## Current phase
 
 - Phase: 04 — Finance and reporting (started 2026-11-27, branch `phase/04-finance-and-reporting`)
-- Current task: T04-05 Reporting read models
-- Next step (exact, so a new session can resume): create `modules/reporting` (depends on every business module's api,
-  finance included): migration (event_log, fact_bill, fact_sale_line, fact_stock_movement, fact_payment, fact_expense,
-  fact_drawer, daily_summary), listeners recording each event in `event_log` and applying it to the facts, the rebuild
-  replaying the event log (ADR-033), then T04-06.
+- Current task: T04-06 Reports, dashboard and exports
+- Next step (exact, so a new session can resume): reporting controllers for every `reporting.yaml` operation (profit by
+  group, bill profit, P&L and aging from `finance.api.LedgerQueries`, sales by group, stock valuation from a new
+  `InventoryQueries.valuation`, wastage, cash position, owner dashboard with low/negative stock counts from inventory and
+  unsynced devices from sync, data quality with its ShedLock job and `DataQualityIssueFound`, exports CSV/XLSX/PDF as
+  operations with signed links and a clean-up job, `/operations/{id}`, rebuild endpoint), then T04-07.
 
 ## Task checklist (current phase)
 
@@ -32,7 +33,7 @@ Phase 04:
 - [x] T04-02 Finance domain (TDD): `Account` (system accounts keep type and stay active), `JournalEntry` whose builder refuses Σ debit ≠ Σ credit with `LEDGER_IMBALANCE`, `PostedJournal.reversal`, `Period`/`FiscalPeriod` (OPEN → CLOSING → CLOSED, late postings), `OpenItem` and `OpenItemSettler` (allocations, then oldest due first, credits left open), aging buckets, profit and loss, year-end closing, the default chart; one `PostingRule` per event of posting-rules.md §2 with a table-driven test of worked examples and a 500-case property test (no journal unbalanced); PIT 95 %
 - [x] T04-03 Finance listeners and persistence — migration (ledgers insert-only, RLS on every table, dimensions as columns), `JournalPoster` (rule → period locked FOR SHARE, late postings to the first open day, accounts by system key, `JE-000001` numbers, batched lines, `JournalPosted`, `bmp.ledger.imbalance`), inbox-guarded listeners for every event of posting-rules.md §2 plus `TenantCreated` (chart and expense categories) and party events (payment terms replica), open items with settlements and the `party_balance` projection, `POST /admin/finance/party-balances/rebuild` with its equality test; listener failures with a `TechnicalException` (e.g. `LEDGER_IMBALANCE`) are now parked like domain ones (ADR-032 §13)
 - [x] T04-04 Expenses, receivables, payables, supplier payments, periods — every `finance.yaml` operation; expenses from the drawer (PAID_OUT through `payments.api`), the bank or on account (payable); supplier payments with allocations; cash drops; aging and statements; periods with close checks and the close as a background operation (`platform.operation`, internal `PeriodCloseRequested`), year-end close to retained earnings; `ReceivableOverdue` daily job (FIN-08); `finance.api.LedgerQueries`; `CreditExposureProvider` (FIN-10, `CreditExposureFlowIT`: a collection raises the credit sales gives); `PaymentCaptured.allocations` and `PaymentQueries.unreconciledOpenedBetween` in payments; web-support maps `ConstraintViolationException` of parameters to 400 `INVALID_PARAMETER`
-- [ ] T04-05 Reporting read models (listeners, `daily_summary`, rebuild)
+- [x] T04-05 Reporting read models — new `reporting` module: listeners for `SaleCompleted`, `StockIssued`, `SaleReturned`, `PaymentRefunded`, `SaleVoided`, `StockAdjusted`, `StockTransformed`, `StockCountPosted`, `PaymentCaptured`, `ExpenseRecorded`, `DrawerReconciled` and the catalog names, each mapped to a reporting-owned fact kept in `reporting.event_log` and applied to `fact_bill`, `fact_sale_line` (sale and cost halves in either order; returns and voids on their own day), `fact_payment`, `fact_expense`, `fact_drawer`, `fact_stock_movement`, `return_watch` and `daily_summary`; the rebuild replays the log under an exclusive tenant lock and equals the incremental build (ADR-033)
 - [ ] T04-06 Reports, dashboard and exports (REP-02..REP-07)
 - [ ] T04-07 Notification module (basic)
 - [ ] T04-08 Month-end reconciliation flow test (`MonthEndFlowIT`)
