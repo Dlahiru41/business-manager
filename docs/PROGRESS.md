@@ -25,6 +25,13 @@ Status values: `not started` · `in progress` · `blocked` · `done`.
   `InventoryQueries.valuation`, wastage, cash position, owner dashboard with low/negative stock counts from inventory and
   unsynced devices from sync, data quality with its ShedLock job and `DataQualityIssueFound`, exports CSV/XLSX/PDF as
   operations with signed links and a clean-up job, `/operations/{id}`, rebuild endpoint), then T04-07.
+- T04-06 design (decided, ADR-033): inventory gains `InventoryQueries.valuation/lowStockCount/negativeStockCount`, sync
+  gains `sync.api.SyncQueries.devicesNotSyncedSince`; the export file link is HMAC-SHA256 over tenant, export and expiry
+  (`bmp.reporting.export-signing-key`, a random key per start when unset) on a path web-support permits without a
+  token, and `ContractSecurity` treats the permission `signed-link` as 403 without a valid link; data-quality decisions
+  are a pure domain service (new issues, resolved issues) run by a ShedLock job per tenant (platform-admin listing from
+  `event_log`), publishing `DataQualityIssueFound` once per issue; XLSX with Apache POI `SXSSFWorkbook` (new
+  dependency), PDF with PDFBox (already in the catalog), CSV cells starting with = + - @ prefixed with an apostrophe.
 
 ## Task checklist (current phase)
 
