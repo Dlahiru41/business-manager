@@ -22,7 +22,8 @@ serialised with a transaction-scoped advisory lock, since ledger rows are never 
   and counted (`bmp.payments.cash_outside_drawer`).
 - **PAY-02** `POST /payments` with a customer and no bill: an ACCOUNT payment. Cash needs `registerId` with an OPEN
   drawer (`DRAWER_NOT_OPEN`) and covers the amount (`TENDERED_TOO_LOW`); CARD and BANK_TRANSFER carry a reference unless
-  the sales setting `tenderReferenceRequired` is false (`REFERENCE_REQUIRED`). Cash collections are PAID_IN movements.
+  the sales setting `tenderReferenceRequired` is false (`REFERENCE_REQUIRED`). Cash collections are PAID_IN movements. A collection may name the bills it pays (`allocations`, each once, together at most the amount);
+  they travel on `PaymentCaptured` and finance settles the rest oldest first (FIN-07).
 - **PAY-03** `POST /payments/{id}/refunds`: at most what is left of the payment; cash comes out of an OPEN drawer of the
   register given or the payment's. For returns (`SaleReturned`) each refund tender other than CREDIT is taken from the
   bill's payments, those of its method first; for voids (`SaleVoided`) every payment is given back in full. A return

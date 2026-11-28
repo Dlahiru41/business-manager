@@ -4,6 +4,7 @@ import com.bmp.persistence.event.InboxGuard;
 import com.bmp.persistence.jdbc.PlatformAdminJdbc;
 import com.bmp.persistence.migration.ModuleMigration;
 import com.bmp.persistence.migration.ModuleMigrator;
+import com.bmp.persistence.operation.Operations;
 import com.bmp.persistence.tenant.ContextTenantIdentifierResolver;
 import com.bmp.persistence.tenant.TenantAwareJpaTransactionManager;
 import com.bmp.shared.id.IdGenerator;
@@ -112,6 +113,11 @@ public class PersistenceAutoConfiguration {
                     dataSource.determineUrl(),
                     properties.platformAdmin().username(),
                     properties.platformAdmin().password());
+        }
+
+        @Bean
+        Operations operations(JdbcClient jdbcClient, Clock clock) {
+            return new Operations(jdbcClient, clock);
         }
 
         @Bean

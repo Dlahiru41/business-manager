@@ -158,6 +158,16 @@ class ProblemDetailsApiTest {
     }
 
     @Test
+    void shouldRejectAParameterBreakingItsConstraintAs400() {
+        assertThatProblem(mvc.get().uri("/test/validated?period=2026-13").exchange())
+                .hasStatus(400)
+                .hasCode("INVALID_PARAMETER")
+                .hasFieldError("period", "PATTERN")
+                .hasNoInternals();
+        assertThat(mvc.get().uri("/test/validated?period=2026-11").exchange()).hasStatusOk();
+    }
+
+    @Test
     void shouldRejectInvalidPathUuidAs400() {
         assertThatProblem(mvc.get().uri("/test/things/not-a-uuid").exchange())
                 .hasStatus(400)

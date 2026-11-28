@@ -31,6 +31,7 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -86,6 +87,12 @@ public class JournalPoster {
     /** Posts what the rule returns; nothing when it has nothing to post. */
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<PostedJournal> post(Supplier<Optional<JournalEntry>> rule) {
+        return post(null, rule);
+    }
+
+    /** Posts with the journal id the caller chose (manual journals and reversals carry the client's id). */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<PostedJournal> post(@Nullable UUID journalId, Supplier<Optional<JournalEntry>> rule) {
         Optional<JournalEntry> entry;
         try {
             entry = rule.get();
@@ -95,10 +102,10 @@ public class JournalPoster {
             }
             throw e;
         }
-        return entry.map(this::write);
+        return entry.map(e -> write(journalId == null ? ids.newUuid() : journalId, e));
     }
 
-    private PostedJournal write(JournalEntry entry) {
+    private PostedJournal write(UUID id, JournalEntry entry) {
         Period own = Period.of(entry.entryDate());
         Period period = own;
         FiscalPeriod status = periods.lockForPosting(period);
@@ -125,7 +132,6 @@ public class JournalPoster {
                     line.party() == null ? null : line.party().type().name(),
                     line.party() == null ? null : line.party().id()));
         }
-        UUID id = ids.newUuid();
         String number = "%s-%06d".formatted(NUMBER_SCOPE, numbers.next(NUMBER_SCOPE));
         Instant now = clock.instant();
         String currency = settings.currency();

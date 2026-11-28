@@ -2,6 +2,7 @@ package com.bmp.payments.application.command;
 
 import com.bmp.party.api.PartyQueries;
 import com.bmp.party.api.dto.PartyInfo;
+import com.bmp.payments.api.events.PaymentCaptured;
 import com.bmp.payments.application.PaymentsEvents;
 import com.bmp.payments.application.PaymentsSettings;
 import com.bmp.payments.domain.error.PaymentsErrorCode;
@@ -34,9 +35,11 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -137,7 +140,13 @@ public class PaymentHandlers {
             BigDecimal amount,
             @Nullable BigDecimal tendered,
             @Nullable String reference,
-            @Nullable UUID registerId) {}
+            @Nullable UUID registerId,
+            List<PaymentCaptured.Allocation> allocations) {
+
+        public Collect {
+            allocations = List.copyOf(allocations);
+        }
+    }
 
     /** Rule PAY-03: a refund at the counter. */
     public record RefundCommand(
@@ -182,7 +191,7 @@ public class PaymentHandlers {
                 cashMovement(
                         session, CashMovementType.SALE, payment.amount(), "PAYMENT", payment.id(), sale.completedAt());
             }
-            events.captured(payment);
+            events.captured(payment, List.of());
             captured.add(payment);
         }
         if (!captured.isEmpty()) {
@@ -202,6 +211,7 @@ public class PaymentHandlers {
         if (known.isPresent()) {
             return known.get().payment();
         }
+        checkAllocations(c);
         PartyInfo customer = parties.findParty(PartyId.of(c.customerId()))
                 .filter(p -> p.active() && p.isCustomer())
                 .orElseThrow(() -> new BusinessRuleViolation(
@@ -244,13 +254,34 @@ public class PaymentHandlers {
                     payment.id(),
                     now));
         }
-        events.captured(payment);
+        events.captured(payment, c.allocations());
         log.atInfo()
                 .addKeyValue("paymentId", payment.id())
                 .addKeyValue("method", payment.method())
                 .addKeyValue("amount", payment.amount())
                 .log("Account payment captured");
         return payment;
+    }
+
+    /** FIN-07: allocations name each bill once, are above zero and add up to at most the collection. */
+    private static void checkAllocations(Collect c) {
+        Set<UUID> bills = new HashSet<>();
+        BigDecimal total = BigDecimal.ZERO;
+        for (PaymentCaptured.Allocation a : c.allocations()) {
+            if (a.amount().signum() <= 0 || !bills.add(a.billId())) {
+                throw new BusinessRuleViolation(
+                        PlatformErrorCode.VALIDATION_FAILED,
+                        "An allocation names a bill once with an amount above zero",
+                        Map.of("field", "allocations", "billId", a.billId()));
+            }
+            total = total.add(a.amount());
+        }
+        if (total.compareTo(c.amount()) > 0) {
+            throw new BusinessRuleViolation(
+                    PlatformErrorCode.VALIDATION_FAILED,
+                    "Allocations add up to at most the amount collected",
+                    Map.of("field", "allocations", "allocated", total.toPlainString()));
+        }
     }
 
     /** Rule PAY-03: at most what is left of the payment; cash comes out of an OPEN drawer of the register. */

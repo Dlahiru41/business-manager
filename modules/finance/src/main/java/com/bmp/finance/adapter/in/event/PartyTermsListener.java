@@ -12,16 +12,16 @@ import org.springframework.stereotype.Component;
 
 /** Replicates parties' payment terms. Inbox-guarded: a redelivered event changes nothing (07 §4). */
 @Component
-class PartyListener {
+class PartyTermsListener {
 
-    static final String CONSUMER = "finance.PartyListener";
+    static final String CONSUMER = "finance.PartyTermsListener";
 
-    private static final Logger log = LoggerFactory.getLogger(PartyListener.class);
+    private static final Logger log = LoggerFactory.getLogger(PartyTermsListener.class);
 
     private final InboxGuard inbox;
     private final PartyReplicaHandler parties;
 
-    PartyListener(InboxGuard inbox, PartyReplicaHandler parties) {
+    PartyTermsListener(InboxGuard inbox, PartyReplicaHandler parties) {
         this.inbox = inbox;
         this.parties = parties;
     }

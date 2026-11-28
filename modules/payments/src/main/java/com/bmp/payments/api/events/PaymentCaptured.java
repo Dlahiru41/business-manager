@@ -5,6 +5,7 @@ import com.bmp.shared.event.EventMetadata;
 import com.bmp.shared.id.TenantId;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 
@@ -34,5 +35,18 @@ public record PaymentCaptured(
         @Nullable UUID registerId,
         @Nullable UUID drawerSessionId,
         String currency,
-        Instant capturedAt)
-        implements DomainEvent {}
+        Instant capturedAt,
+        List<Allocation> allocations)
+        implements DomainEvent {
+
+    public PaymentCaptured {
+        allocations = List.copyOf(allocations);
+    }
+
+    /**
+     * A bill an account collection pays, as the cashier chose (FIN-07); finance settles the rest oldest first.
+     *
+     * @param amount at most what the collection pays
+     */
+    public record Allocation(UUID billId, BigDecimal amount) {}
+}

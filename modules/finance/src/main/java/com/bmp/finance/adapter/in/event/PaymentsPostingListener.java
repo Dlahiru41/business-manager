@@ -1,11 +1,11 @@
 package com.bmp.finance.adapter.in.event;
 
 import com.bmp.finance.application.command.PaymentPostingHandler;
+import com.bmp.finance.domain.service.OpenItemSettler;
 import com.bmp.payments.api.events.DrawerReconciled;
 import com.bmp.payments.api.events.PaymentCaptured;
 import com.bmp.payments.api.events.PaymentRefunded;
 import com.bmp.persistence.event.InboxGuard;
-import java.util.List;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,7 +33,11 @@ class PaymentsPostingListener {
         if (redelivered(event.eventId())) {
             return;
         }
-        payments.captured(event, List.of());
+        payments.captured(
+                event,
+                event.allocations().stream()
+                        .map(a -> new OpenItemSettler.Allocation(a.billId(), a.amount()))
+                        .toList());
     }
 
     @ApplicationModuleListener

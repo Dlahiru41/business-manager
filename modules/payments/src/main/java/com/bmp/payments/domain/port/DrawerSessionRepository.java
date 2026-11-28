@@ -2,6 +2,7 @@ package com.bmp.payments.domain.port;
 
 import com.bmp.payments.domain.model.DrawerSession;
 import com.bmp.payments.domain.model.DrawerStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,9 @@ public interface DrawerSessionRepository {
     /** Newest first, from before {@code beforeId}. */
     List<DrawerSession> page(
             @Nullable UUID registerId, @Nullable DrawerStatus status, @Nullable UUID beforeId, int limit);
+
+    /** Sessions opened in {@code [from, to)} that are not RECONCILED, oldest first. */
+    List<DrawerSession> unreconciledOpenedBetween(Instant from, Instant to);
 
     DrawerSession saveAndFlush(DrawerSession session);
 }

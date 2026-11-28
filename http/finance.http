@@ -1,0 +1,129 @@
+# Finance module (contracts/openapi/finance.yaml). Run auth.http, tenant.http, party.http (customerId, supplierId),
+# sales.http and payments.http (drawerId) first. Sales, payments, stock and purchases post their journals by themselves.
+
+### The chart of accounts (FIN-01: seeded with the tenant)
+GET {{baseUrl}}/api/v1/accounts?limit=50
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("bankAccountId", response.body.items.find(a => a.systemKey === "BANK").id);
+     client.global.set("equityAccountId", response.body.items.find(a => a.systemKey === "EQUITY").id); %}
+
+### Add an account under packing materials
+POST {{baseUrl}}/api/v1/accounts
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "code": "6410", "name": "Bottles and caps", "type": "EXPENSE"}
+
+### Journals of the month, newest first (FIN-02)
+GET {{baseUrl}}/api/v1/journals?period=2026-11&limit=20
+Authorization: Bearer {{ownerToken}}
+
+### A manual journal: the owner's capital paid into the bank (FIN-04: memo, balanced)
+POST {{baseUrl}}/api/v1/journals
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "entryDate": "2026-11-30", "memo": "Owner's capital paid into the bank",
+ "lines": [{"accountId": "{{bankAccountId}}", "debit": "100000.00"},
+           {"accountId": "{{equityAccountId}}", "credit": "100000.00"}]}
+
+> {% client.global.set("journalId", response.body.id); %}
+
+### Reverse it (a new journal pointing back)
+POST {{baseUrl}}/api/v1/journals/{{journalId}}/reverse
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "memo": "Entered twice"}
+
+### Trial balance today
+GET {{baseUrl}}/api/v1/ledger/trial-balance
+Authorization: Bearer {{ownerToken}}
+
+### Profit and loss of the month
+GET {{baseUrl}}/api/v1/ledger/profit-and-loss?from=2026-11&to=2026-11
+Authorization: Bearer {{ownerToken}}
+
+### Expense categories
+GET {{baseUrl}}/api/v1/expense-categories
+Authorization: Bearer {{ownerToken}}
+
+> {% client.global.set("packingCategoryId", response.body.items.find(c => c.code === "PACKING").id);
+     client.global.set("utilitiesCategoryId", response.body.items.find(c => c.code === "UTILITIES").id); %}
+
+### 200 empty bottles paid from the drawer (FIN-09: a PAID_OUT on the open drawer)
+POST {{baseUrl}}/api/v1/expenses
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "categoryId": "{{packingCategoryId}}", "expenseDate": "2026-11-25", "amount": "2000.00",
+ "paidFrom": "CASH_DRAWER", "drawerSessionId": "{{drawerId}}", "description": "200 empty bottles"}
+
+### Electricity on account (FIN-09: opens a payable)
+POST {{baseUrl}}/api/v1/expenses
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "categoryId": "{{utilitiesCategoryId}}", "expenseDate": "2026-11-25", "amount": "4300.00",
+ "paidFrom": "PAYABLE", "supplierId": "{{supplierId}}", "description": "Electricity November"}
+
+### What customers owe, aged (FIN-07)
+GET {{baseUrl}}/api/v1/receivables?asOf=2026-11-30
+Authorization: Bearer {{ownerToken}}
+
+### A customer's statement
+GET {{baseUrl}}/api/v1/receivables/{{customerId}}/statement?from=2026-11-01&to=2026-11-30
+Authorization: Bearer {{ownerToken}}
+
+### What is owed to suppliers, aged
+GET {{baseUrl}}/api/v1/payables
+Authorization: Bearer {{ownerToken}}
+
+### Pay the supplier from the bank (FIN-11)
+POST {{baseUrl}}/api/v1/supplier-payments
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "supplierId": "{{supplierId}}", "amount": "4300.00", "paidFrom": "BANK", "reference": "TT 445512"}
+
+### Take cash from the drawer to the bank
+POST {{baseUrl}}/api/v1/cash-drops
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"id": "{{$uuid}}", "drawerSessionId": "{{drawerId}}", "amount": "40000.00", "reference": "Deposit slip 0912"}
+
+### What stands in the way of closing October (FIN-06)
+GET {{baseUrl}}/api/v1/periods/2026-10/close-checks
+Authorization: Bearer {{ownerToken}}
+
+### Close October (202; read the operation)
+POST {{baseUrl}}/api/v1/periods/2026-10/close
+Authorization: Bearer {{ownerToken}}
+Content-Type: application/json
+Idempotency-Key: {{$uuid}}
+
+{"acknowledgedBillIds": []}
+
+> {% client.global.set("operationId", response.body.id); %}
+
+### The close operation
+GET {{baseUrl}}/api/v1/operations/{{operationId}}
+Authorization: Bearer {{ownerToken}}
+
+### Periods
+GET {{baseUrl}}/api/v1/periods
+Authorization: Bearer {{ownerToken}}
+
+### Rebuild the party balances
+POST {{baseUrl}}/api/v1/admin/finance/party-balances/rebuild
+Authorization: Bearer {{ownerToken}}
+Idempotency-Key: {{$uuid}}

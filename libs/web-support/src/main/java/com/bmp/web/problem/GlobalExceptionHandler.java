@@ -9,6 +9,8 @@ import com.bmp.shared.error.PlatformErrorCode;
 import com.bmp.shared.error.ValidationFailure;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolationException;
+import jakarta.validation.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -132,6 +134,36 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> handleOpenCircuit(CallNotPermittedException ex, HttpServletRequest request) {
         logFailure(PlatformErrorCode.DEPENDENCY_UNAVAILABLE, request, ex);
         return respond(PlatformErrorCode.DEPENDENCY_UNAVAILABLE, request);
+    }
+
+    /**
+     * A path or query parameter broke its constraint where the generated interfaces validate through a
+     * {@code @Validated} proxy (Spring's method validation interceptor), e.g. a period that is not {@code YYYY-MM}.
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex, WebRequest request) {
+        List<FieldError> errors = ex.getConstraintViolations().stream()
+                .map(v -> new FieldError(
+                        parameter(v.getPropertyPath()),
+                        constraintCode(v.getConstraintDescriptor()
+                                .getAnnotation()
+                                .annotationType()
+                                .getName()),
+                        v.getMessage()))
+                .sorted(java.util.Comparator.comparing(FieldError::field))
+                .toList();
+        return validation(PlatformErrorCode.INVALID_PARAMETER, errors, request);
+    }
+
+    /** {@code listJournals.period} becomes {@code period}. */
+    private static String parameter(Path path) {
+        String name = "parameter";
+        for (Path.Node node : path) {
+            if (node.getName() != null) {
+                name = node.getName();
+            }
+        }
+        return name;
     }
 
     @ExceptionHandler(Exception.class)

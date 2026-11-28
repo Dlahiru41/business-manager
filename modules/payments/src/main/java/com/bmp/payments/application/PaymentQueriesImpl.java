@@ -6,6 +6,8 @@ import com.bmp.payments.domain.model.DrawerSession;
 import com.bmp.payments.domain.port.CashLedger;
 import com.bmp.payments.domain.port.DrawerSessionRepository;
 import com.bmp.payments.domain.service.ExpectedCash;
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -33,6 +35,14 @@ class PaymentQueriesImpl implements PaymentQueries {
     @Transactional(readOnly = true)
     public Optional<DrawerSessionInfo> findDrawer(UUID sessionId) {
         return sessions.findById(sessionId).map(this::info);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<DrawerSessionInfo> unreconciledOpenedBetween(Instant from, Instant to) {
+        return sessions.unreconciledOpenedBetween(from, to).stream()
+                .map(this::info)
+                .toList();
     }
 
     @Transactional(readOnly = true)

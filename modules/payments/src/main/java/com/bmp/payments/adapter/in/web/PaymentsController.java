@@ -8,6 +8,7 @@ import com.bmp.payments.adapter.in.web.generated.model.PaymentPage;
 import com.bmp.payments.adapter.in.web.generated.model.PaymentSummary;
 import com.bmp.payments.adapter.in.web.generated.model.Refund;
 import com.bmp.payments.adapter.in.web.generated.model.RefundRequest;
+import com.bmp.payments.api.events.PaymentCaptured;
 import com.bmp.payments.application.PaymentsSettings;
 import com.bmp.payments.application.command.PaymentHandlers;
 import com.bmp.payments.application.query.PaymentsQueryService;
@@ -16,6 +17,7 @@ import com.bmp.web.pagination.PageQuery;
 import java.math.BigDecimal;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
 import java.util.UUID;
 import org.jspecify.annotations.Nullable;
 import org.springframework.http.ResponseEntity;
@@ -71,7 +73,12 @@ class PaymentsController implements PaymentsApi {
                 new BigDecimal(request.getAmount()),
                 PaymentsWebMapper.decimalOrNull(request.getTendered()),
                 request.getReference(),
-                request.getRegisterId()));
+                request.getRegisterId(),
+                request.getAllocations() == null
+                        ? List.of()
+                        : request.getAllocations().stream()
+                                .map(a -> new PaymentCaptured.Allocation(a.getBillId(), new BigDecimal(a.getAmount())))
+                                .toList()));
         return ResponseEntity.created(URI.create("/api/v1/payments/" + payment.id()))
                 .body(mapper.payment(queries.payment(payment.id()).captured()));
     }

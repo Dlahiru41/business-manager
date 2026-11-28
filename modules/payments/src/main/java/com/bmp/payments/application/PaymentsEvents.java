@@ -9,6 +9,7 @@ import com.bmp.payments.domain.model.Refund;
 import com.bmp.shared.context.TenantContext;
 import com.bmp.shared.event.EventStamp;
 import com.bmp.shared.event.EventStampSource;
+import java.util.List;
 import java.util.Objects;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -25,7 +26,8 @@ public class PaymentsEvents {
         this.stamps = stamps;
     }
 
-    public void captured(Payment p) {
+    /** A payment; {@code allocations} only for account collections. */
+    public void captured(Payment p, List<PaymentCaptured.Allocation> allocations) {
         EventStamp stamp = stamps.next();
         publisher.publishEvent(new PaymentCaptured(
                 stamp.eventId(),
@@ -47,7 +49,8 @@ public class PaymentsEvents {
                 p.registerId(),
                 p.drawerSessionId(),
                 p.currency(),
-                p.capturedAt()));
+                p.capturedAt(),
+                allocations));
     }
 
     public void refunded(Refund r, Payment of) {

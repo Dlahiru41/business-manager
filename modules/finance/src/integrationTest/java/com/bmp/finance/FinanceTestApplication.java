@@ -35,6 +35,11 @@ public class FinanceTestApplication {
         return new FinanceEventRecorder();
     }
 
+    @Bean
+    FakeDrawers fakeDrawers() {
+        return new FakeDrawers();
+    }
+
     /** Finance events of every thread (the listeners publish on their own). */
     public static class FinanceEventRecorder {
 
@@ -42,6 +47,21 @@ public class FinanceTestApplication {
 
         @EventListener
         public void on(JournalPosted event) {
+            events.add(event);
+        }
+
+        @EventListener
+        public void on(com.bmp.finance.api.events.ExpenseRecorded event) {
+            events.add(event);
+        }
+
+        @EventListener
+        public void on(com.bmp.finance.api.events.ReceivableOverdue event) {
+            events.add(event);
+        }
+
+        @EventListener
+        public void on(com.bmp.finance.api.events.PeriodClosed event) {
             events.add(event);
         }
 

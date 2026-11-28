@@ -6,6 +6,7 @@ import com.bmp.payments.domain.port.DrawerSessionRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import jakarta.persistence.TypedQuery;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -70,6 +71,18 @@ class JpaDrawerSessions implements DrawerSessionRepository {
             query.setParameter("beforeId", beforeId);
         }
         return query.setMaxResults(limit).getResultList();
+    }
+
+    @Override
+    public List<DrawerSession> unreconciledOpenedBetween(Instant from, Instant to) {
+        return em.createQuery(
+                        "select s from DrawerSession s where s.openedAt >= :from and s.openedAt < :to"
+                                + " and s.status <> :reconciled order by s.openedAt, s.id",
+                        DrawerSession.class)
+                .setParameter("from", from)
+                .setParameter("to", to)
+                .setParameter("reconciled", DrawerStatus.RECONCILED)
+                .getResultList();
     }
 
     @Override

@@ -73,6 +73,13 @@ public class FailedEventStore {
                         .update()));
     }
 
+    /** The current tenant's parked events, in the caller's transaction (row-level security keeps it to the tenant). */
+    public long parkedCount() {
+        return jdbc.sql("SELECT count(*) FROM platform.failed_event WHERE status = 'PARKED'")
+                .query(Long.class)
+                .single();
+    }
+
     /** Whether {@code consumer} parked {@code eventId}; parked publications are abandoned instead of retried. */
     public boolean isParked(String consumer, UUID eventId, TenantId tenant) {
         return TenantContext.callWith(

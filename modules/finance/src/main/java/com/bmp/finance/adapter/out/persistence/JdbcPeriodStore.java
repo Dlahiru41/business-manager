@@ -92,6 +92,25 @@ class JdbcPeriodStore implements PeriodStore {
 
     @Override
     @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<Period> earliestOpenWithJournalsBefore(Period period) {
+        return jdbc.sql("""
+                        SELECT j.period FROM finance.journal_entry j
+                         WHERE j.tenant_id = :tenantId AND j.period < :period
+                           AND NOT EXISTS (SELECT 1 FROM finance.fiscal_period f
+                                            WHERE f.tenant_id = j.tenant_id AND f.period = j.period
+                                              AND f.status = 'CLOSED')
+                         ORDER BY j.period
+                         LIMIT 1
+                        """)
+                .param("tenantId", Tenants.current())
+                .param("period", period.toString())
+                .query(String.class)
+                .optional()
+                .map(Period::parse);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.MANDATORY)
     public List<FiscalPeriod> page(@Nullable Period before, int limit) {
         String filter = before == null ? "" : " AND k.period < :before";
         var statement = jdbc.sql("""

@@ -19,6 +19,9 @@ public interface PeriodStore {
 
     void save(FiscalPeriod period);
 
+    /** Rule FIN-06: the earliest period before {@code period} that has journals and is not CLOSED. */
+    Optional<Period> earliestOpenWithJournalsBefore(Period period);
+
     /** Periods with a row or with journals, newest first, before {@code before}. */
     List<FiscalPeriod> page(@Nullable Period before, int limit);
 }

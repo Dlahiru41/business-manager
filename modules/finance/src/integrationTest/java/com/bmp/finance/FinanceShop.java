@@ -109,6 +109,46 @@ final class FinanceShop {
                 .single());
     }
 
+    UUID accountId(String systemKey) {
+        return sql(j -> j.sql("SELECT id FROM finance.account WHERE system_key = :k")
+                .param("k", systemKey)
+                .query(UUID.class)
+                .single());
+    }
+
+    UUID categoryId(String code) {
+        return sql(j -> j.sql("SELECT id FROM finance.expense_category WHERE code = :c")
+                .param("c", code)
+                .query(UUID.class)
+                .single());
+    }
+
+    /** Publishes a supplier and waits until finance knows its terms. */
+    void supplierKnown(UUID party, int terms) {
+        publish(new PartyCreated(
+                UUID.randomUUID(),
+                tenant,
+                SOLD,
+                party,
+                1,
+                EventMetadata.empty(),
+                PartyId.of(party),
+                "SUPPLIER",
+                "Egg farm",
+                null,
+                "ACTIVE",
+                false,
+                "LKR",
+                new CreditPolicySnapshot(false, BigDecimal.ZERO, terms)));
+        await().atMost(Duration.ofSeconds(20))
+                .untilAsserted(() -> assertThat(
+                                this.<Long>sql(j -> j.sql("SELECT count(*) FROM finance.party_ref WHERE party_id = :p")
+                                        .param("p", party)
+                                        .query(Long.class)
+                                        .single()))
+                        .isEqualTo(1L));
+    }
+
     /** Publishes the customer and waits until finance knows its terms (a credit bill before it would wait a minute). */
     void customerKnown(UUID party, int terms) {
         publish(customer(party, terms));
@@ -211,7 +251,8 @@ final class FinanceShop {
                 register,
                 null,
                 "LKR",
-                SOLD);
+                SOLD,
+                List.of());
     }
 
     PaymentRefunded refund(UUID payment, UUID bill, @Nullable UUID creditNote, String method, String amount) {

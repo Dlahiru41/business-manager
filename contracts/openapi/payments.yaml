@@ -902,6 +902,25 @@ components:
           type: string
           format: uuid
           description: Cash goes into this register's open drawer.
+        allocations:
+          type: array
+          maxItems: 100
+          description: Bills this collection pays, each named once; finance settles what is left oldest first
+            (FIN-07). Together at most the amount.
+          items:
+            $ref: '#/components/schemas/CollectionAllocation'
+    CollectionAllocation:
+      type: object
+      additionalProperties: false
+      required:
+      - billId
+      - amount
+      properties:
+        billId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Amount'
     Refund:
       type: object
       required:
